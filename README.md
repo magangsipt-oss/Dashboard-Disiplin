@@ -30,6 +30,18 @@ npm run dev
 Backend berjalan di `http://localhost:5000`. Endpoint pemeriksaan:
 `http://localhost:5000/api/health`.
 
+Setelah PostgreSQL aktif dan `DATABASE_URL` sudah diisi, buat tabel dan data
+dummy dari folder `backend`:
+
+```powershell
+npm run prisma:generate
+npm run prisma:push
+npm run prisma:seed
+```
+
+`prisma:seed` aman dijalankan berulang kali karena menggunakan `upsert`; data
+dummy dengan identity yang sama akan diperbarui, bukan diduplikasi.
+
 Login, data dashboard, dan formulir dalam UI saat ini adalah demo frontend;
 belum terhubung ke autentikasi atau penyimpanan database.
 

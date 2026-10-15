@@ -1,29 +1,30 @@
 {
-  "name": "backend",
+  "name": "sidisiplin-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "private": true,
   "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:push": "prisma db push"
+  },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
+    "@prisma/client": "6.12.0",
     "cors": "^2.8.6",
-    "dotenv": "^18.0.8",
-    "express": "^5.3.0",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.11.2"
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^26.6.5",
-    "nodemon": "^3.1.14",
-    "ts-node": "^10.9.2",
-    "typescript": "^7.0.2"
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "prisma": "6.12.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }

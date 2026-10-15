@@ -4,9 +4,12 @@
 **/dist/
 **/build/
 **/coverage/
+backend/src/generated/
 
 # Local environment and credentials
-.env*
+**/.env
+**/.env.*
+!**/.env.example
 *.pem
 
 # Tool output

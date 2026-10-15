@@ -1,0 +1,19 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/kemahasiswaan"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("KEMAHASISWAAN_DATABASE_URL")
+}
+
+model Kemahasiswaan {
+  id       Int    @id @default(autoincrement())
+  nip      BigInt @unique @map("NIP")
+  nama     String @map("Nama")
+  password String @db.VarChar(255) @map("Password")
+  timestamp DateTime @default(now())
+
+  @@map("Kemahasiswaan")
+}

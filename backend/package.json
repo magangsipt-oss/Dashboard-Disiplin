@@ -10,6 +10,15 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:push": "prisma db push",
+    "prisma:mahasiswa:generate": "prisma generate --schema=prisma/mahasiswa.prisma",
+    "prisma:mahasiswa:validate": "prisma validate --schema=prisma/mahasiswa.prisma",
+    "prisma:mahasiswa:push": "prisma db push --schema=prisma/mahasiswa.prisma",
+    "prisma:dosen:generate": "prisma generate --schema=prisma/dosen.prisma",
+    "prisma:dosen:validate": "prisma validate --schema=prisma/dosen.prisma",
+    "prisma:dosen:push": "prisma db push --schema=prisma/dosen.prisma",
+    "prisma:kemahasiswaan:generate": "prisma generate --schema=prisma/kemahasiswaan.prisma",
+    "prisma:kemahasiswaan:validate": "prisma validate --schema=prisma/kemahasiswaan.prisma",
+    "prisma:kemahasiswaan:push": "prisma db push --schema=prisma/kemahasiswaan.prisma",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {

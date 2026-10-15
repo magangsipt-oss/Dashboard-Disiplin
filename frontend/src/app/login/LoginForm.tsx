@@ -79,32 +79,37 @@ export default function LoginForm({ role }: { role: LoginRole }) {
         <ArrowLeft className="w-4 h-4" /> Kembali ke Halaman Utama
       </a>
 
-      <section className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white/80 relative z-10">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <img
-              src="/poltek-simas-berau.png"
-              alt="Logo Poltek Simas Berau"
-              className="h-14 w-14 object-contain rounded-2xl border border-slate-200 bg-white p-1 shadow-md"
-            />
-            <div className="text-left">
-              <p className="text-lg font-extrabold leading-tight text-slate-900">
-                SiDisiplin
-              </p>
-              <p className="text-sm font-semibold text-slate-600">
-                Poltek Simas Berau
-              </p>
-            </div>
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-900">
-            Masuk Portal
+      <section className="relative z-10 w-full max-w-md rounded-3xl border border-white/80 bg-white/95 p-7 shadow-2xl backdrop-blur-md">
+        <div
+          className="relative isolate mx-auto mb-6 w-fit max-w-full overflow-hidden rounded-2xl bg-cover bg-center px-7 py-5 text-center text-white shadow-lg"
+          style={{ backgroundImage: "url(/portal-access-background.jpg)" }}
+        >
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 -z-10 bg-gradient-to-br from-red-950/95 via-red-900/85 to-rose-800/75"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute -right-8 -top-12 -z-10 h-40 w-40 rounded-full border border-white/15 bg-white/10"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute -bottom-20 -left-8 -z-10 h-44 w-44 rounded-full border border-white/10 bg-red-400/10"
+          />
+          <h1 className="text-3xl font-black tracking-tight drop-shadow-md sm:text-4xl">
+            {details.label}
           </h1>
-          <p className="text-red-800 text-xs mt-1.5 uppercase tracking-wider font-extrabold bg-red-50 py-1.5 px-3 rounded-full inline-block border border-red-200/50">
-            Peran: {details.label}
+          <p className="mt-2 text-sm font-medium text-red-50">
+            Masuk untuk melanjutkan ke dashboard
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="text-center">
+          <p className="mb-6 text-sm font-semibold text-slate-600">
+            Masukkan identitas dan kata sandi Anda
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="identity"
@@ -159,7 +164,8 @@ export default function LoginForm({ role }: { role: LoginRole }) {
           >
             {isLoggingIn ? "Memeriksa akun..." : "Masuk ke Dashboard"}
           </button>
-        </form>
+          </form>
+        </div>
       </section>
     </main>
   );

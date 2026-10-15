@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" role="img" aria-labelledby="title">
+  <title id="title">SiDisiplin PSB</title>
+  <rect width="160" height="48" rx="10" fill="#7f1d1d"/>
+  <path d="M14 12h20v5H19v4h13v5H19v5h15v5H14z" fill="#fff"/>
+  <path d="M39 12h5v24h-5zM49 12h5v24h-5z" fill="#fbbf24"/>
+  <text x="63" y="23" fill="#fff" font-family="Arial, sans-serif" font-size="12" font-weight="700">SiDisiplin</text>
+  <text x="63" y="35" fill="#fde68a" font-family="Arial, sans-serif" font-size="8" font-weight="600">POLTEK SIMAS BERAU</text>
+</svg>

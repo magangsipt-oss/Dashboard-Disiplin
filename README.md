@@ -13,7 +13,9 @@ npm install
 npm run dev
 ```
 
-Buka `http://localhost:3000`.
+Buka `http://localhost:3000`. Frontend meneruskan permintaan `/api/*` ke
+backend lokal di `http://localhost:5000`. Jalankan backend terlebih dahulu
+agar indikator koneksi API di portal menunjukkan status terhubung.
 
 ## Menjalankan backend
 
@@ -27,6 +29,9 @@ npm run dev
 
 Backend berjalan di `http://localhost:5000`. Endpoint pemeriksaan:
 `http://localhost:5000/api/health`.
+
+Login, data dashboard, dan formulir dalam UI saat ini adalah demo frontend;
+belum terhubung ke autentikasi atau penyimpanan database.
 
 ## Prisma
 

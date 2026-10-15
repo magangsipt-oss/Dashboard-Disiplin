@@ -29,9 +29,9 @@ import {
 
 export default function App() {
   const router = useRouter();
-  const [backendStatus, setBackendStatus] = useState('checking');
   const [activePage, setActivePage] = useState('landing');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeHeroImage, setActiveHeroImage] = useState(0);
 
   const [showSKPIModal, setShowSKPIModal] = useState(false);
   const [showSanggahModal, setShowSanggahModal] = useState(false);
@@ -41,7 +41,12 @@ export default function App() {
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
 
   const officialLogoUrl = "/poltek-simas-berau.png";
-  const bgCampusImage = "/campus.svg";
+  const portalAccessBackground = "/portal-access-background.jpg";
+  const heroImages = [
+    '/campus-team.png',
+    '/header-student-team.png',
+    '/header-vocational-training.png',
+  ];
   const navigationByRole = {
     mhs: [
       { id: 'dashboard', label: 'Ringkasan' },
@@ -72,44 +77,6 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    let healthTimer;
-
-    const checkBackend = async () => {
-      try {
-        const response = await fetch('/api/health', {
-          cache: 'no-store',
-          signal: AbortSignal.timeout(5000),
-        });
-        if (!response.ok) {
-          throw new Error(`Backend returned ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (!response.ok && data.database === 'disconnected') {
-          if (isMounted) {
-            setBackendStatus('database-unavailable');
-          }
-          return;
-        }
-        if (!response.ok) {
-          throw new Error(`Backend returned ${response.status}`);
-        }
-
-        if (isMounted) {
-          setBackendStatus(data.status === 'ok' ? 'connected' : 'unavailable');
-        }
-      } catch {
-        if (isMounted) {
-          setBackendStatus('unavailable');
-        }
-      } finally {
-        if (isMounted) {
-          healthTimer = window.setTimeout(checkBackend, 10000);
-        }
-      }
-    };
-
-    void checkBackend();
 
     fetch('/api/auth/me')
       .then(async (response) => {
@@ -133,7 +100,6 @@ export default function App() {
 
     return () => {
       isMounted = false;
-      window.clearTimeout(healthTimer);
     };
   }, []);
 
@@ -167,6 +133,18 @@ export default function App() {
 
     return () => observer.disconnect();
   }, [activePage]);
+
+  useEffect(() => {
+    if (activePage !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return undefined;
+    }
+
+    const heroTimer = window.setInterval(() => {
+      setActiveHeroImage((currentImage) => (currentImage + 1) % heroImages.length);
+    }, 6500);
+
+    return () => window.clearInterval(heroTimer);
+  }, [activePage, heroImages.length]);
 
   const handleSelectRole = (role) => {
     router.push(`/login?role=${role}`);
@@ -256,31 +234,6 @@ export default function App() {
                 <a href="#regulasi-poin" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Regulasi Poin SKPI</a>
               </div>
 
-              <div className="flex items-center gap-3 text-xs">
-                <span
-                  className={`rounded-lg border px-3 py-1.5 font-medium ${
-                    backendStatus === 'connected'
-                      ? 'border-emerald-500/50 bg-emerald-950/40 text-emerald-200'
-                      : backendStatus === 'database-unavailable'
-                        ? 'border-orange-400/50 bg-orange-950/40 text-orange-200'
-                        : backendStatus === 'unavailable'
-                          ? 'border-rose-400/50 bg-rose-950/40 text-rose-200'
-                          : 'border-amber-400/50 bg-amber-950/40 text-amber-200'
-                  }`}
-                  role="status"
-                >
-                  {backendStatus === 'connected'
-                    ? 'API & database terhubung'
-                    : backendStatus === 'database-unavailable'
-                      ? 'API aktif; database tidak terhubung'
-                    : backendStatus === 'unavailable'
-                      ? 'API backend tidak terhubung'
-                      : 'Menghubungkan API...'}
-                </span>
-                <button className="flex items-center gap-1.5 bg-red-900/60 hover:bg-red-900 px-3 py-1.5 rounded-lg text-slate-100 border border-red-700/50 transition-colors font-medium">
-                  <HelpCircle className="w-3.5 h-3.5 text-amber-300" /> Pusat Sanggah & Helpdesk
-                </button>
-              </div>
             </div>
           </nav>
 
@@ -292,44 +245,51 @@ export default function App() {
 
           <div 
             data-scroll-reveal
-            className="relative isolate overflow-hidden border-b border-slate-800 bg-slate-900 px-6 py-12 text-white"
+            data-reveal="zoom"
+            className="relative z-20 isolate overflow-hidden rounded-b-3xl bg-slate-900 px-6 py-12 text-white"
           >
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 -z-20 scale-105 bg-cover bg-center blur-[2px]"
-              style={{ backgroundImage: "url(/campus-team.png)" }}
-            />
+            {heroImages.map((image, index) => (
+              <div
+                key={image}
+                aria-hidden="true"
+                className={`hero-image-layer absolute inset-0 -z-20 bg-cover bg-center blur-[2px] ${
+                  activeHeroImage === index ? 'is-active' : ''
+                }`}
+                style={{ backgroundImage: `url(${image})` }}
+              />
+            ))}
             <div
               aria-hidden="true"
               className="absolute inset-0 -z-10 bg-gradient-to-r from-red-950/90 via-red-900/75 to-rose-900/65"
             />
             <div className="max-w-7xl mx-auto relative z-10">
-              <span className="bg-amber-400 text-red-950 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider shadow-sm">
+              <span data-scroll-reveal data-reveal="text" className="bg-amber-400 text-red-950 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider shadow-sm">
                 Sistem Poin Kedisiplinan & Track Record Vokasi
               </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold mt-3 leading-tight">
+              <h2 data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-3xl sm:text-4xl font-extrabold mt-3 leading-tight">
                 Portal Kedisiplinan & Integrasi SKPI Mahasiswa
               </h2>
-              <p className="mt-2 text-slate-100 max-w-2xl text-sm sm:text-base leading-relaxed">
+              <p data-scroll-reveal data-reveal="text" data-reveal-delay="160" className="mt-2 text-slate-100 max-w-2xl text-sm sm:text-base leading-relaxed">
                 Selamat datang di portal pemantauan kedisiplinan Politeknik Sinar Mas Berau Coal. Sistem ini menyajikan rekam jejak presensi yang bersumber dari e-Campus serta poin kegiatan non-akademik.
               </p>
             </div>
           </div>
 
-          <main data-scroll-reveal className="relative flex-1 w-full bg-cover bg-center py-16 px-6 flex items-center justify-center overflow-hidden"
-                style={{ backgroundImage: `url(${bgCampusImage})` }}>
-            <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"></div>
+          <main data-scroll-reveal className="relative z-0 -mt-7 flex min-h-[520px] w-full flex-1 items-center justify-center overflow-hidden bg-cover bg-center px-6 py-16"
+                style={{ backgroundImage: `url(${portalAccessBackground})` }}>
+            <div className="absolute inset-0 z-0 bg-slate-950/55 backdrop-blur-sm"></div>
 
             <div className="max-w-7xl mx-auto w-full relative z-10">
               <div className="text-center mb-10">
-                <h3 className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">Pilih Akses Masuk Portal</h3>
-                <p className="text-slate-100 text-sm mt-2 font-medium drop-shadow-sm">Silakan pilih peran Anda untuk melanjutkan ke halaman login</p>
+                <h3 data-scroll-reveal data-reveal="text" className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">Pilih Akses Masuk Portal</h3>
+                <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-100 text-sm mt-2 font-medium drop-shadow-sm">Silakan pilih peran Anda untuk melanjutkan ke halaman login</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <button
                   type="button"
                   data-scroll-reveal
+                  data-reveal="left"
                   data-reveal-delay="80"
                   onClick={() => handleSelectRole('mhs')}
                   className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
@@ -338,8 +298,8 @@ export default function App() {
                     <div className="w-14 h-14 bg-red-50 text-red-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-800 group-hover:text-white transition-all shadow-sm">
                       <User className="w-8 h-8" />
                     </div>
-                    <h4 className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Mahasiswa</h4>
-                    <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
+                    <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Mahasiswa</h4>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
                       Cek rekam jejak kedisiplinan dan presensi e-Campus, ajukan sanggah, serta klaim poin kegiatan non-akademik.
                     </p>
                   </div>
@@ -351,6 +311,7 @@ export default function App() {
                 <button
                   type="button"
                   data-scroll-reveal
+                  data-reveal="zoom"
                   data-reveal-delay="160"
                   onClick={() => handleSelectRole('dosen')}
                   className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-rose-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
@@ -359,8 +320,8 @@ export default function App() {
                     <div className="w-14 h-14 bg-rose-50 text-rose-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-rose-800 group-hover:text-white transition-all shadow-sm">
                       <UserCheck className="w-8 h-8" />
                     </div>
-                    <h4 className="text-2xl font-bold text-slate-900 group-hover:text-rose-800 transition-colors">Akses Dosen PA</h4>
-                    <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
+                    <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-rose-800 transition-colors">Akses Dosen PA</h4>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
                       Monitoring statistik kedisiplinan mahasiswa bimbingan, verifikasi jadwal konseling, dan berikan catatan bimbingan.
                     </p>
                   </div>
@@ -372,6 +333,7 @@ export default function App() {
                 <button
                   type="button"
                   data-scroll-reveal
+                  data-reveal="right"
                   data-reveal-delay="240"
                   onClick={() => handleSelectRole('admin')}
                   className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
@@ -380,8 +342,8 @@ export default function App() {
                     <div className="w-14 h-14 bg-red-50 text-red-900 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-900 group-hover:text-white transition-all shadow-sm">
                       <ShieldCheck className="w-8 h-8" />
                     </div>
-                    <h4 className="text-2xl font-bold text-slate-900 group-hover:text-red-900 transition-colors">Akses Kemahasiswaan</h4>
-                    <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
+                    <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-900 transition-colors">Akses Kemahasiswaan</h4>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
                       Verifikasi klaim sertifikat & kegiatan non-akademik, validasi sanggahan presensi, serta kelola syarat kelulusan.
                     </p>
                   </div>
@@ -399,10 +361,10 @@ export default function App() {
                 <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-red-800">
                   <HelpCircle className="h-4 w-4" /> Tentang SiDisiplin
                 </span>
-                <h2 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+                <h2 data-scroll-reveal data-reveal="text" className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
                   Apa itu Website SiDisiplin?
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+                <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
                   SiDisiplin adalah portal informasi kedisiplinan Politeknik Sinar Mas Berau Coal. Website ini dirancang untuk membantu mahasiswa, dosen pembimbing akademik, dan pihak kemahasiswaan mengakses informasi presensi, catatan kedisiplinan, kegiatan non-akademik, serta bimbingan dalam satu tempat.
                 </p>
               </div>
@@ -411,49 +373,49 @@ export default function App() {
                 <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Cara kerja portal</p>
-                    <h3 className="mt-1 text-lg font-extrabold sm:text-xl">Informasi kedisiplinan dalam satu alur</h3>
+                    <h3 data-scroll-reveal data-reveal="text" className="mt-1 text-lg font-extrabold sm:text-xl">Informasi kedisiplinan dalam satu alur</h3>
                   </div>
                   <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-red-100">
                     Ringkasan use case SiDisiplin
                   </span>
                 </div>
                 <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                  <div data-scroll-reveal data-reveal="left" className="rounded-2xl border border-white/15 bg-white/10 p-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
                       <FileText className="h-5 w-5" />
                     </div>
-                    <p className="mt-3 text-sm font-bold">Presensi e-Campus</p>
-                    <p className="mt-1 text-xs leading-relaxed text-red-100">Sumber catatan kehadiran perkuliahan</p>
+                    <p data-scroll-reveal data-reveal="text" className="mt-3 text-sm font-bold">Presensi e-Campus</p>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-1 text-xs leading-relaxed text-red-100">Sumber catatan kehadiran perkuliahan</p>
                   </div>
                   <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                  <div data-scroll-reveal data-reveal="left" data-reveal-delay="80" className="rounded-2xl border border-white/15 bg-white/10 p-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
                       <Award className="h-5 w-5" />
                     </div>
-                    <p className="mt-3 text-sm font-bold">Kegiatan & poin</p>
-                    <p className="mt-1 text-xs leading-relaxed text-red-100">Klaim aktivitas melalui proses verifikasi</p>
+                    <p data-scroll-reveal data-reveal="text" className="mt-3 text-sm font-bold">Kegiatan & poin</p>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-1 text-xs leading-relaxed text-red-100">Klaim aktivitas melalui proses verifikasi</p>
                   </div>
                   <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                  <div data-scroll-reveal data-reveal="right" data-reveal-delay="160" className="rounded-2xl border border-white/15 bg-white/10 p-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
                       <UserCheck className="h-5 w-5" />
                     </div>
-                    <p className="mt-3 text-sm font-bold">Pemantauan & bimbingan</p>
-                    <p className="mt-1 text-xs leading-relaxed text-red-100">Dosen PA meninjau perkembangan mahasiswa</p>
+                    <p data-scroll-reveal data-reveal="text" className="mt-3 text-sm font-bold">Pemantauan & bimbingan</p>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-1 text-xs leading-relaxed text-red-100">Dosen PA meninjau perkembangan mahasiswa</p>
                   </div>
                   <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
-                  <div className="rounded-2xl border border-amber-300/40 bg-amber-300/15 p-4">
+                  <div data-scroll-reveal data-reveal="right" data-reveal-delay="240" className="rounded-2xl border border-amber-300/40 bg-amber-300/15 p-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-300 text-red-950">
                       <ShieldCheck className="h-5 w-5" />
                     </div>
-                    <p className="mt-3 text-sm font-bold">Rekam jejak</p>
-                    <p className="mt-1 text-xs leading-relaxed text-red-100">Informasi untuk tindak lanjut dan kelulusan</p>
+                    <p data-scroll-reveal data-reveal="text" className="mt-3 text-sm font-bold">Rekam jejak</p>
+                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-1 text-xs leading-relaxed text-red-100">Informasi untuk tindak lanjut dan kelulusan</p>
                   </div>
                 </div>
               </div>
 
               <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div data-scroll-reveal data-reveal-delay="80" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div data-scroll-reveal data-reveal="left" data-reveal-delay="80" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-800">
                     <Calendar className="h-5 w-5" />
                   </div>
@@ -462,7 +424,7 @@ export default function App() {
                     Mahasiswa dapat melihat presensi yang disinkronkan dari e-Campus dan mengajukan sanggahan jika ada catatan yang perlu ditinjau.
                   </p>
                 </div>
-                <div data-scroll-reveal data-reveal-delay="160" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div data-scroll-reveal data-reveal="zoom" data-reveal-delay="160" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
                     <Award className="h-5 w-5" />
                   </div>
@@ -471,7 +433,7 @@ export default function App() {
                     Kegiatan, sertifikasi, dan prestasi non-akademik dapat diajukan untuk verifikasi dan pencatatan poin SKPI.
                   </p>
                 </div>
-                <div data-scroll-reveal data-reveal-delay="240" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div data-scroll-reveal data-reveal="right" data-reveal-delay="240" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-800">
                     <MessageSquare className="h-5 w-5" />
                   </div>
@@ -490,16 +452,16 @@ export default function App() {
                 <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
                   <Award className="h-4 w-4" /> Ketentuan Poin Mahasiswa
                 </span>
-                <h2 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+                <h2 data-scroll-reveal data-reveal="text" className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
                   Hal yang memengaruhi poin kedisiplinan
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+                <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
                   Poin mencerminkan catatan kedisiplinan dan partisipasi mahasiswa. Perubahan poin dicatat berdasarkan aktivitas yang terekam atau pengajuan yang sudah diverifikasi.
                 </p>
               </div>
 
               <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div data-scroll-reveal data-reveal-delay="80" className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+                <div data-scroll-reveal data-reveal="left" data-reveal-delay="80" className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="flex items-center gap-2 text-lg font-extrabold text-emerald-800">
@@ -527,7 +489,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div data-scroll-reveal data-reveal-delay="180" className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+                <div data-scroll-reveal data-reveal="right" data-reveal-delay="180" className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="flex items-center gap-2 text-lg font-extrabold text-red-800">

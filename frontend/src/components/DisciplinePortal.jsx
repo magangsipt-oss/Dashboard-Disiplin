@@ -277,7 +277,7 @@ export default function App() {
 
           <main data-scroll-reveal className="relative z-0 -mt-7 flex min-h-[520px] w-full flex-1 items-center justify-center overflow-hidden bg-cover bg-center px-6 py-16"
                 style={{ backgroundImage: `url(${portalAccessBackground})` }}>
-            <div className="absolute inset-0 z-0 bg-slate-950/55 backdrop-blur-sm"></div>
+            <div className="absolute inset-0 z-0 bg-slate-950/55 backdrop-blur-[1px]"></div>
 
             <div className="max-w-7xl mx-auto w-full relative z-10">
               <div className="text-center mb-10">

@@ -46,25 +46,34 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+    let healthTimer;
 
-    fetch('/api/health')
-      .then((response) => {
+    const checkBackend = async () => {
+      try {
+        const response = await fetch('/api/health', {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(5000),
+        });
         if (!response.ok) {
           throw new Error(`Backend returned ${response.status}`);
         }
 
-        return response.json();
-      })
-      .then((data) => {
+        const data = await response.json();
         if (isMounted) {
           setBackendStatus(data.status === 'ok' ? 'connected' : 'unavailable');
         }
-      })
-      .catch(() => {
+      } catch {
         if (isMounted) {
           setBackendStatus('unavailable');
         }
-      });
+      } finally {
+        if (isMounted) {
+          healthTimer = window.setTimeout(checkBackend, 10000);
+        }
+      }
+    };
+
+    void checkBackend();
 
     fetch('/api/auth/me')
       .then(async (response) => {
@@ -88,6 +97,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
+      window.clearTimeout(healthTimer);
     };
   }, []);
 
@@ -275,9 +285,10 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div 
+                <button
+                  type="button"
                   onClick={() => handleSelectRole('mhs')}
-                  className="bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between"
+                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
                 >
                   <div>
                     <div className="w-14 h-14 bg-red-50 text-red-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-800 group-hover:text-white transition-all shadow-sm">
@@ -288,14 +299,15 @@ export default function App() {
                       Cek rekapitulasi nilai kedisiplinan, histori tapping KTM, ajukan sanggah presensi, dan klaim poin SKPI kegiatan.
                     </p>
                   </div>
-                  <button className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
+                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
                     Masuk via NIM
-                  </button>
-                </div>
+                  </span>
+                </button>
 
-                <div 
+                <button
+                  type="button"
                   onClick={() => handleSelectRole('dosen')}
-                  className="bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-rose-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between"
+                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-rose-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
                 >
                   <div>
                     <div className="w-14 h-14 bg-rose-50 text-rose-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-rose-800 group-hover:text-white transition-all shadow-sm">
@@ -306,14 +318,15 @@ export default function App() {
                       Monitoring statistik kedisiplinan mahasiswa bimbingan, verifikasi jadwal konseling, dan berikan catatan bimbingan.
                     </p>
                   </div>
-                  <button className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-rose-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
+                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-rose-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
                     Masuk via NIP/NIDN
-                  </button>
-                </div>
+                  </span>
+                </button>
 
-                <div 
+                <button
+                  type="button"
                   onClick={() => handleSelectRole('admin')}
-                  className="bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between"
+                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
                 >
                   <div>
                     <div className="w-14 h-14 bg-red-50 text-red-900 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-900 group-hover:text-white transition-all shadow-sm">
@@ -324,10 +337,10 @@ export default function App() {
                       Verifikasi klaim sertifikat & kegiatan non-akademik, validasi sanggahan presensi, serta kelola syarat kelulusan.
                     </p>
                   </div>
-                  <button className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-900 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
+                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-900 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
                     Masuk Portal Admin
-                  </button>
-                </div>
+                  </span>
+                </button>
               </div>
             </div>
           </main>

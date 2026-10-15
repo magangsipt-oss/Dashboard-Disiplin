@@ -38,46 +38,36 @@ URL ini menggunakan username/password PostgreSQL lokal Anda. Jangan commit
 Pengguna PostgreSQL pada URL perlu memiliki izin `CREATEDB` agar perintah
 setup dapat membuat database secara otomatis.
 
-### Memindahkan data dari tiga database lama
+### Menyiapkan database yang sama di komputer teman
 
-Database sumber `Mahasiswa`, `Dosen`, dan `Kemahasiswaan` tidak dihapus oleh
-langkah ini. Sebelum memindahkan data, pastikan tiga variabel URL sumber masih
-ada di `backend/.env` dan masing-masing menunjuk ke database lama yang sesuai:
-`MAHASISWA_DATABASE_URL`, `DOSEN_DATABASE_URL`, dan
-`KEMAHASISWAAN_DATABASE_URL`.
-
-Di komputer yang masih dapat mengakses database lama, jalankan dari folder
-`backend`:
+Di komputer Anda, pastikan `backend/.env` menunjuk ke database sumber
+`dashboard_disiplin`, lalu jalankan dari folder `backend`:
 
 ```powershell
 npm.cmd install
 npm.cmd run prisma:data:export
 ```
 
-Perintah ini mengekspor semua baris dari tiga tabel lama ke
-`backend/prisma/database-data.json`. File ini berisi informasi pribadi
-termasuk password. Simpan dan pindahkan hanya melalui kanal privat yang aman;
-jangan commit atau mengirimnya ke kanal publik. File tersebut sudah
-dikecualikan dari Git.
+Perintah ini mengekspor seluruh data terkini dari ketiga tabel ke
+`backend/prisma/database-data.json`. File ini berisi data pribadi termasuk
+password. File tersebut dikecualikan dari Git. Pindahkan file itu ke teman
+Anda melalui kanal privat yang aman; jangan mengirimkannya melalui kanal
+publik.
 
-Atur `DATABASE_URL` agar menunjuk ke database tujuan `dashboard_disiplin`.
-Di komputer tujuan, pindahkan file ekspor ke folder `backend/prisma/`, lalu
-jalankan:
+Di komputer teman, salin `backend/.env.example` menjadi `backend/.env`, lalu
+ubah `DATABASE_URL` agar menggunakan host, username, dan password PostgreSQL
+lokalnya dengan nama database `dashboard_disiplin`. Pindahkan file
+`database-data.json` ke folder `backend/prisma/`, lalu jalankan:
 
 ```powershell
 npm.cmd install
 npm.cmd run prisma:setup
 ```
 
-Perintah setup akan membuat database `dashboard_disiplin` jika belum ada,
-menerapkan satu skema Prisma yang berisi ketiga tabel, lalu mengimpor data.
-Database sumber tidak dihapus. Jika baris bentrok dengan primary key atau
-unique key yang sudah ada di tujuan, baris itu dilewati; data yang ada tidak
-ditimpa.
-
-Untuk komputer baru yang belum punya database sumber, cukup atur
-`DATABASE_URL`, siapkan file ekspor dari komputer sumber, lalu jalankan
-`npm.cmd run prisma:setup`.
+Perintah tersebut membuat database jika belum tersedia, membuat tabel sesuai
+`backend/prisma/schema.prisma`, lalu memasukkan data ekspor. Jika baris
+bertabrakan dengan primary key atau unique key yang sudah ada, baris itu
+dilewati dan data yang sudah ada tidak ditimpa.
 
 ### Memulai backend
 

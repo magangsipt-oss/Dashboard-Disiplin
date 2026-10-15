@@ -11,8 +11,7 @@
     "prisma:validate": "prisma validate",
     "prisma:push": "prisma db push",
     "prisma:setup": "tsx prisma/create-database.ts && npm run prisma:generate && npm run prisma:push && tsx prisma/transfer-data.ts import",
-    "prisma:legacy:generate": "prisma generate --schema=prisma/mahasiswa.prisma && prisma generate --schema=prisma/dosen.prisma && prisma generate --schema=prisma/kemahasiswaan.prisma",
-    "prisma:data:export": "npm run prisma:legacy:generate && tsx prisma/transfer-data.ts export",
+    "prisma:data:export": "npm run prisma:generate && tsx prisma/transfer-data.ts export",
     "prisma:data:import": "npm run prisma:generate && tsx prisma/transfer-data.ts import"
   },
   "dependencies": {

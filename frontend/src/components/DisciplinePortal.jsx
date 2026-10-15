@@ -41,6 +41,7 @@ export default function App() {
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
 
   const officialLogoUrl = "/poltek-simas-berau.png";
+  const bgCampusImage = "/campus.svg";
   const portalAccessBackground = "/portal-access-background.jpg";
   const heroImages = [
     '/campus-team.png',

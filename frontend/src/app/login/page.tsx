@@ -1,8 +1,13 @@
-export default function LoginPage() {
-  return (
-    <main>
-      <h1>Masuk ke SiDisiplin</h1>
-      <p>Form login akan ditambahkan di sini.</p>
-    </main>
-  );
+import LoginForm, { type LoginRole } from "./LoginForm";
+
+type LoginPageProps = {
+  searchParams: Promise<{ role?: string | string[] }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { role } = await searchParams;
+  const selectedRole: LoginRole =
+    role === "dosen" || role === "admin" ? role : "mhs";
+
+  return <LoginForm role={selectedRole} />;
 }

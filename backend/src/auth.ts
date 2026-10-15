@@ -1,10 +1,11 @@
 import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
 import dotenv from "dotenv";
 import { Router, type Request, type Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
-dotenv.config();
+dotenv.config({ path: resolve(__dirname, "../.env") });
 
 const scryptAsync = promisify(scrypt);
 const database = new PrismaClient();

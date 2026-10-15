@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -26,19 +27,16 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  const router = useRouter();
   const [backendStatus, setBackendStatus] = useState('checking');
   const [activePage, setActivePage] = useState('landing');
-  const [selectedRole, setSelectedRole] = useState('mhs');
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const [showSKPIModal, setShowSKPIModal] = useState(false);
   const [showSanggahModal, setShowSanggahModal] = useState(false);
   const [showKonselingModal, setShowKonselingModal] = useState(false);
 
-  const [identityInput, setIdentityInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
 
   const officialLogoUrl = "/sidisiplin-mark.svg";
@@ -59,6 +57,16 @@ export default function App() {
         }
 
         const data = await response.json();
+        if (!response.ok && data.database === 'disconnected') {
+          if (isMounted) {
+            setBackendStatus('database-unavailable');
+          }
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+
         if (isMounted) {
           setBackendStatus(data.status === 'ok' ? 'connected' : 'unavailable');
         }
@@ -85,7 +93,6 @@ export default function App() {
       .then((data) => {
         if (isMounted && data?.profile) {
           setAuthenticatedUser(data.profile);
-          setSelectedRole(data.profile.role);
           setActivePage('dashboard');
         }
       })
@@ -102,43 +109,7 @@ export default function App() {
   }, []);
 
   const handleSelectRole = (role) => {
-    setSelectedRole(role);
-    setIdentityInput('');
-    setPasswordInput('');
-    setLoginError('');
-    setActivePage('login');
-  };
-
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    setIsLoggingIn(true);
-
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role: selectedRole,
-          identity: identityInput,
-          password: passwordInput,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Login gagal. Periksa identitas dan kata sandi.');
-      }
-
-      setAuthenticatedUser(data.profile);
-      setSelectedRole(data.profile.role);
-      setPasswordInput('');
-      setActiveTab('dashboard');
-      setActivePage('dashboard');
-    } catch (error) {
-      setLoginError(error.message || 'Tidak dapat menghubungi layanan login.');
-    } finally {
-      setIsLoggingIn(false);
-    }
+    router.push(`/login?role=${role}`);
   };
 
   const handleLogout = async () => {
@@ -153,8 +124,6 @@ export default function App() {
       setLoginError('Koneksi logout gagal. Muat ulang halaman untuk memeriksa sesi.');
     } finally {
       setAuthenticatedUser(null);
-      setIdentityInput('');
-      setPasswordInput('');
       setActivePage('landing');
     }
   };
@@ -232,14 +201,18 @@ export default function App() {
                   className={`rounded-lg border px-3 py-1.5 font-medium ${
                     backendStatus === 'connected'
                       ? 'border-emerald-500/50 bg-emerald-950/40 text-emerald-200'
-                      : backendStatus === 'unavailable'
-                        ? 'border-rose-400/50 bg-rose-950/40 text-rose-200'
-                        : 'border-amber-400/50 bg-amber-950/40 text-amber-200'
+                      : backendStatus === 'database-unavailable'
+                        ? 'border-orange-400/50 bg-orange-950/40 text-orange-200'
+                        : backendStatus === 'unavailable'
+                          ? 'border-rose-400/50 bg-rose-950/40 text-rose-200'
+                          : 'border-amber-400/50 bg-amber-950/40 text-amber-200'
                   }`}
                   role="status"
                 >
                   {backendStatus === 'connected'
-                    ? 'API backend terhubung'
+                    ? 'API & database terhubung'
+                    : backendStatus === 'database-unavailable'
+                      ? 'API aktif; database tidak terhubung'
                     : backendStatus === 'unavailable'
                       ? 'API backend tidak terhubung'
                       : 'Menghubungkan API...'}
@@ -348,102 +321,6 @@ export default function App() {
           <footer className="bg-slate-950 text-slate-400 py-6 text-center text-xs border-t border-slate-800 relative z-20">
             © 2026 Politeknik Sinar Mas Berau Coal — Sistem Informasi Kedisiplinan Mahasiswa (SiDisiplin)
           </footer>
-        </div>
-      )}
-
-      {}
-      {activePage === 'login' && (
-        <div 
-          className="min-h-screen flex items-center justify-center bg-cover bg-center p-4 relative overflow-hidden"
-          style={{ backgroundImage: `url(${bgCampusImage})` }}
-        >
-          <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm"></div>
-
-          <button 
-            onClick={() => setActivePage('landing')}
-            className="absolute top-6 left-6 text-slate-200 hover:text-white flex items-center gap-2 text-sm font-semibold transition-colors z-20 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-700/60 shadow-lg"
-          >
-            <ArrowLeft className="w-4 h-4" /> Kembali ke Halaman Utama
-          </button>
-
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white/80 relative z-10">
-            <div className="text-center mb-6">
-              <div className="h-14 w-auto flex items-center justify-center p-2 bg-white rounded-2xl shadow-md border border-slate-200 mx-auto mb-3">
-                <img 
-                  src={officialLogoUrl} 
-                  alt="Logo Poltek Simas Berau" 
-                  className="h-10 w-auto object-contain"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.style.display = 'none';
-                    e.target.parentNode.innerHTML = '<div class="w-10 h-10 bg-red-800 text-white font-black rounded-xl flex items-center justify-center">PSB</div>';
-                  }}
-                />
-              </div>
-              <h3 className="text-2xl font-extrabold text-slate-900">Masuk Portal SiDisiplin</h3>
-              <p className="text-red-800 text-xs mt-1.5 uppercase tracking-wider font-extrabold bg-red-50 py-1.5 px-3 rounded-full inline-block border border-red-200/50">
-                Peran: {selectedRole === 'mhs' ? 'Mahasiswa' : selectedRole === 'dosen' ? 'Dosen PA' : 'Admin Kemahasiswaan'}
-              </p>
-            </div>
-
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  {selectedRole === 'mhs'
-                    ? 'NIM (Nomor Induk Mahasiswa)'
-                    : selectedRole === 'dosen'
-                      ? 'NIP atau NIDN'
-                      : 'NIP Kemahasiswaan'}
-                </label>
-                <input 
-                  type="text"
-                  required
-                  autoComplete="username"
-                  placeholder={selectedRole === 'mhs' ? 'misal: 202401001' : 'masukkan nomor identitas'}
-                  value={identityInput}
-                  onChange={(e) => setIdentityInput(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-sm bg-slate-50 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Kata Sandi
-                </label>
-                <input 
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-sm bg-slate-50 font-medium"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded text-red-800" />
-                  <span>Ingat Saya</span>
-                </label>
-                <a href="#" className="text-red-800 font-bold hover:underline">Lupa Kata Sandi?</a>
-              </div>
-
-              {loginError && (
-                <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
-                  {loginError}
-                </p>
-              )}
-
-              <button 
-                type="submit"
-                disabled={isLoggingIn}
-                className="w-full py-3.5 bg-red-800 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-2"
-              >
-                {isLoggingIn ? 'Memeriksa akun...' : 'Masuk ke Dashboard'}
-              </button>
-            </form>
-          </div>
         </div>
       )}
 

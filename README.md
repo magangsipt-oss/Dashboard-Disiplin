@@ -107,3 +107,7 @@ npm.cmd run prisma:generate
 
 Gunakan `npm.cmd run prisma:setup` hanya saat perlu membuat database baru dan
 mengimpor file ekspor data.
+
+Backend memuat konfigurasi dari `backend/.env`, termasuk saat perintah
+dijalankan dari folder lain. Halaman login dapat dibuka langsung melalui
+`/login?role=mhs`, `/login?role=dosen`, atau `/login?role=admin`.

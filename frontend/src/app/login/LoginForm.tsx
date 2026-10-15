@@ -81,15 +81,23 @@ export default function LoginForm({ role }: { role: LoginRole }) {
 
       <section className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white/80 relative z-10">
         <div className="text-center mb-6">
-          <div className="h-14 w-auto flex items-center justify-center p-2 bg-white rounded-2xl shadow-md border border-slate-200 mx-auto mb-3">
+          <div className="flex items-center justify-center gap-3 mb-5">
             <img
-              src="/sidisiplin-mark.svg"
+              src="/poltek-simas-berau.png"
               alt="Logo Poltek Simas Berau"
-              className="h-10 w-auto object-contain"
+              className="h-14 w-14 object-contain rounded-2xl border border-slate-200 bg-white p-1 shadow-md"
             />
+            <div className="text-left">
+              <p className="text-lg font-extrabold leading-tight text-slate-900">
+                SiDisiplin
+              </p>
+              <p className="text-sm font-semibold text-slate-600">
+                Poltek Simas Berau
+              </p>
+            </div>
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900">
-            Masuk Portal SiDisiplin
+            Masuk Portal
           </h1>
           <p className="text-red-800 text-xs mt-1.5 uppercase tracking-wider font-extrabold bg-red-50 py-1.5 px-3 rounded-full inline-block border border-red-200/50">
             Peran: {details.label}

@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/dosen"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DOSEN_DATABASE_URL")
+}
+
+model Dosen {
+  id       Int    @id @default(autoincrement())
+  nidn     BigInt @unique @map("NIDN")
+  nip      BigInt @unique @map("NIP")
+  nama     String @map("Nama")
+  password String @db.VarChar(255) @map("Password")
+  timestamp DateTime @default(now())
+
+  @@map("Dosen")
+}

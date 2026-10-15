@@ -5,6 +5,7 @@
 **/build/
 **/coverage/
 backend/src/generated/
+backend/prisma/database-data.json
 
 # Local environment and credentials
 **/.env

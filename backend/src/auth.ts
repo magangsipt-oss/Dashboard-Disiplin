@@ -2,25 +2,19 @@ import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
 import { promisify } from "node:util";
 import dotenv from "dotenv";
 import { Router, type Request, type Response } from "express";
-import { PrismaClient as MahasiswaClient } from "./generated/mahasiswa";
-import { PrismaClient as DosenClient } from "./generated/dosen";
-import { PrismaClient as KemahasiswaanClient } from "./generated/kemahasiswaan";
+import { PrismaClient } from "@prisma/client";
 
 dotenv.config();
 
 const scryptAsync = promisify(scrypt);
-const mahasiswaDb = new MahasiswaClient();
-const dosenDb = new DosenClient();
-const kemahasiswaanDb = new KemahasiswaanClient();
+const database = new PrismaClient();
 const SESSION_COOKIE = "sidisiplin_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const SCRYPT_KEY_LENGTH = 64;
 const MAX_POSTGRES_BIGINT = 9_223_372_036_854_775_807n;
 
 export const authDatabases = [
-  { name: "mahasiswa", client: mahasiswaDb },
-  { name: "dosen", client: dosenDb },
-  { name: "kemahasiswaan", client: kemahasiswaanDb },
+  { name: "dashboard_disiplin", client: database },
 ];
 
 type Role = "mhs" | "dosen" | "admin";
@@ -114,7 +108,7 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
       return null;
     }
 
-    const account = await mahasiswaDb.mahasiswa.findUnique({ where: { nim } });
+    const account = await database.mahasiswa.findUnique({ where: { nim } });
     if (!account) {
       return null;
     }
@@ -130,7 +124,7 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
       details: [{ label: "Jurusan", value: account.jurusan }],
       createdAt: account.timestamp,
       updatePassword: (password) =>
-        mahasiswaDb.mahasiswa.update({
+        database.mahasiswa.update({
           where: { id: account.id },
           data: { password },
         }),
@@ -143,7 +137,7 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
   }
 
   if (role === "dosen") {
-    const account = await dosenDb.dosen.findFirst({
+    const account = await database.dosen.findFirst({
       where: {
         OR: [{ nip: numericIdentity }, { nidn: numericIdentity }],
       },
@@ -167,14 +161,14 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
       ],
       createdAt: account.timestamp,
       updatePassword: (password) =>
-        dosenDb.dosen.update({
+        database.dosen.update({
           where: { id: account.id },
           data: { password },
         }),
     };
   }
 
-  const account = await kemahasiswaanDb.kemahasiswaan.findUnique({
+  const account = await database.kemahasiswaan.findUnique({
     where: { nip: numericIdentity },
   });
   if (!account) {
@@ -192,7 +186,7 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
     details: [{ label: "NIP", value: String(account.nip) }],
     createdAt: account.timestamp,
     updatePassword: (password) =>
-      kemahasiswaanDb.kemahasiswaan.update({
+      database.kemahasiswaan.update({
         where: { id: account.id },
         data: { password },
       }),

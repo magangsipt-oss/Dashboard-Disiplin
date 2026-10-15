@@ -19,6 +19,7 @@ import {
   Send,
   User,
   ArrowLeft,
+  ArrowRight,
   HelpCircle,
   MapPin,
   Mail,
@@ -41,6 +42,33 @@ export default function App() {
 
   const officialLogoUrl = "/poltek-simas-berau.png";
   const bgCampusImage = "/campus.svg";
+  const navigationByRole = {
+    mhs: [
+      { id: 'dashboard', label: 'Ringkasan' },
+      { id: 'rekam-jejak', label: 'Rekam Jejak' },
+      { id: 'sanggah', label: 'Sanggah Presensi' },
+      { id: 'klaim', label: 'Klaim Kegiatan' },
+      { id: 'konseling', label: 'Konseling' },
+    ],
+    dosen: [
+      { id: 'dashboard', label: 'Ringkasan' },
+      { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
+      { id: 'konseling', label: 'Catatan & Konseling' },
+    ],
+    admin: [
+      { id: 'dashboard', label: 'Ringkasan' },
+      { id: 'sanggah', label: 'Sanggah Presensi' },
+      { id: 'verifikasi', label: 'Verifikasi Klaim' },
+      { id: 'kelulusan', label: 'SKPI & Kelulusan' },
+      { id: 'aturan', label: 'Aturan Poin' },
+      { id: 'redemption', label: 'Pemulihan Poin' },
+      { id: 'sinkronisasi', label: 'Sinkronisasi e-Campus' },
+      { id: 'users', label: 'Manajemen User' },
+      { id: 'maintenance', label: 'Pemeliharaan' },
+    ],
+  };
+  const dashboardNavigation =
+    navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
 
   useEffect(() => {
     let isMounted = true;
@@ -93,6 +121,7 @@ export default function App() {
       .then((data) => {
         if (isMounted && data?.profile) {
           setAuthenticatedUser(data.profile);
+          setActiveTab('dashboard');
           setActivePage('dashboard');
         }
       })
@@ -107,6 +136,37 @@ export default function App() {
       window.clearTimeout(healthTimer);
     };
   }, []);
+
+  useEffect(() => {
+    const revealElements = document.querySelectorAll('[data-scroll-reveal]');
+    const showAll = () => {
+      revealElements.forEach((element) => element.classList.add('is-visible'));
+    };
+
+    if (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      !('IntersectionObserver' in window)
+    ) {
+      showAll();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -32px 0px' },
+    );
+
+    revealElements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, [activePage]);
 
   const handleSelectRole = (role) => {
     router.push(`/login?role=${role}`);
@@ -192,8 +252,8 @@ export default function App() {
                   <ShieldCheck className="w-4 h-4" /> SiDisiplin PSB Portal
                 </span>
                 <a href="#" className="hover:text-amber-200 transition-colors py-1 border-b-2 border-amber-300 font-bold">Beranda</a>
-                <a href="#" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Panduan Tapping KTM</a>
-                <a href="#" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Regulasi Poin SKPI</a>
+                <a href="#tentang-website" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Tentang Website</a>
+                <a href="#regulasi-poin" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Regulasi Poin SKPI</a>
               </div>
 
               <div className="flex items-center gap-3 text-xs">
@@ -231,9 +291,18 @@ export default function App() {
           )}
 
           <div 
-            className="bg-slate-900 text-white py-12 px-6 relative overflow-hidden bg-cover bg-center border-b border-slate-800" 
-            style={{ backgroundImage: `linear-gradient(to right, rgba(69, 10, 10, 0.92), rgba(153, 27, 27, 0.85)), url(${bgCampusImage})` }}
+            data-scroll-reveal
+            className="relative isolate overflow-hidden border-b border-slate-800 bg-slate-900 px-6 py-12 text-white"
           >
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 -z-20 scale-105 bg-cover bg-center blur-[2px]"
+              style={{ backgroundImage: "url(/campus-team.png)" }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 -z-10 bg-gradient-to-r from-red-950/90 via-red-900/75 to-rose-900/65"
+            />
             <div className="max-w-7xl mx-auto relative z-10">
               <span className="bg-amber-400 text-red-950 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider shadow-sm">
                 Sistem Poin Kedisiplinan & Track Record Vokasi
@@ -242,12 +311,12 @@ export default function App() {
                 Portal Kedisiplinan & Integrasi SKPI Mahasiswa
               </h2>
               <p className="mt-2 text-slate-100 max-w-2xl text-sm sm:text-base leading-relaxed">
-                Selamat datang di portal resmi pemantauan nilai kedisiplinan Politeknik Sinar Mas Berau Coal. Sistem ini mencatat presensi tapping KTM otomatis serta akumulasi poin kegiatan non-akademik.
+                Selamat datang di portal pemantauan kedisiplinan Politeknik Sinar Mas Berau Coal. Sistem ini menyajikan rekam jejak presensi yang bersumber dari e-Campus serta poin kegiatan non-akademik.
               </p>
             </div>
           </div>
 
-          <main className="relative flex-1 w-full bg-cover bg-center py-16 px-6 flex items-center justify-center overflow-hidden"
+          <main data-scroll-reveal className="relative flex-1 w-full bg-cover bg-center py-16 px-6 flex items-center justify-center overflow-hidden"
                 style={{ backgroundImage: `url(${bgCampusImage})` }}>
             <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"></div>
 
@@ -260,6 +329,8 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <button
                   type="button"
+                  data-scroll-reveal
+                  data-reveal-delay="80"
                   onClick={() => handleSelectRole('mhs')}
                   className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
                 >
@@ -269,7 +340,7 @@ export default function App() {
                     </div>
                     <h4 className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Mahasiswa</h4>
                     <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Cek rekapitulasi nilai kedisiplinan, histori tapping KTM, ajukan sanggah presensi, dan klaim poin SKPI kegiatan.
+                      Cek rekam jejak kedisiplinan dan presensi e-Campus, ajukan sanggah, serta klaim poin kegiatan non-akademik.
                     </p>
                   </div>
                   <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
@@ -279,6 +350,8 @@ export default function App() {
 
                 <button
                   type="button"
+                  data-scroll-reveal
+                  data-reveal-delay="160"
                   onClick={() => handleSelectRole('dosen')}
                   className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-rose-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
                 >
@@ -298,6 +371,8 @@ export default function App() {
 
                 <button
                   type="button"
+                  data-scroll-reveal
+                  data-reveal-delay="240"
                   onClick={() => handleSelectRole('admin')}
                   className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
                 >
@@ -317,6 +392,188 @@ export default function App() {
               </div>
             </div>
           </main>
+
+          <section id="tentang-website" data-scroll-reveal className="scroll-mt-6 bg-white px-6 py-14">
+            <div className="max-w-5xl mx-auto">
+              <div className="max-w-3xl">
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-red-800">
+                  <HelpCircle className="h-4 w-4" /> Tentang SiDisiplin
+                </span>
+                <h2 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+                  Apa itu Website SiDisiplin?
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+                  SiDisiplin adalah portal informasi kedisiplinan Politeknik Sinar Mas Berau Coal. Website ini dirancang untuk membantu mahasiswa, dosen pembimbing akademik, dan pihak kemahasiswaan mengakses informasi presensi, catatan kedisiplinan, kegiatan non-akademik, serta bimbingan dalam satu tempat.
+                </p>
+              </div>
+
+              <div data-scroll-reveal className="mt-8 rounded-3xl bg-gradient-to-br from-red-950 via-red-900 to-rose-800 p-6 text-white shadow-xl sm:p-8">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Cara kerja portal</p>
+                    <h3 className="mt-1 text-lg font-extrabold sm:text-xl">Informasi kedisiplinan dalam satu alur</h3>
+                  </div>
+                  <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-red-100">
+                    Ringkasan use case SiDisiplin
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold">Presensi e-Campus</p>
+                    <p className="mt-1 text-xs leading-relaxed text-red-100">Sumber catatan kehadiran perkuliahan</p>
+                  </div>
+                  <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
+                      <Award className="h-5 w-5" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold">Kegiatan & poin</p>
+                    <p className="mt-1 text-xs leading-relaxed text-red-100">Klaim aktivitas melalui proses verifikasi</p>
+                  </div>
+                  <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
+                      <UserCheck className="h-5 w-5" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold">Pemantauan & bimbingan</p>
+                    <p className="mt-1 text-xs leading-relaxed text-red-100">Dosen PA meninjau perkembangan mahasiswa</p>
+                  </div>
+                  <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
+                  <div className="rounded-2xl border border-amber-300/40 bg-amber-300/15 p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-300 text-red-950">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold">Rekam jejak</p>
+                    <p className="mt-1 text-xs leading-relaxed text-red-100">Informasi untuk tindak lanjut dan kelulusan</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div data-scroll-reveal data-reveal-delay="80" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-800">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900">Pantau presensi</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    Mahasiswa dapat melihat presensi yang disinkronkan dari e-Campus dan mengajukan sanggahan jika ada catatan yang perlu ditinjau.
+                  </p>
+                </div>
+                <div data-scroll-reveal data-reveal-delay="160" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                    <Award className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900">Rekam kegiatan</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    Kegiatan, sertifikasi, dan prestasi non-akademik dapat diajukan untuk verifikasi dan pencatatan poin SKPI.
+                  </p>
+                </div>
+                <div data-scroll-reveal data-reveal-delay="240" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-800">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900">Dukung bimbingan</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    Portal menyediakan informasi dan fasilitas pengajuan konseling antara mahasiswa dengan dosen pembimbing akademik.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="regulasi-poin" data-scroll-reveal className="scroll-mt-6 bg-slate-50 px-6 py-14">
+            <div className="max-w-5xl mx-auto">
+              <div className="max-w-3xl">
+                <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
+                  <Award className="h-4 w-4" /> Ketentuan Poin Mahasiswa
+                </span>
+                <h2 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+                  Hal yang memengaruhi poin kedisiplinan
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+                  Poin mencerminkan catatan kedisiplinan dan partisipasi mahasiswa. Perubahan poin dicatat berdasarkan aktivitas yang terekam atau pengajuan yang sudah diverifikasi.
+                </p>
+              </div>
+
+              <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div data-scroll-reveal data-reveal-delay="80" className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-lg font-extrabold text-emerald-800">
+                        <TrendingUp className="h-5 w-5" /> Poin dapat bertambah
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500">Kontribusi positif yang tercatat atau diverifikasi</p>
+                    </div>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                      <ArrowRight className="h-5 w-5 -rotate-45" />
+                    </span>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    <div className="flex gap-3 rounded-xl bg-emerald-50/80 p-3">
+                      <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Presensi tepat waktu</strong><br />Kehadiran kuliah atau praktikum yang tercatat di e-Campus dan diproses sesuai aturan kampus.</p>
+                    </div>
+                    <div className="flex gap-3 rounded-xl bg-emerald-50/80 p-3">
+                      <Award className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Sertifikasi dan prestasi</strong><br />Sertifikat keahlian, lomba, atau kompetisi yang diajukan dengan bukti dan telah diverifikasi.</p>
+                    </div>
+                    <div className="flex gap-3 rounded-xl bg-emerald-50/80 p-3">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Partisipasi kegiatan</strong><br />Organisasi, seminar, workshop, atau kegiatan non-akademik yang diakui dan disetujui.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div data-scroll-reveal data-reveal-delay="180" className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-lg font-extrabold text-red-800">
+                        <AlertCircle className="h-5 w-5" /> Poin dapat berkurang
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500">Catatan yang ditinjau sesuai aturan kampus</p>
+                    </div>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+                      <ArrowRight className="h-5 w-5 rotate-45" />
+                    </span>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    <div className="flex gap-3 rounded-xl bg-red-50/80 p-3">
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Terlambat</strong><br />Presensi tercatat melewati batas waktu yang ditetapkan.</p>
+                    </div>
+                    <div className="flex gap-3 rounded-xl bg-red-50/80 p-3">
+                      <X className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Tidak hadir</strong><br />Ketidakhadiran tanpa keterangan yang disetujui.</p>
+                    </div>
+                    <div className="flex gap-3 rounded-xl bg-red-50/80 p-3">
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Pelanggaran tata tertib</strong><br />Pelanggaran kedisiplinan yang dicatat dan ditindaklanjuti sesuai ketentuan kampus.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div data-scroll-reveal className="mt-5 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-slate-900">Alur pembaruan skor</p>
+                  <p className="mt-1 text-sm text-slate-600">Catatan presensi e-Campus dan poin kegiatan yang disetujui menjadi bahan perhitungan rekam jejak kedisiplinan.</p>
+                </div>
+                <div className="flex items-center gap-2 self-start rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 sm:self-auto">
+                  <span>Catatan</span><ArrowRight className="h-4 w-4" /><span>Verifikasi</span><ArrowRight className="h-4 w-4" /><span>Skor</span>
+                </div>
+              </div>
+
+              <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+                Besaran poin dan keputusan akhir mengikuti regulasi resmi kampus serta hasil verifikasi. Jika catatan presensi tidak sesuai, mahasiswa dapat mengajukan sanggahan untuk ditinjau.
+              </p>
+            </div>
+          </section>
 
           <footer className="bg-slate-950 text-slate-400 py-6 text-center text-xs border-t border-slate-800 relative z-20">
             © 2026 Politeknik Sinar Mas Berau Coal — Sistem Informasi Kedisiplinan Mahasiswa (SiDisiplin)
@@ -354,39 +611,20 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center bg-[#581c1c]/90 p-1 rounded-xl border border-red-800/50">
-                  <button 
-                    onClick={() => setActiveTab('dashboard')}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === 'dashboard' ? 'bg-red-700 text-white shadow-md' : 'text-slate-200 hover:text-white'
-                    }`}
-                  >
-                    Dashboard Utama
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('presensi')}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === 'presensi' ? 'bg-red-700 text-white shadow-md' : 'text-slate-200 hover:text-white'
-                    }`}
-                  >
-                    Presensi KTM
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('skpi')}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === 'skpi' ? 'bg-red-700 text-white shadow-md' : 'text-slate-200 hover:text-white'
-                    }`}
-                  >
-                    Poin Non-Akademik
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('konseling')}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === 'konseling' ? 'bg-red-700 text-white shadow-md' : 'text-slate-200 hover:text-white'
-                    }`}
-                  >
-                    Konseling Dosen PA
-                  </button>
+                <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-red-800/50 bg-[#581c1c]/90 p-1">
+                  {dashboardNavigation.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                        activeTab === item.id
+                          ? 'bg-red-700 text-white shadow-md'
+                          : 'text-slate-200 hover:text-white'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -408,8 +646,9 @@ export default function App() {
               </div>
             </header>
 
+            {authenticatedUser?.role === 'mhs' && (
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
-              <div className="bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-red-600/30">
+              <div data-scroll-reveal className="bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-red-600/30">
                 <div className="space-y-2 z-10">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-900/40 rounded-full text-amber-300 text-xs font-semibold border border-red-500/30">
                     <Clock className="w-3.5 h-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
@@ -442,103 +681,106 @@ export default function App() {
               </div>
 
               <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
-                Profil di atas dimuat dari database. Statistik poin, presensi, dan aktivitas di bawah masih berupa data demo.
+                Profil dimuat dari database. Rekam jejak, skor, klaim kegiatan, dan konseling akan ditampilkan setelah layanan data SiDisiplin serta integrasi e-Campus tersedia.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
+                <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Score Kedisiplinan</span>
                     <Bookmark className="w-5 h-5 text-red-800" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">895</span>
-                    <span className="text-xs text-slate-400 font-semibold">/ 1000 Poin</span>
+                    <span className="text-3xl font-extrabold text-slate-900">--</span>
+                    <span className="text-xs text-slate-400 font-semibold">Poin</span>
                   </div>
                   <div className="mt-3 space-y-1.5">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold">Grade: A (Sangat Baik)</span>
-                      <span className="text-slate-500 text-[11px]">Top 5% Kampus</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div className="bg-red-800 h-2 rounded-full" style={{ width: '89.5%' }}></div>
+                      <span className="text-slate-500">Zona risiko</span>
+                      <span className="font-semibold text-slate-700">Menunggu data</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
+                <div data-scroll-reveal data-reveal-delay="160" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tingkat Kehadiran</span>
                     <UserCheck className="w-5 h-5 text-emerald-600" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">98.2%</span>
+                    <span className="text-3xl font-extrabold text-slate-900">--</span>
                   </div>
                   <div className="mt-3 space-y-1">
                     <div className="flex justify-between text-xs text-slate-600">
-                      <span>Tepat Waktu: <strong className="text-slate-900">45</strong></span>
-                      <span>Terlambat: <strong className="text-amber-600">1</strong></span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '98.2%' }}></div>
+                      <span>Sumber data: e-Campus</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
+                <div data-scroll-reveal data-reveal-delay="240" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Poin SKPI / Kegiatan</span>
                     <TrendingUp className="w-5 h-5 text-rose-600" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">160</span>
-                    <span className="text-xs text-slate-400 font-semibold">Poin Terekam</span>
+                    <span className="text-3xl font-extrabold text-slate-900">--</span>
+                    <span className="text-xs text-slate-400 font-semibold">Poin</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
-                    <span>Sertifikasi Industri K3</span>
-                    <span className="text-emerald-600 font-semibold">+30 Poin Bulan Ini</span>
+                    <span>Kegiatan terverifikasi</span>
+                    <span className="font-semibold">--</span>
                   </div>
                 </div>
 
-                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
+                <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status Bimbingan PA</span>
                     <MessageSquare className="w-5 h-5 text-purple-600" />
                   </div>
                   <div>
-                    <span className="text-base font-bold text-slate-900 leading-snug block">Konseling Vokasi Disetujui</span>
-                    <p className="text-xs text-slate-500 mt-1">Konseling Terakhir: 10 Okt 2026</p>
+                    <span className="text-base font-bold text-slate-900 leading-snug block">Belum ada data konseling</span>
+                    <p className="text-xs text-slate-500 mt-1">Catatan PA akan dimuat di sini.</p>
                   </div>
-                  <div 
+                  <button
+                    type="button"
                     onClick={() => setShowKonselingModal(true)}
-                    className="mt-3 pt-2 border-t border-slate-100 text-xs text-red-800 font-semibold cursor-pointer hover:underline"
+                    className="mt-3 border-t border-slate-100 pt-2 text-left text-xs font-semibold text-red-800 hover:underline"
                   >
                     Ajukan / Lihat Catatan PA →
-                  </div>
+                  </button>
                 </div>
               </div>
 
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
+              <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">
-                      {activeTab === 'dashboard' && 'Riwayat Presensi Tapping KTM Terakhir'}
-                      {activeTab === 'presensi' && 'Log Detail Presensi & Pengajuan Sanggah'}
-                      {activeTab === 'skpi' && 'Klaim Poin Non-Akademik & SKPI'}
+                      {activeTab === 'dashboard' && 'Ringkasan Rekam Jejak Kedisiplinan'}
+                      {activeTab === 'rekam-jejak' && 'Rekam Jejak Presensi e-Campus'}
+                      {activeTab === 'sanggah' && 'Pengajuan Sanggah Presensi'}
+                      {activeTab === 'klaim' && 'Klaim Poin Kegiatan Non-Akademik'}
                       {activeTab === 'konseling' && 'Pengawasan & Bimbingan Konseling PA'}
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Data tersinkronisasi otomatis dengan hardware mesin tapping KTM Poltek Simas Berau
+                      Sumber presensi yang direncanakan: e-Campus. Sinkronisasi belum aktif.
                     </p>
                   </div>
 
                   <div className="flex gap-2">
-                    {activeTab === 'skpi' && (
+                    {activeTab === 'klaim' && (
                       <button 
                         onClick={() => setShowSKPIModal(true)}
                         className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow transition-colors"
                       >
-                        <Plus className="w-4 h-4" /> Tambah Klaim Sertifikasi / Lomba
+                        <Plus className="w-4 h-4" /> Ajukan Klaim Kegiatan
+                      </button>
+                    )}
+                    {activeTab === 'sanggah' && (
+                      <button
+                        onClick={() => setShowSanggahModal(true)}
+                        className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow transition-colors"
+                      >
+                        <FileText className="w-4 h-4" /> Ajukan Sanggah
                       </button>
                     )}
                   </div>
@@ -548,67 +790,20 @@ export default function App() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
-                        <th className="py-3 px-4">Mata Kuliah / Praktikum / Kegiatan</th>
-                        <th className="py-3 px-4">Waktu Tap</th>
+                        <th className="py-3 px-4">Mata Kuliah / Kegiatan</th>
+                        <th className="py-3 px-4">Waktu Presensi</th>
                         <th className="py-3 px-4">Status</th>
                         <th className="py-3 px-4">Poin Impact</th>
                         <th className="py-3 px-4 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
-                      <tr className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-slate-800">
-                          Praktikum Perawatan & Perbaikan Mesin
-                          <p className="text-xs text-slate-400 font-normal">Workshop Teknik Mesin - Lab A</p>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600 text-xs font-medium">08:00:15 WITA</td>
-                        <td className="py-3.5 px-4">
-                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full text-xs">
-                            Tepat Waktu
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-emerald-600 font-bold text-xs">+10 Poin</td>
-                        <td className="py-3.5 px-4 text-right">
-                          <span className="text-xs text-slate-400">Tercatat</span>
-                        </td>
-                      </tr>
-
-                      <tr className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-slate-800">
-                          K3 Pertambangan & Keselamatan Kerja
-                          <p className="text-xs text-slate-400 font-normal">Auditorium Utama Poltek Simas Berau</p>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600 text-xs font-medium">08:22:10 WITA</td>
-                        <td className="py-3.5 px-4">
-                          <span className="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-xs">
-                            Terlambat (+12m)
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-red-600 font-bold text-xs">-3 Poin</td>
-                        <td className="py-3.5 px-4 text-right">
-                          <button 
-                            onClick={() => setShowSanggahModal(true)}
-                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded text-xs transition-colors"
-                          >
-                            Sanggah
-                          </button>
-                        </td>
-                      </tr>
-
-                      <tr className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-slate-800">
-                          Sertifikasi Kompetensi Operator Alat Berat
-                          <p className="text-xs text-slate-400 font-normal">Program Vokasi Penunjang Industri</p>
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-600 text-xs font-medium">04 Okt 2026</td>
-                        <td className="py-3.5 px-4">
-                          <span className="px-2.5 py-1 bg-red-100 text-red-800 font-bold rounded-full text-xs">
-                            Terverifikasi SKPI
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-emerald-600 font-bold text-xs">+50 Poin</td>
-                        <td className="py-3.5 px-4 text-right">
-                          <span className="text-xs text-slate-400">Sertifikat Valid</span>
+                      <tr>
+                        <td colSpan={5} className="px-4 py-10 text-center">
+                          <p className="font-semibold text-slate-700">Belum ada rekam jejak untuk ditampilkan</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Presensi akan dimuat dari e-Campus setelah integrasi API tersedia.
+                          </p>
                         </td>
                       </tr>
                     </tbody>
@@ -616,23 +811,23 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6 sm:p-8 space-y-6">
+              <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6 sm:p-8 space-y-6">
                 <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
                   <div className="w-10 h-10 bg-red-100 text-red-800 rounded-xl flex items-center justify-center font-bold">
                     <HelpCircle className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-lg font-extrabold text-slate-900">Tentang Portal SiDisiplin Poltek Simas Berau</h3>
-                    <p className="text-xs text-slate-500">Sistem Informasi Track Record, Presensi KTM, dan Poin SKPI Vokasi</p>
+                    <p className="text-xs text-slate-500">Sistem Informasi Rekam Jejak Kedisiplinan, Presensi e-Campus, dan Poin SKPI Vokasi</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-200/80 space-y-2">
                     <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-xs">1</div>
-                    <h4 className="font-bold text-slate-900">Presensi Tapping KTM</h4>
+                    <h4 className="font-bold text-slate-900">Presensi e-Campus</h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Pencatatan kehadiran kuliah dan praktikum di kelas maupun laboratorium secara otomatis melalui mesin pembaca KTM di setiap gedung perkuliahan.
+                      Rekam kehadiran kuliah dan praktikum diambil dari presensi yang dicatat dosen pada e-Campus dan disinkronkan ke dashboard.
                     </p>
                   </div>
 
@@ -668,6 +863,113 @@ export default function App() {
                 </div>
               </div>
             </main>
+            )}
+
+            {authenticatedUser?.role === 'dosen' && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Dashboard Dosen PA / Prodi</p>
+                  <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
+                    Monitoring Mahasiswa Bimbingan
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
+                    Pantau zona risiko, tinjau rekam jejak presensi dari e-Campus, dan catat tindak lanjut konseling mahasiswa bimbingan.
+                  </p>
+                </section>
+
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
+                  Data mahasiswa bimbingan, presensi e-Campus, dan konseling belum terhubung ke API. Panel ini menampilkan rancangan alur sesuai use case.
+                </p>
+
+                <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                  {[
+                    { label: 'Mahasiswa bimbingan', icon: UserCheck },
+                    { label: 'Zona kuning / merah', icon: AlertCircle },
+                    { label: 'Perlu tindak lanjut', icon: MessageSquare },
+                  ].map(({ label, icon: Icon }) => (
+                    <div key={label} data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
+                        <Icon className="h-5 w-5 text-red-800" />
+                      </div>
+                      <p className="mt-3 text-3xl font-extrabold text-slate-900">--</p>
+                      <p className="mt-1 text-xs text-slate-500">Menunggu sinkronisasi data</p>
+                    </div>
+                  ))}
+                </section>
+
+                <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
+                  <h3 className="text-lg font-extrabold text-slate-900">
+                    {activeTab === 'konseling' ? 'Catatan & Konseling Kedisiplinan' : 'Daftar Mahasiswa Bimbingan'}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {activeTab === 'konseling'
+                      ? 'Riwayat catatan pembinaan dan jadwal konseling akan tersedia setelah layanan konseling diaktifkan.'
+                      : 'Gunakan daftar ini untuk memfilter mahasiswa berdasarkan zona risiko dan membuka detail rekam jejak.'}
+                  </p>
+                  <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                    <p className="font-semibold text-slate-700">Belum ada data untuk ditampilkan</p>
+                    <p className="mt-1 text-sm text-slate-500">Daftar dan detail mahasiswa akan dimuat dari layanan backend.</p>
+                  </div>
+                </section>
+              </main>
+            )}
+
+            {authenticatedUser?.role === 'admin' && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
+                  <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
+                    Panel Verifikasi & Pengelolaan SiDisiplin
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
+                    Kelola sanggahan presensi, verifikasi klaim kegiatan, tinjau kelayakan SKPI, serta pantau integrasi dan administrasi sistem.
+                  </p>
+                </section>
+
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
+                  Profil akun sudah dimuat dari database. Antrean verifikasi, aturan poin, pemulihan, sinkronisasi e-Campus, dan administrasi sistem belum tersedia melalui API.
+                </p>
+
+                <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                  {[
+                    { label: 'Sanggahan menunggu', icon: FileText },
+                    { label: 'Klaim kegiatan menunggu', icon: Award },
+                    { label: 'Verifikasi kelulusan', icon: CheckCircle2 },
+                  ].map(({ label, icon: Icon }) => (
+                    <div key={label} data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
+                        <Icon className="h-5 w-5 text-red-800" />
+                      </div>
+                      <p className="mt-3 text-3xl font-extrabold text-slate-900">--</p>
+                      <p className="mt-1 text-xs text-slate-500">Menunggu layanan antrean</p>
+                    </div>
+                  ))}
+                </section>
+
+                <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
+                  <h3 className="text-lg font-extrabold text-slate-900">
+                    {dashboardNavigation.find((item) => item.id === activeTab)?.label ?? 'Ringkasan'}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {activeTab === 'sanggah' && 'Tinjau alasan dan dokumen pendukung, lalu setujui atau tolak sanggahan dengan catatan.'}
+                    {activeTab === 'verifikasi' && 'Periksa bukti sertifikat, kategori kegiatan, dan bobot poin sebelum menyetujui atau menolak klaim.'}
+                    {activeTab === 'kelulusan' && 'Tinjau skor kedisiplinan dan portofolio kegiatan, lalu siapkan rekap status kelulusan dan SKPI.'}
+                    {activeTab === 'aturan' && 'Kelola bobot poin presensi, poin kegiatan, serta ambang batas kelulusan sesuai kebijakan kampus.'}
+                    {activeTab === 'redemption' && 'Tinjau bukti tugas pemulihan mahasiswa dan catat keputusan serta poin pemulihan.'}
+                    {activeTab === 'sinkronisasi' && 'Pantau sinkronisasi presensi e-Campus, hasil pembaruan, dan catatan kegagalan API.'}
+                    {activeTab === 'users' && 'Kelola akun, peran, status akses, dan permintaan reset kata sandi pengguna.'}
+                    {activeTab === 'maintenance' && 'Pantau kesehatan sistem, log aktivitas, dan proses pemeliharaan atau backup.'}
+                    {activeTab === 'dashboard' && 'Pilih menu untuk membuka antrean kerja dan fungsi administrasi yang dibutuhkan.'}
+                  </p>
+                  <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                    <p className="font-semibold text-slate-700">Fungsi belum terhubung ke backend</p>
+                    <p className="mt-1 text-sm text-slate-500">Bagian ini adalah struktur antarmuka sesuai use case; data dan aksi akan aktif setelah endpoint terkait dibuat.</p>
+                  </div>
+                </section>
+              </main>
+            )}
           </div>
         </div>
       )}
@@ -740,7 +1042,7 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-lg">Formulir Sanggah Presensi KTM</h3>
+              <h3 className="font-extrabold text-slate-900 text-lg">Formulir Sanggah Presensi e-Campus</h3>
               <button 
                 onClick={() => setShowSanggahModal(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
@@ -755,7 +1057,7 @@ export default function App() {
                 <textarea 
                   required 
                   rows={3}
-                  placeholder="Jelaskan alasan keterlambatan atau kendala tapping KTM..."
+                  placeholder="Jelaskan catatan presensi e-Campus yang ingin disanggah beserta kronologinya..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs"
                 ></textarea>
               </div>

@@ -37,6 +37,9 @@ export default function App() {
 
   const [identityInput, setIdentityInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [authenticatedUser, setAuthenticatedUser] = useState(null);
 
   const officialLogoUrl = "/sidisiplin-mark.svg";
   const bgCampusImage = "/campus.svg";
@@ -63,6 +66,26 @@ export default function App() {
         }
       });
 
+    fetch('/api/auth/me')
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (isMounted && data?.profile) {
+          setAuthenticatedUser(data.profile);
+          setSelectedRole(data.profile.role);
+          setActivePage('dashboard');
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          console.error('Tidak dapat memeriksa sesi login:', error);
+        }
+      });
+
     return () => {
       isMounted = false;
     };
@@ -72,12 +95,58 @@ export default function App() {
     setSelectedRole(role);
     setIdentityInput('');
     setPasswordInput('');
+    setLoginError('');
     setActivePage('login');
   };
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    setActivePage('dashboard');
+    setLoginError('');
+    setIsLoggingIn(true);
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: selectedRole,
+          identity: identityInput,
+          password: passwordInput,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Login gagal. Periksa identitas dan kata sandi.');
+      }
+
+      setAuthenticatedUser(data.profile);
+      setSelectedRole(data.profile.role);
+      setPasswordInput('');
+      setActiveTab('dashboard');
+      setActivePage('dashboard');
+    } catch (error) {
+      setLoginError(error.message || 'Tidak dapat menghubungi layanan login.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
+      setLoginError('');
+    } catch (error) {
+      console.error('Tidak dapat mengakhiri sesi di backend:', error);
+      setLoginError('Koneksi logout gagal. Muat ulang halaman untuk memeriksa sesi.');
+    } finally {
+      setAuthenticatedUser(null);
+      setIdentityInput('');
+      setPasswordInput('');
+      setActivePage('landing');
+    }
   };
 
   return (
@@ -171,6 +240,12 @@ export default function App() {
               </div>
             </div>
           </nav>
+
+          {loginError && (
+            <p className="bg-amber-50 px-6 py-3 text-center text-sm text-amber-900" role="alert">
+              {loginError}
+            </p>
+          )}
 
           <div 
             className="bg-slate-900 text-white py-12 px-6 relative overflow-hidden bg-cover bg-center border-b border-slate-800" 
@@ -301,12 +376,17 @@ export default function App() {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  {selectedRole === 'mhs' ? 'NIM (Nomor Induk Mahasiswa)' : 'NIP / NIDN'}
+                  {selectedRole === 'mhs'
+                    ? 'NIM (Nomor Induk Mahasiswa)'
+                    : selectedRole === 'dosen'
+                      ? 'NIP atau NIDN'
+                      : 'NIP Kemahasiswaan'}
                 </label>
                 <input 
                   type="text"
                   required
-                  placeholder={selectedRole === 'mhs' ? 'misal: 202401001' : 'misal: 198503102010121001'}
+                  autoComplete="username"
+                  placeholder={selectedRole === 'mhs' ? 'misal: 202401001' : 'masukkan nomor identitas'}
                   value={identityInput}
                   onChange={(e) => setIdentityInput(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-sm bg-slate-50 font-medium"
@@ -320,6 +400,7 @@ export default function App() {
                 <input 
                   type="password"
                   required
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
@@ -335,11 +416,18 @@ export default function App() {
                 <a href="#" className="text-red-800 font-bold hover:underline">Lupa Kata Sandi?</a>
               </div>
 
+              {loginError && (
+                <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
+                  {loginError}
+                </p>
+              )}
+
               <button 
                 type="submit"
-                className="w-full py-3.5 bg-red-800 hover:bg-red-900 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-2"
+                disabled={isLoggingIn}
+                className="w-full py-3.5 bg-red-800 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-2"
               >
-                Masuk ke Dashboard
+                {isLoggingIn ? 'Memeriksa akun...' : 'Masuk ke Dashboard'}
               </button>
             </form>
           </div>
@@ -414,36 +502,13 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <div className="bg-[#581c1c]/90 px-3 py-1.5 rounded-lg border border-red-800/50 flex items-center gap-2">
                     <span className="text-[10px] text-red-200 uppercase font-semibold">Role:</span>
-                    <div className="flex gap-1">
-                      <button 
-                        onClick={() => setSelectedRole('mhs')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          selectedRole === 'mhs' ? 'bg-red-700 text-white' : 'text-red-200 hover:text-white'
-                        }`}
-                      >
-                        Mhs
-                      </button>
-                      <button 
-                        onClick={() => setSelectedRole('dosen')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          selectedRole === 'dosen' ? 'bg-red-700 text-white' : 'text-red-200 hover:text-white'
-                        }`}
-                      >
-                        Dosen
-                      </button>
-                      <button 
-                        onClick={() => setSelectedRole('admin')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          selectedRole === 'admin' ? 'bg-red-700 text-white' : 'text-red-200 hover:text-white'
-                        }`}
-                      >
-                        Admin
-                      </button>
-                    </div>
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold text-white">
+                      {authenticatedUser?.roleLabel ?? 'Belum login'}
+                    </span>
                   </div>
 
                   <button 
-                    onClick={() => setActivePage('landing')}
+                    onClick={handleLogout}
                     className="p-2 text-slate-200 hover:text-red-200 hover:bg-red-900/40 rounded-lg transition-colors"
                     title="Logout"
                   >
@@ -460,32 +525,35 @@ export default function App() {
                     <Clock className="w-3.5 h-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                    {selectedRole === 'mhs' && 'Selamat Datang, Arief Maulana!'}
-                    {selectedRole === 'dosen' && 'Selamat Datang, Ir. Budi Santoso, M.T.'}
-                    {selectedRole === 'admin' && 'Selamat Datang, Tim Kemahasiswaan Poltek Simas Berau'}
+                    Selamat Datang, {authenticatedUser?.name || 'Pengguna'}
                   </h2>
-                  <p className="text-red-100 text-sm">
-                    {selectedRole === 'mhs' && 'D3 Pemeliharaan Mesin • Dosen PA: Ir. Budi Santoso, M.T.'}
-                    {selectedRole === 'dosen' && 'Dosen Pembimbing Akademik • Total Bimbingan: 18 Mahasiswa Vokasi'}
-                    {selectedRole === 'admin' && 'Administrator Sistem Kedisiplinan & Portofolio Vokasi Kampus'}
+                  <p className="text-red-100 text-sm" data-testid="database-profile">
+                    {authenticatedUser?.identityLabel}: {authenticatedUser?.identity}
+                    {authenticatedUser?.details?.map((detail) => ` • ${detail.label}: ${detail.value}`)}
                   </p>
                 </div>
 
                 <div className="bg-[#581c1c]/95 backdrop-blur-sm border border-red-800/60 rounded-2xl p-4 sm:p-5 flex items-center gap-4 min-w-[280px]">
                   <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center border border-emerald-500/30 flex-shrink-0">
-                    <CheckCircle2 className="w-7 h-7" />
+                    <UserCheck className="w-7 h-7" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-red-200 uppercase tracking-wider font-bold">Syarat Kelulusan Vokasi</p>
-                    <p className="text-emerald-400 font-extrabold text-base leading-snug">
-                      Memenuhi Syarat Kedisiplinan
+                    <p className="text-[10px] text-red-200 uppercase tracking-wider font-bold">Profil akun</p>
+                    <p className="text-white font-extrabold text-base leading-snug">
+                      {authenticatedUser?.roleLabel}
                     </p>
                     <p className="text-xs text-red-200 mt-0.5">
-                      Skor Minimum Syarat: <span className="text-white font-semibold">700 / 1000 Poin</span>
+                      Terdaftar: {authenticatedUser?.createdAt
+                        ? new Date(authenticatedUser.createdAt).toLocaleDateString('id-ID')
+                        : '-'}
                     </p>
                   </div>
                 </div>
               </div>
+
+              <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
+                Profil di atas dimuat dari database. Statistik poin, presensi, dan aktivitas di bawah masih berupa data demo.
+              </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">

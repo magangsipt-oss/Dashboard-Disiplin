@@ -7,17 +7,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  MAHASISWA
-  DOSEN
-  ADMIN
+model Mahasiswa {
+  id        Int      @id @default(autoincrement())
+  nim       Int      @unique @map("NIM")
+  nama      String   @map("Nama")
+  password  String   @db.VarChar(255) @map("Password")
+  jurusan   String   @map("Jurusan")
+  timestamp DateTime @default(now())
+
+  @@map("Mahasiswa")
 }
 
-model User {
-  id        String   @id @default(uuid())
-  identity  String   @unique
-  name      String
-  password  String
-  role      Role     @default(MAHASISWA)
-  createdAt DateTime @default(now())
+model Dosen {
+  id        Int      @id @default(autoincrement())
+  nidn      BigInt   @unique @map("NIDN")
+  nip       BigInt   @unique @map("NIP")
+  nama      String   @map("Nama")
+  password  String   @db.VarChar(255) @map("Password")
+  timestamp DateTime @default(now())
+
+  @@map("Dosen")
+}
+
+model Kemahasiswaan {
+  id        Int      @id @default(autoincrement())
+  nip       BigInt   @unique @map("NIP")
+  nama      String   @map("Nama")
+  password  String   @db.VarChar(255) @map("Password")
+  timestamp DateTime @default(now())
+
+  @@map("Kemahasiswaan")
 }

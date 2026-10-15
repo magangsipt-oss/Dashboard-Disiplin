@@ -67,7 +67,7 @@ export default function LoginForm({ role }: { role: LoginRole }) {
 
   return (
     <main
-      className="min-h-screen flex items-center justify-center bg-cover bg-center p-4 relative overflow-hidden"
+      className="min-h-screen font-sans flex items-center justify-center bg-cover bg-center p-4 relative overflow-hidden"
       style={{ backgroundImage: "url(/campus.svg)" }}
     >
       <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" />

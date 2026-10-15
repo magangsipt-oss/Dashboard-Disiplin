@@ -1,20 +1,19 @@
 import cors from "cors";
-import dotenv from "dotenv";
 import express from "express";
-import { PrismaClient } from "@prisma/client";
-
-dotenv.config();
+import { authDatabases, authRouter } from "./auth";
 
 const app = express();
-const prisma = new PrismaClient();
 const port = Number(process.env.PORT ?? 5000);
 
 app.use(cors());
 app.use(express.json());
+app.use("/api/auth", authRouter);
 
 app.get("/api/health", async (_request, response) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await Promise.all(
+      authDatabases.map(({ client }) => client.$queryRaw`SELECT 1`),
+    );
     response.json({
       status: "ok",
       database: "connected",
@@ -32,16 +31,16 @@ app.get("/api/health", async (_request, response) => {
 
 app.listen(port, async () => {
   try {
-    await prisma.$connect();
-    console.log("Prisma terhubung ke PostgreSQL");
+    await Promise.all(authDatabases.map(({ client }) => client.$connect()));
+    console.log("Prisma terhubung ke database Mahasiswa, Dosen, dan Kemahasiswaan");
   } catch (error) {
-    console.error("Gagal terhubung ke PostgreSQL:", error);
+    console.error("Gagal terhubung ke satu atau lebih database:", error);
   }
   console.log(`Server Express berjalan di http://localhost:${port}`);
 });
 
 const shutdown = async () => {
-  await prisma.$disconnect();
+  await Promise.all(authDatabases.map(({ client }) => client.$disconnect()));
   process.exit(0);
 };
 

@@ -22,15 +22,15 @@ agar indikator koneksi API di portal menunjukkan status terhubung.
 ```powershell
 cd backend
 npm.cmd install
-# Pastikan DATABASE_URL dan MAHASISWA_DATABASE_URL sudah diatur di .env.
+# Pastikan URL ketiga database sudah diatur di .env.
 npm.cmd run dev
 ```
 
 Backend berjalan di `http://localhost:5000`. Endpoint pemeriksaan:
 `http://localhost:5000/api/health`.
 
-Setelah PostgreSQL aktif dan `DATABASE_URL` sudah diisi, buat tabel dan data
-dummy dari folder `backend`:
+Setelah PostgreSQL dan database utama aktif, tabel database utama dapat dibuat
+dari folder `backend`:
 
 ```powershell
 npm.cmd run prisma:generate
@@ -141,8 +141,22 @@ bigint dan unik, `Nama`, `Password` `VARCHAR(255)`, serta `timestamp` yang
 otomatis mencatat waktu pembuatan baris. Kolom `id` dibuat otomatis; simpan
 password sebagai hash, bukan teks biasa.
 
-Login, data dashboard, dan formulir dalam UI saat ini adalah demo frontend;
-belum terhubung ke autentikasi atau penyimpanan database.
+### Login dan profil dashboard
+
+Frontend mengirim login ke backend. Pilih peran di halaman awal, lalu masuk
+menggunakan NIM mahasiswa, NIP/NIDN dosen, atau NIP kemahasiswaan dan password
+yang tersimpan di database peran tersebut. Backend membuat sesi cookie
+HttpOnly dan dashboard menampilkan profil dari database. Sesi aktif disimpan
+di memori backend dan berakhir setelah 8 jam atau ketika backend dimulai ulang.
+
+Password teks biasa yang sudah ada didukung untuk migrasi awal: setelah login
+berhasil, backend langsung menggantinya dengan hash scrypt. Password yang sudah
+di-hash harus memakai format internal `scrypt$...` yang dihasilkan backend.
+Jangan kirim atau menampilkan password dalam respons API.
+
+Database saat ini hanya memiliki data profil pengguna. Statistik poin,
+presensi, SKPI, dan aktivitas pada dashboard masih data demo sampai tabel dan
+API untuk data tersebut dibuat.
 
 ## Prisma
 

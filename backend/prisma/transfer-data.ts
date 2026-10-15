@@ -132,62 +132,40 @@ function parseSnapshot(value: unknown): Snapshot {
 }
 
 async function exportData(): Promise<void> {
-  const [
-    { PrismaClient: MahasiswaClient },
-    { PrismaClient: DosenClient },
-    { PrismaClient: KemahasiswaanClient },
-  ] = await Promise.all([
-    import("../src/generated/mahasiswa/index.js"),
-    import("../src/generated/dosen/index.js"),
-    import("../src/generated/kemahasiswaan/index.js"),
+  const [mahasiswa, dosen, kemahasiswaan] = await Promise.all([
+    prisma.mahasiswa.findMany(),
+    prisma.dosen.findMany(),
+    prisma.kemahasiswaan.findMany(),
   ]);
 
-  const mahasiswaDb = new MahasiswaClient();
-  const dosenDb = new DosenClient();
-  const kemahasiswaanDb = new KemahasiswaanClient();
+  const snapshot: Snapshot = {
+    formatVersion: 2,
+    exportedAt: new Date().toISOString(),
+    mahasiswa: mahasiswa.map((row) => ({
+      ...row,
+      timestamp: row.timestamp.toISOString(),
+    })),
+    dosen: dosen.map((row) => ({
+      ...row,
+      nidn: row.nidn.toString(),
+      nip: row.nip.toString(),
+      timestamp: row.timestamp.toISOString(),
+    })),
+    kemahasiswaan: kemahasiswaan.map((row) => ({
+      ...row,
+      nip: row.nip.toString(),
+      timestamp: row.timestamp.toISOString(),
+    })),
+  };
 
-  try {
-    const [mahasiswa, dosen, kemahasiswaan] = await Promise.all([
-      mahasiswaDb.mahasiswa.findMany(),
-      dosenDb.dosen.findMany(),
-      kemahasiswaanDb.kemahasiswaan.findMany(),
-    ]);
-
-    const snapshot: Snapshot = {
-      formatVersion: 2,
-      exportedAt: new Date().toISOString(),
-      mahasiswa: mahasiswa.map((row) => ({
-        ...row,
-        timestamp: row.timestamp.toISOString(),
-      })),
-      dosen: dosen.map((row) => ({
-        ...row,
-        nidn: row.nidn.toString(),
-        nip: row.nip.toString(),
-        timestamp: row.timestamp.toISOString(),
-      })),
-      kemahasiswaan: kemahasiswaan.map((row) => ({
-        ...row,
-        nip: row.nip.toString(),
-        timestamp: row.timestamp.toISOString(),
-      })),
-    };
-
-    await writeFile(dataPath, `${JSON.stringify(snapshot, null, 2)}\n`, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    console.log(
-      `Ekspor selesai: ${mahasiswa.length} mahasiswa, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan.`,
-    );
-    console.warn("File ini berisi data pribadi dan password. Jangan commit atau bagikan melalui kanal publik.");
-  } finally {
-    await Promise.all([
-      mahasiswaDb.$disconnect(),
-      dosenDb.$disconnect(),
-      kemahasiswaanDb.$disconnect(),
-    ]);
-  }
+  await writeFile(dataPath, `${JSON.stringify(snapshot, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  console.log(
+    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan.`,
+  );
+  console.warn("File ini berisi data pribadi dan password. Jangan commit atau bagikan melalui kanal publik.");
 }
 
 async function importData(): Promise<void> {

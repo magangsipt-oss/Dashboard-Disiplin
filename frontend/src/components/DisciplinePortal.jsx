@@ -39,7 +39,7 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
 
-  const officialLogoUrl = "/sidisiplin-mark.svg";
+  const officialLogoUrl = "/poltek-simas-berau.png";
   const bgCampusImage = "/campus.svg";
 
   useEffect(() => {
@@ -336,11 +336,11 @@ export default function App() {
             <header className="bg-[#450a0a]/95 backdrop-blur-sm text-white border-b border-red-950 sticky top-0 z-30 shadow-md">
               <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap justify-between items-center gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-auto bg-white p-1 rounded-xl flex items-center justify-center shadow-lg">
+                  <div className="h-12 w-12 bg-white p-0.5 rounded-xl flex items-center justify-center shadow-lg">
                     <img 
                       src={officialLogoUrl} 
                       alt="Logo Poltek Simas Berau" 
-                      className="h-8 w-auto object-contain"
+                      className="h-11 w-11 object-contain"
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.style.display = 'none';

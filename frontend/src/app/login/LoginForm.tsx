@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, GraduationCap } from "lucide-react";
 
 export type LoginRole = "mhs" | "dosen" | "admin";
 
@@ -13,17 +13,17 @@ const roleDetails: Record<
   mhs: {
     label: "Mahasiswa",
     identityLabel: "NIM (Nomor Induk Mahasiswa)",
-    identityPlaceholder: "misal: 202401001",
+    identityPlaceholder: "Masukkan NIM Anda",
   },
   dosen: {
     label: "Dosen PA",
     identityLabel: "NIP atau NIDN",
-    identityPlaceholder: "masukkan nomor identitas",
+    identityPlaceholder: "Masukkan nomor identitas",
   },
   admin: {
     label: "Admin Kemahasiswaan",
     identityLabel: "NIP Kemahasiswaan",
-    identityPlaceholder: "masukkan nomor identitas",
+    identityPlaceholder: "Masukkan nomor identitas",
   },
 };
 
@@ -67,105 +67,90 @@ export default function LoginForm({ role }: { role: LoginRole }) {
 
   return (
     <main
-      className="min-h-screen font-sans flex items-center justify-center bg-cover bg-center p-4 relative overflow-hidden"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-cover bg-center p-4 font-sans"
       style={{ backgroundImage: "url(/campus.svg)" }}
     >
       <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" />
 
-      <a
-        href="/"
-        className="absolute top-6 left-6 text-slate-200 hover:text-white flex items-center gap-2 text-sm font-semibold transition-colors z-20 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-700/60 shadow-lg"
-      >
-        <ArrowLeft className="w-4 h-4" /> Kembali ke Halaman Utama
-      </a>
-
-      <section className="relative z-10 w-full max-w-md rounded-3xl border border-white/80 bg-white/95 p-7 shadow-2xl backdrop-blur-md">
-        <div
-          className="relative isolate mx-auto mb-6 w-fit max-w-full overflow-hidden rounded-2xl bg-cover bg-center px-7 py-5 text-center text-white shadow-lg"
-          style={{ backgroundImage: "url(/portal-access-background.jpg)" }}
-        >
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 bg-gradient-to-br from-red-950/95 via-red-900/85 to-rose-800/75"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute -right-8 -top-12 -z-10 h-40 w-40 rounded-full border border-white/15 bg-white/10"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute -bottom-20 -left-8 -z-10 h-44 w-44 rounded-full border border-white/10 bg-red-400/10"
-          />
-          <h1 className="text-3xl font-black tracking-tight drop-shadow-md sm:text-4xl">
-            {details.label}
-          </h1>
-          <p className="mt-2 text-sm font-medium text-red-50">
-            Masuk untuk melanjutkan ke dashboard
-          </p>
-        </div>
-
-        <div className="text-center">
-          <p className="mb-6 text-sm font-semibold text-slate-600">
-            Masukkan identitas dan kata sandi Anda
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="identity"
-              className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
-            >
-              {details.identityLabel}
-            </label>
-            <input
-              id="identity"
-              type="text"
-              required
-              autoComplete="username"
-              placeholder={details.identityPlaceholder}
-              value={identity}
-              onChange={(event) => setIdentity(event.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-sm bg-slate-50 font-medium"
+      <section className="relative z-10 w-full max-w-xl rounded-3xl border border-slate-200 bg-white/95 px-7 py-10 shadow-sm sm:px-11 sm:py-12">
+          <header className="mb-10 text-center">
+            <GraduationCap
+              aria-hidden="true"
+              className="mx-auto mb-5 h-14 w-14 text-orange-700"
+              strokeWidth={1.8}
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
-            >
-              Kata Sandi
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              placeholder="Masukkan kata sandi"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-sm bg-slate-50 font-medium"
-            />
-          </div>
-
-          {error && (
-            <p
-              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
-              role="alert"
-            >
-              {error}
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              Login {details.label}
+            </h1>
+            <p className="mt-8 text-base text-slate-500 sm:text-lg">
+              Masukkan identitas dan kata sandi Anda
             </p>
-          )}
+          </header>
 
-          <button
-            type="submit"
-            disabled={isLoggingIn}
-            className="w-full py-3.5 bg-red-800 hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-2"
-          >
-            {isLoggingIn ? "Memeriksa akun..." : "Masuk ke Dashboard"}
-          </button>
+          <form onSubmit={handleSubmit} className="space-y-8 text-left">
+            <div>
+              <label
+                htmlFor="identity"
+                className="mb-3 block text-base font-bold text-slate-800"
+              >
+                {details.identityLabel}
+              </label>
+              <input
+                id="identity"
+                type="text"
+                required
+                autoComplete="username"
+                placeholder={details.identityPlaceholder}
+                value={identity}
+                onChange={(event) => setIdentity(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-blue-50 px-5 py-5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-3 block text-base font-bold text-slate-800"
+              >
+                Kata Sandi
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                placeholder="Masukkan kata sandi"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-blue-50 px-5 py-5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
+              />
+            </div>
+
+            {error && (
+              <p
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="mt-2 w-full rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-4 text-base font-bold text-white shadow-lg shadow-red-900/15 transition hover:from-red-900 hover:to-red-800 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isLoggingIn ? "Memeriksa akun..." : "Masuk Dashboard"}
+            </button>
           </form>
-        </div>
+
+          <a
+            href="/"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-4 text-base font-bold text-white shadow-lg shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
+          >
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Kembali ke Menu Utama
+          </a>
       </section>
     </main>
   );

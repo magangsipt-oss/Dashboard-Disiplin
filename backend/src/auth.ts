@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import dotenv from "dotenv";
 import { Router, type Request, type Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import {
+  calculatePointChange,
+  getScorePredicate,
+  pointChangeRules,
+  type PointChangeAction,
+} from "./points";
 
 dotenv.config({ path: resolve(__dirname, "../.env") });
 
@@ -239,6 +245,22 @@ function clearSessionCookie(response: Response): void {
 
 export const authRouter = Router();
 
+function getSessionForRequest(
+  request: Request,
+  response: Response,
+): Session | null {
+  const token = readSessionToken(request);
+  const session = token ? sessions.get(token) : undefined;
+  if (!session || session.expiresAt <= Date.now()) {
+    if (token) {
+      sessions.delete(token);
+      clearSessionCookie(response);
+    }
+    return null;
+  }
+  return session;
+}
+
 authRouter.post("/login", async (request, response) => {
   const { role, identity, password } = request.body ?? {};
   if (
@@ -299,6 +321,157 @@ authRouter.get("/me", (request, response) => {
   }
 
   response.json({ profile: session.profile });
+});
+
+authRouter.get("/points", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "mhs") {
+    response.status(403).json({ message: "Data poin hanya tersedia untuk akun mahasiswa." });
+    return;
+  }
+
+  try {
+    const [student, activityTotals] = await Promise.all([
+      database.mahasiswa.findUnique({
+        where: { id: session.profile.id },
+        select: {
+          pointScore: true,
+          pointChanges: {
+            orderBy: { createdAt: "desc" },
+            take: 50,
+            select: {
+              id: true,
+              type: true,
+              delta: true,
+              scoreAfter: true,
+              reason: true,
+              createdAt: true,
+            },
+          },
+        },
+      }),
+      database.pointChange.aggregate({
+        where: {
+          studentId: session.profile.id,
+          type: { in: ["COMPETITION", "NON_ACADEMIC_ACTIVITY"] },
+        },
+        _sum: { delta: true },
+        _count: { _all: true },
+      }),
+    ]);
+    if (!student) {
+      response.status(404).json({ message: "Data mahasiswa tidak ditemukan." });
+      return;
+    }
+
+    response.json({
+      score: student.pointScore,
+      predicate: getScorePredicate(student.pointScore),
+      activityPoints: activityTotals._sum.delta ?? 0,
+      verifiedActivityCount: activityTotals._count._all,
+      changes: student.pointChanges,
+    });
+  } catch (error) {
+    console.error("Gagal memuat poin mahasiswa:", error);
+    response.status(500).json({ message: "Data poin mahasiswa gagal dimuat." });
+  }
+});
+
+authRouter.post("/points/adjust", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "admin") {
+    response.status(403).json({ message: "Hanya admin kemahasiswaan yang dapat mencatat perubahan poin." });
+    return;
+  }
+
+  const { nim, type, reason } = request.body ?? {};
+  if (
+    typeof nim !== "string" ||
+    !/^\d+$/.test(nim) ||
+    !Number.isSafeInteger(Number(nim)) ||
+    Number(nim) < 1 ||
+    Number(nim) > 2_147_483_647 ||
+    typeof type !== "string" ||
+    !Object.prototype.hasOwnProperty.call(pointChangeRules, type) ||
+    typeof reason !== "string" ||
+    reason.trim().length === 0 ||
+    reason.trim().length > 500
+  ) {
+    response.status(400).json({
+      message: "NIM, jenis perubahan poin, dan catatan wajib diisi dengan benar.",
+    });
+    return;
+  }
+
+  const action = type as PointChangeAction;
+  const rule = pointChangeRules[action];
+  try {
+    const result = await database.$transaction(
+      async (transaction) => {
+        const student = await transaction.mahasiswa.findUnique({
+          where: { nim: Number(nim) },
+          select: { id: true, nim: true, nama: true, pointScore: true },
+        });
+        if (!student) {
+          return null;
+        }
+
+        const { score, delta: appliedDelta } = calculatePointChange(
+          student.pointScore,
+          action,
+        );
+        await transaction.mahasiswa.update({
+          where: { id: student.id },
+          data: { pointScore: score },
+        });
+        await transaction.pointChange.create({
+          data: {
+            studentId: student.id,
+            type: rule.type,
+            delta: appliedDelta,
+            scoreAfter: score,
+            reason: reason.trim(),
+            recordedByIdentity: session.profile.identity,
+          },
+        });
+
+        return { student, score, appliedDelta };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    if (!result) {
+      response.status(404).json({ message: "Mahasiswa dengan NIM tersebut tidak ditemukan." });
+      return;
+    }
+
+    response.json({
+      nim: result.student.nim,
+      name: result.student.nama,
+      score: result.score,
+      delta: result.appliedDelta,
+      predicate: getScorePredicate(result.score),
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      response.status(409).json({
+        message: "Perubahan poin bersamaan terdeteksi. Silakan ulangi pencatatan.",
+      });
+      return;
+    }
+    console.error("Gagal mencatat perubahan poin mahasiswa:", error);
+    response.status(500).json({ message: "Perubahan poin gagal disimpan." });
+  }
 });
 
 authRouter.post("/logout", (request, response) => {

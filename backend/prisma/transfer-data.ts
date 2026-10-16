@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 const dataPath = resolve(process.cwd(), "prisma", "database-data.json");
 
 type Snapshot = {
-  formatVersion: 2;
+  formatVersion: 3;
   exportedAt: string;
   mahasiswa: {
     id: number;
@@ -16,7 +16,18 @@ type Snapshot = {
     nama: string;
     password: string;
     jurusan: string;
+    pointScore: number;
     timestamp: string;
+  }[];
+  pointChanges: {
+    id: number;
+    studentId: number;
+    type: "LATE" | "UNEXCUSED_ABSENCE" | "DISCIPLINE_VIOLATION" | "COMPETITION" | "NON_ACADEMIC_ACTIVITY";
+    delta: number;
+    scoreAfter: number;
+    reason: string;
+    recordedByIdentity: string;
+    createdAt: string;
   }[];
   dosen: {
     id: number;
@@ -74,6 +85,26 @@ function requireDateString(value: unknown, label: string): string {
   return result;
 }
 
+function requirePointChangeType(
+  value: unknown,
+  label: string,
+): Snapshot["pointChanges"][number]["type"] {
+  const validTypes = [
+    "LATE",
+    "UNEXCUSED_ABSENCE",
+    "DISCIPLINE_VIOLATION",
+    "COMPETITION",
+    "NON_ACADEMIC_ACTIVITY",
+  ] as const;
+  if (
+    typeof value !== "string" ||
+    !validTypes.includes(value as (typeof validTypes)[number])
+  ) {
+    throw new Error(`${label} memiliki jenis perubahan poin yang tidak valid.`);
+  }
+  return value as Snapshot["pointChanges"][number]["type"];
+}
+
 function requireRows(value: unknown, label: string): UnknownRecord[] {
   if (!Array.isArray(value)) {
     throw new Error(`${label} harus berupa array.`);
@@ -83,7 +114,7 @@ function requireRows(value: unknown, label: string): UnknownRecord[] {
 
 function parseSnapshot(value: unknown): Snapshot {
   const data = requireRecord(value, "File ekspor");
-  if (data.formatVersion !== 2) {
+  if (data.formatVersion !== 2 && data.formatVersion !== 3) {
     throw new Error("Versi format file ekspor tidak didukung. Ekspor ulang data sumber.");
   }
 
@@ -95,9 +126,33 @@ function parseSnapshot(value: unknown): Snapshot {
       nama: requireString(row.nama, `${label}.nama`),
       password: requireString(row.password, `${label}.password`),
       jurusan: requireString(row.jurusan, `${label}.jurusan`),
+      pointScore:
+        row.pointScore === undefined
+          ? 100
+          : requireInteger(row.pointScore, `${label}.pointScore`),
       timestamp: requireDateString(row.timestamp, `${label}.timestamp`),
     };
   });
+
+  const pointChanges =
+    data.formatVersion >= 3
+      ? requireRows(data.pointChanges, "pointChanges").map((row, index) => {
+          const label = `pointChanges[${index}]`;
+          return {
+            id: requireInteger(row.id, `${label}.id`),
+            studentId: requireInteger(row.studentId, `${label}.studentId`),
+            type: requirePointChangeType(row.type, `${label}.type`),
+            delta: requireInteger(row.delta, `${label}.delta`),
+            scoreAfter: requireInteger(row.scoreAfter, `${label}.scoreAfter`),
+            reason: requireString(row.reason, `${label}.reason`),
+            recordedByIdentity: requireString(
+              row.recordedByIdentity,
+              `${label}.recordedByIdentity`,
+            ),
+            createdAt: requireDateString(row.createdAt, `${label}.createdAt`),
+          };
+        })
+      : [];
 
   const dosen = requireRows(data.dosen, "dosen").map((row, index) => {
     const label = `dosen[${index}]`;
@@ -123,27 +178,33 @@ function parseSnapshot(value: unknown): Snapshot {
   });
 
   return {
-    formatVersion: 2,
+    formatVersion: 3,
     exportedAt: requireDateString(data.exportedAt, "exportedAt"),
     mahasiswa,
+    pointChanges,
     dosen,
     kemahasiswaan,
   };
 }
 
 async function exportData(): Promise<void> {
-  const [mahasiswa, dosen, kemahasiswaan] = await Promise.all([
+  const [mahasiswa, pointChanges, dosen, kemahasiswaan] = await Promise.all([
     prisma.mahasiswa.findMany(),
+    prisma.pointChange.findMany(),
     prisma.dosen.findMany(),
     prisma.kemahasiswaan.findMany(),
   ]);
 
   const snapshot: Snapshot = {
-    formatVersion: 2,
+    formatVersion: 3,
     exportedAt: new Date().toISOString(),
     mahasiswa: mahasiswa.map((row) => ({
       ...row,
       timestamp: row.timestamp.toISOString(),
+    })),
+    pointChanges: pointChanges.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
     })),
     dosen: dosen.map((row) => ({
       ...row,
@@ -163,7 +224,7 @@ async function exportData(): Promise<void> {
     mode: 0o600,
   });
   console.log(
-    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan.`,
+    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${pointChanges.length} perubahan poin, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan.`,
   );
   console.warn("File ini berisi data pribadi dan password. Jangan commit atau bagikan melalui kanal publik.");
 }
@@ -198,15 +259,22 @@ async function importData(): Promise<void> {
       skipDuplicates: true,
     }),
   ]);
-
+  const pointChanges = await prisma.pointChange.createMany({
+    data: snapshot.pointChanges.map((row) => ({
+      ...row,
+      createdAt: new Date(row.createdAt),
+    })),
+    skipDuplicates: true,
+  });
   await Promise.all([
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Mahasiswa"', 'id'), COALESCE((SELECT MAX(id) FROM public."Mahasiswa"), 1), EXISTS (SELECT 1 FROM public."Mahasiswa"))`,
+    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."PerubahanPoin"', 'id'), COALESCE((SELECT MAX(id) FROM public."PerubahanPoin"), 1), EXISTS (SELECT 1 FROM public."PerubahanPoin"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Dosen"', 'id'), COALESCE((SELECT MAX(id) FROM public."Dosen"), 1), EXISTS (SELECT 1 FROM public."Dosen"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Kemahasiswaan"', 'id'), COALESCE((SELECT MAX(id) FROM public."Kemahasiswaan"), 1), EXISTS (SELECT 1 FROM public."Kemahasiswaan"))`,
   ]);
 
   console.log(
-    `Impor selesai. Baris baru: ${mahasiswa.count} mahasiswa, ${dosen.count} dosen, ${kemahasiswaan.count} kemahasiswaan. Baris duplikat dilewati.`,
+    `Impor selesai. Baris baru: ${mahasiswa.count} mahasiswa, ${pointChanges.count} perubahan poin, ${dosen.count} dosen, ${kemahasiswaan.count} kemahasiswaan. Baris duplikat dilewati.`,
   );
 }
 

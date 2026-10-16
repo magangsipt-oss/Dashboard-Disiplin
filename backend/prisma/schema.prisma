@@ -8,14 +8,39 @@ datasource db {
 }
 
 model Mahasiswa {
-  id        Int      @id @default(autoincrement())
-  nim       Int      @unique @map("NIM")
-  nama      String   @map("Nama")
-  password  String   @db.VarChar(255) @map("Password")
-  jurusan   String   @map("Jurusan")
-  timestamp DateTime @default(now())
+  id          Int           @id @default(autoincrement())
+  nim         Int           @unique @map("NIM")
+  nama        String        @map("Nama")
+  password    String        @db.VarChar(255) @map("Password")
+  jurusan     String        @map("Jurusan")
+  pointScore  Int           @default(100) @map("Poin")
+  timestamp   DateTime      @default(now())
+  pointChanges PointChange[]
 
   @@map("Mahasiswa")
+}
+
+enum PointChangeType {
+  LATE
+  UNEXCUSED_ABSENCE
+  DISCIPLINE_VIOLATION
+  COMPETITION
+  NON_ACADEMIC_ACTIVITY
+}
+
+model PointChange {
+  id                  Int             @id @default(autoincrement())
+  studentId           Int
+  type                PointChangeType
+  delta               Int
+  scoreAfter          Int
+  reason              String          @db.VarChar(500)
+  recordedByIdentity  String          @db.VarChar(100)
+  createdAt           DateTime        @default(now())
+  student             Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@map("PerubahanPoin")
 }
 
 model Dosen {

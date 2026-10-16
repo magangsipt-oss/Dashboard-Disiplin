@@ -189,7 +189,7 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
     identity: String(account.nip),
     identityLabel: "NIP",
     role,
-    roleLabel: "Kemahasiswaan/Admin",
+    roleLabel: "Kemahasiswaan",
     details: [{ label: "NIP", value: String(account.nip) }],
     createdAt: account.timestamp,
     updatePassword: (password) =>

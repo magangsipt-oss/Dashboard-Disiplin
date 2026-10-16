@@ -51,7 +51,7 @@ export default function App() {
   const [pointChangeError, setPointChangeError] = useState('');
 
   const officialLogoUrl = "/poltek-simas-berau.png";
-  const bgCampusImage = "/campus.svg";
+  const bgCampusImage = "/portal-access-background.jpg";
   const portalAccessBackground = "/portal-access-background.jpg";
   const heroImages = [
     '/campus-team.png',
@@ -680,10 +680,12 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="bg-[#581c1c]/90 px-3 py-1.5 rounded-lg border border-red-800/50 flex items-center gap-2">
-                    <span className="text-[10px] text-red-200 uppercase font-semibold">Role:</span>
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold text-white">
-                      {authenticatedUser?.roleLabel ?? 'Belum login'}
+                  <div className="flex items-center gap-1.5 rounded-lg border border-red-800/50 bg-[#581c1c]/90 px-3 py-1.5 text-xs text-red-200">
+                    <span className="font-semibold">Role :</span>
+                    <span className="font-bold">
+                      {authenticatedUser?.role === 'admin'
+                        ? 'Kemahasiswaan'
+                        : (authenticatedUser?.roleLabel ?? 'Belum login')}
                     </span>
                   </div>
 

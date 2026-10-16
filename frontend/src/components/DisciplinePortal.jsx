@@ -36,7 +36,6 @@ export default function App() {
   const [showSKPIModal, setShowSKPIModal] = useState(false);
   const [showSanggahModal, setShowSanggahModal] = useState(false);
   const [showKonselingModal, setShowKonselingModal] = useState(false);
-  const [showLecturerProfile, setShowLecturerProfile] = useState(false);
 
   const [loginError, setLoginError] = useState('');
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
@@ -862,15 +861,9 @@ export default function App() {
                   </div>
 
                   <div className="flex min-w-[280px] items-center gap-4 rounded-2xl border border-red-800/60 bg-[#581c1c]/95 p-4 backdrop-blur-sm sm:p-5">
-                    <button
-                      type="button"
-                      onClick={() => setShowLecturerProfile(true)}
-                      aria-label="Tampilkan informasi lengkap dosen"
-                      title="Lihat informasi dosen"
-                      className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 transition hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
-                    >
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
                       <GraduationCap className="h-7 w-7" />
-                    </button>
+                    </div>
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-red-200">Profil akun</p>
                       <p className="text-base font-extrabold leading-snug text-white">
@@ -1001,85 +994,7 @@ export default function App() {
         </div>
       )}
 
-      {showLecturerProfile && authenticatedUser?.role === 'dosen' && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
-          onClick={() => setShowLecturerProfile(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="lecturer-profile-title"
-            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#450a0a] via-[#7f1d1d] to-[#991b1b] px-6 py-7 text-white sm:px-8">
-              <div aria-hidden="true" className="absolute -right-10 -top-16 h-48 w-48 rounded-full border-[24px] border-white/5" />
-              <div aria-hidden="true" className="absolute -bottom-24 right-24 h-40 w-40 rounded-full bg-red-400/10 blur-2xl" />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="text-left">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
-                    Profil Dosen
-                  </p>
-                  <h2 id="lecturer-profile-title" className="mt-1 text-xl font-extrabold sm:text-2xl">
-                    {authenticatedUser.name}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowLecturerProfile(false)}
-                  aria-label="Tutup informasi dosen"
-                  className="rounded-xl border border-white/15 bg-white/10 p-2 text-white/80 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-5 p-6 text-left sm:p-8">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Informasi Identitas</h3>
-                <p className="mt-1 text-xs text-slate-500">Nomor identitas yang terdaftar pada akun dosen.</p>
-              </div>
-              <dl className="space-y-4">
-                {authenticatedUser.details?.map((detail) => (
-                  <div key={detail.label}>
-                    <dt className="mb-2 text-sm font-bold text-slate-800">
-                      {detail.label}
-                    </dt>
-                    <dd className="w-full break-all rounded-2xl border border-slate-200 bg-blue-50 px-4 py-4 text-sm font-medium text-slate-900">
-                      {detail.value}
-                    </dd>
-                  </div>
-                ))}
-                <div>
-                  <dt className="mb-2 text-sm font-bold text-slate-800">
-                    Terdaftar sejak
-                  </dt>
-                  <dd className="w-full break-all rounded-2xl border border-slate-200 bg-blue-50 px-4 py-4 text-sm font-medium text-slate-900">
-                    {authenticatedUser.createdAt
-                      ? new Date(authenticatedUser.createdAt).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })
-                      : '-'}
-                  </dd>
-                </div>
-              </dl>
-              <div className="flex justify-end border-t border-slate-100 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowLecturerProfile(false)}
-                  className="rounded-xl bg-red-800 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:bg-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
+      {}
 
       {}
       {showSKPIModal && (

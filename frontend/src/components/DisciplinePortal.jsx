@@ -41,6 +41,19 @@ export default function App() {
   const [studentPoints, setStudentPoints] = useState(null);
   const [isLoadingStudentPoints, setIsLoadingStudentPoints] = useState(false);
   const [studentPointsError, setStudentPointsError] = useState('');
+  const [advisors, setAdvisors] = useState([]);
+  const [advisor, setAdvisor] = useState(null);
+  const [advisorRequest, setAdvisorRequest] = useState(null);
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState('');
+  const [isLoadingAdvisors, setIsLoadingAdvisors] = useState(false);
+  const [isSavingAdvisor, setIsSavingAdvisor] = useState(false);
+  const [advisorError, setAdvisorError] = useState('');
+  const [advisorStatus, setAdvisorStatus] = useState('');
+  const [advisorRequests, setAdvisorRequests] = useState([]);
+  const [isLoadingAdvisorRequests, setIsLoadingAdvisorRequests] = useState(false);
+  const [advisorRequestError, setAdvisorRequestError] = useState('');
+  const [advisorDecisionStatus, setAdvisorDecisionStatus] = useState('');
+  const [updatingAdvisorRequestId, setUpdatingAdvisorRequestId] = useState(null);
   const [pointChangeForm, setPointChangeForm] = useState({
     nim: '',
     type: 'late',
@@ -65,6 +78,7 @@ export default function App() {
       { id: 'sanggah', label: 'Sanggah Presensi' },
       { id: 'klaim', label: 'Klaim Kegiatan' },
       { id: 'konseling', label: 'Konseling' },
+      { id: 'dosen-pa', label: 'Dosen PA' },
     ],
     dosen: [
       { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
@@ -133,6 +147,81 @@ export default function App() {
                   setIsLoadingStudentPoints(false);
                 }
               });
+
+            setIsLoadingAdvisors(true);
+            Promise.all([
+              fetch('/api/auth/advisors'),
+              fetch('/api/auth/advisor'),
+            ])
+              .then(async ([advisorsResponse, advisorResponse]) => {
+                const [advisorsData, advisorData] = await Promise.all([
+                  advisorsResponse.json().catch(() => ({})),
+                  advisorResponse.json().catch(() => ({})),
+                ]);
+                if (isMounted) {
+                  if (advisorsResponse.ok) {
+                    setAdvisors(advisorsData.advisors ?? []);
+                  } else {
+                    setAdvisorError(advisorsData.message || 'Daftar dosen PA gagal dimuat.');
+                  }
+                  if (advisorResponse.ok) {
+                    setAdvisor(advisorData.advisor ?? null);
+                    setAdvisorRequest(advisorData.request ?? null);
+                    setSelectedAdvisorId(
+                      advisorData.request
+                        ? String(advisorData.request.dosenId)
+                        : advisorData.advisor
+                          ? String(advisorData.advisor.id)
+                          : '',
+                    );
+                  } else {
+                    setAdvisorError((current) => current || advisorData.message || 'Status dosen PA gagal dimuat.');
+                  }
+                }
+              })
+              .catch((error) => {
+                if (isMounted) {
+                  setAdvisorError(
+                    error instanceof Error
+                      ? error.message
+                      : 'Daftar dosen PA gagal dimuat.',
+                  );
+                }
+              })
+              .finally(() => {
+                if (isMounted) {
+                  setIsLoadingAdvisors(false);
+                }
+              });
+          }
+          if (data.profile.role === 'dosen') {
+            setIsLoadingAdvisorRequests(true);
+            fetch('/api/auth/advisor-requests')
+              .then(async (response) => {
+                const result = await response.json();
+                if (!response.ok) {
+                  throw new Error(result.message || 'Permohonan PA gagal dimuat.');
+                }
+                return result.requests ?? [];
+              })
+              .then((requests) => {
+                if (isMounted) {
+                  setAdvisorRequests(requests);
+                  setAdvisorRequestError('');
+                }
+              })
+              .catch((error) => {
+                if (isMounted) {
+                  setAdvisorRequestError(
+                    error instanceof Error ? error.message : 'Permohonan PA gagal dimuat.',
+                  );
+                }
+              })
+              .finally(() => {
+                if (isMounted) {
+                  setIsLoadingAdvisorRequests(false);
+                }
+              });
           }
         }
       })
@@ -179,6 +268,40 @@ export default function App() {
   }, [activePage, activeTab]);
 
   useEffect(() => {
+    if (authenticatedUser?.role !== 'dosen' || activePage !== 'dashboard') {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const refreshAdvisorRequests = async () => {
+      try {
+        const response = await fetch('/api/auth/advisor-requests');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Permohonan PA gagal dimuat.');
+        }
+        if (isMounted) {
+          setAdvisorRequests(data.requests ?? []);
+          setAdvisorRequestError('');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setAdvisorRequestError(
+            error instanceof Error ? error.message : 'Permohonan PA gagal dimuat.',
+          );
+        }
+      }
+    };
+
+    refreshAdvisorRequests();
+    const refreshTimer = window.setInterval(refreshAdvisorRequests, 15000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [authenticatedUser?.role, activePage]);
+
+  useEffect(() => {
     if (activePage !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return undefined;
     }
@@ -207,6 +330,11 @@ export default function App() {
     } finally {
       setAuthenticatedUser(null);
       setStudentPoints(null);
+      setAdvisor(null);
+      setAdvisorRequest(null);
+      setAdvisors([]);
+      setAdvisorRequests([]);
+      setSelectedAdvisorId('');
       setActivePage('landing');
     }
   };
@@ -241,6 +369,67 @@ export default function App() {
       );
     } finally {
       setIsSubmittingPointChange(false);
+    }
+  };
+
+  const handleAdvisorSubmit = async (event) => {
+    event.preventDefault();
+    setAdvisorError('');
+    setAdvisorStatus('');
+    setIsSavingAdvisor(true);
+
+    try {
+      const response = await fetch('/api/auth/advisor/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dosenId: Number(selectedAdvisorId) }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Pilihan dosen PA gagal disimpan.');
+      }
+
+      setAdvisorRequest(data.request);
+      setAdvisorStatus(`Permohonan kepada ${data.request.dosen.nama} dikirim dan menunggu persetujuan.`);
+    } catch (error) {
+      setAdvisorError(
+        error instanceof Error
+          ? error.message
+          : 'Pilihan dosen PA gagal disimpan.',
+      );
+    } finally {
+      setIsSavingAdvisor(false);
+    }
+  };
+
+  const handleAdvisorDecision = async (requestId, decision) => {
+    setAdvisorRequestError('');
+    setAdvisorDecisionStatus('');
+    setUpdatingAdvisorRequestId(requestId);
+
+    try {
+      const response = await fetch(`/api/auth/advisor-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Keputusan permohonan gagal disimpan.');
+      }
+
+      setAdvisorRequests((current) => current.filter((item) => item.id !== requestId));
+      setAdvisorDecisionStatus(
+        decision === 'approved'
+          ? `Permohonan ${data.request.mahasiswa.nama} disetujui.`
+          : `Permohonan ${data.request.mahasiswa.nama} ditolak.`,
+      );
+    } catch (error) {
+      setAdvisorRequestError(
+        error instanceof Error ? error.message : 'Keputusan permohonan gagal disimpan.',
+      );
+    } finally {
+      setUpdatingAdvisorRequestId(null);
     }
   };
 
@@ -675,6 +864,11 @@ export default function App() {
                       }`}
                     >
                       {item.label}
+                      {item.id === 'approval' && advisorRequests.length > 0 && (
+                        <span className="ml-1.5 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-red-950">
+                          {advisorRequests.length}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -732,11 +926,13 @@ export default function App() {
                 </div>
               </div>
 
-              <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
-                Skor kedisiplinan dimulai dari 100 poin, dapat berkurang karena pelanggaran, dan bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi. Skor maksimal adalah 200 poin.
-              </p>
+              {activeTab === 'dashboard' && (
+                <>
+                  <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
+                    Skor kedisiplinan dimulai dari 100 poin, dapat berkurang karena pelanggaran, dan bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi. Skor maksimal adalah 200 poin.
+                  </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Skor Kedisiplinan</span>
@@ -814,8 +1010,18 @@ export default function App() {
                     <MessageSquare className="w-5 h-5 text-purple-600" />
                   </div>
                   <div>
-                    <span className="text-base font-bold text-slate-900 leading-snug block">Belum ada data konseling</span>
-                    <p className="text-xs text-slate-500 mt-1">Catatan PA akan dimuat di sini.</p>
+                    <span className="text-base font-bold text-slate-900 leading-snug block">
+                      {advisor?.nama ?? (advisorRequest?.status === 'PENDING'
+                        ? `Menunggu persetujuan ${advisorRequest.dosen.nama}`
+                        : 'Belum ada dosen PA disetujui')}
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {advisor
+                        ? 'Dosen pembimbing akademik Anda.'
+                        : advisorRequest?.status === 'REJECTED'
+                          ? 'Permohonan sebelumnya ditolak. Anda dapat mengajukan kembali.'
+                          : 'Pilih dosen PA melalui menu Dosen PA.'}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -825,8 +1031,69 @@ export default function App() {
                     Ajukan / Lihat Catatan PA →
                   </button>
                 </div>
-              </div>
+                  </div>
+                </>
+              )}
 
+              {activeTab === 'dosen-pa' && (
+                <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold text-slate-900">Pilih Dosen Pembimbing Akademik</h3>
+                    <p className="mt-1 text-sm text-slate-600">Pilih dosen PA Anda dari daftar dosen yang terdaftar.</p>
+                  </div>
+
+                  {advisor && (
+                    <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                      Dosen PA saat ini: <strong>{advisor.nama}</strong>
+                    </p>
+                  )}
+                  {advisorRequest?.status === 'PENDING' && (
+                    <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+                      Permohonan kepada <strong>{advisorRequest.dosen.nama}</strong> sedang menunggu persetujuan dosen.
+                    </p>
+                  )}
+                  {advisorRequest?.status === 'REJECTED' && (
+                    <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="status">
+                      Permohonan sebelumnya ditolak. Silakan pilih dosen PA dan kirim pengajuan kembali.
+                    </p>
+                  )}
+
+                  <form onSubmit={handleAdvisorSubmit} className="max-w-xl space-y-4">
+                    <div>
+                      <label htmlFor="advisor-select" className="mb-1.5 block text-sm font-semibold text-slate-700">Nama dosen</label>
+                      <select
+                        id="advisor-select"
+                        required
+                        value={selectedAdvisorId}
+                        onChange={(event) => setSelectedAdvisorId(event.target.value)}
+                        disabled={isLoadingAdvisors || isSavingAdvisor || advisors.length === 0}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-800 disabled:bg-slate-100"
+                      >
+                        <option value="">
+                          {isLoadingAdvisors ? 'Memuat daftar dosen...' : 'Pilih dosen PA'}
+                        </option>
+                        {advisors.map((item) => (
+                          <option key={item.id} value={item.id}>{item.nama}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {advisorError && <p className="text-sm text-red-700" role="alert">{advisorError}</p>}
+                    {advisorStatus && <p className="text-sm text-emerald-700" role="status">{advisorStatus}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={!selectedAdvisorId || isLoadingAdvisors || isSavingAdvisor}
+                      className="rounded-xl bg-red-800 px-5 py-2.5 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingAdvisor ? 'Mengirim...' : 'Kirim Permohonan PA'}
+                    </button>
+                  </form>
+                </section>
+              )}
+
+              {activeTab !== 'dosen-pa' && (
+                <>
               <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                   <div>
@@ -985,6 +1252,8 @@ export default function App() {
                   </div>
                 </div>
               </div>
+                </>
+              )}
             </main>
             )}
 
@@ -1025,8 +1294,23 @@ export default function App() {
                 </section>
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-                  Data mahasiswa bimbingan, presensi e-Campus, dan konseling belum terhubung ke API. Panel ini menampilkan rancangan alur sesuai use case.
+                  Permohonan dosen PA sudah terhubung. Data presensi e-Campus dan konseling masih menunggu integrasi.
                 </p>
+
+                {advisorRequests.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('approval')}
+                    className="flex w-full items-center justify-between gap-4 rounded-xl border border-amber-300 bg-amber-100 px-4 py-3 text-left text-sm text-amber-950 shadow-sm hover:bg-amber-200"
+                    role="status"
+                  >
+                    <span>
+                      <strong>{advisorRequests.length} permohonan PA menunggu</strong>
+                      {' '}— buka untuk meninjau dan memberikan keputusan.
+                    </span>
+                    <ArrowRight className="h-4 w-4 flex-shrink-0" />
+                  </button>
+                )}
 
                 {activeTab !== 'approval' && (
                   <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -1053,14 +1337,58 @@ export default function App() {
                       Permohonan Mahasiswa Bimbingan
                     </h3>
                     <p className="mt-1 text-sm text-slate-500">
-                      Daftar mahasiswa yang mengajukan untuk menjadi mahasiswa bimbingan Anda.
+                      Tinjau permohonan mahasiswa yang memilih Anda sebagai dosen PA.
                     </p>
-                    <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                      <p className="font-semibold text-slate-700">Data permohonan belum tersedia</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Pengajuan mahasiswa akan ditampilkan setelah layanan pengajuan bimbingan tersedia.
+                    {advisorRequestError && (
+                      <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                        {advisorRequestError}
                       </p>
-                    </div>
+                    )}
+                    {advisorDecisionStatus && (
+                      <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+                        {advisorDecisionStatus}
+                      </p>
+                    )}
+                    {isLoadingAdvisorRequests ? (
+                      <p className="mt-5 rounded-xl bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">Memuat permohonan...</p>
+                    ) : advisorRequests.length === 0 ? (
+                      <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                        <p className="font-semibold text-slate-700">Tidak ada permohonan yang menunggu</p>
+                        <p className="mt-1 text-sm text-slate-500">Permohonan mahasiswa yang memilih Anda akan tampil di sini.</p>
+                      </div>
+                    ) : (
+                      <div className="mt-5 space-y-4">
+                        {advisorRequests.map((request) => (
+                          <article key={request.id} className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5">
+                            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                              <div>
+                                <p className="font-bold text-slate-900">{request.student.nama}</p>
+                                <p className="mt-1 text-sm text-slate-600">NIM {request.student.nim} · {request.student.jurusan}</p>
+                                <p className="mt-1 text-xs text-slate-500">Diajukan {new Date(request.createdAt).toLocaleString('id-ID')}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdvisorDecision(request.id, 'rejected')}
+                                  disabled={updatingAdvisorRequestId !== null}
+                                  className="rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                                >
+                                  {updatingAdvisorRequestId === request.id ? 'Memproses...' : 'Tolak'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdvisorDecision(request.id, 'approved')}
+                                  disabled={updatingAdvisorRequestId !== null}
+                                  className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
+                                >
+                                  {updatingAdvisorRequestId === request.id ? 'Memproses...' : 'Setujui'}
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 ) : (
                   <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
@@ -1343,7 +1671,7 @@ export default function App() {
                 <input 
                   type="text" 
                   disabled 
-                  value="Ir. Budi Santoso, M.T. (D3 Pemeliharaan Mesin)"
+                  value={advisor?.nama ?? 'Pilih dosen PA melalui menu Dosen PA'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 font-bold text-slate-700 text-xs"
                 />
               </div>

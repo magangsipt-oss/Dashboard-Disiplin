@@ -323,6 +323,194 @@ authRouter.get("/me", (request, response) => {
   response.json({ profile: session.profile });
 });
 
+authRouter.get("/advisors", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "mhs") {
+    response.status(403).json({ message: "Daftar dosen PA hanya tersedia untuk akun mahasiswa." });
+    return;
+  }
+
+  try {
+    const advisors = await database.dosen.findMany({
+      orderBy: { nama: "asc" },
+      select: { id: true, nama: true },
+    });
+    response.json({ advisors });
+  } catch (error) {
+    console.error("Gagal memuat daftar dosen PA:", error);
+    response.status(500).json({ message: "Daftar dosen PA gagal dimuat." });
+  }
+});
+
+authRouter.get("/advisor", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "mhs") {
+    response.status(403).json({ message: "Pilihan dosen PA hanya tersedia untuk akun mahasiswa." });
+    return;
+  }
+
+  try {
+    const student = await database.mahasiswa.findUnique({
+      where: { id: session.profile.id },
+      select: {
+        dosenPa: { select: { id: true, nama: true } },
+        advisorRequest: {
+          select: {
+            id: true,
+            dosenId: true,
+            status: true,
+            dosen: { select: { id: true, nama: true } },
+          },
+        },
+      },
+    });
+    if (!student) {
+      response.status(404).json({ message: "Data mahasiswa tidak ditemukan." });
+      return;
+    }
+    response.json({ advisor: student.dosenPa, request: student.advisorRequest });
+  } catch (error) {
+    console.error("Gagal memuat dosen PA mahasiswa:", error);
+    response.status(500).json({ message: "Pilihan dosen PA gagal dimuat." });
+  }
+});
+
+authRouter.get("/advisor-requests", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "dosen") {
+    response.status(403).json({ message: "Hanya akun dosen yang dapat melihat permohonan PA." });
+    return;
+  }
+
+  try {
+    const requests = await database.advisorRequest.findMany({
+      where: { dosenId: session.profile.id, status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        student: { select: { id: true, nim: true, nama: true, jurusan: true } },
+      },
+    });
+    response.json({ requests });
+  } catch (error) {
+    console.error("Gagal memuat permohonan dosen PA:", error);
+    response.status(500).json({ message: "Permohonan PA gagal dimuat." });
+  }
+});
+
+authRouter.post("/advisor/request", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "mhs") {
+    response.status(403).json({ message: "Hanya mahasiswa yang dapat mengajukan dosen PA." });
+    return;
+  }
+
+  const dosenId = request.body?.dosenId;
+  if (typeof dosenId !== "number" || !Number.isSafeInteger(dosenId) || dosenId < 1) {
+    response.status(400).json({ message: "Pilih dosen PA yang valid." });
+    return;
+  }
+
+  try {
+    const advisor = await database.dosen.findUnique({
+      where: { id: dosenId },
+      select: { id: true },
+    });
+    if (!advisor) {
+      response.status(404).json({ message: "Dosen PA tidak ditemukan." });
+      return;
+    }
+
+    const advisorRequest = await database.advisorRequest.upsert({
+      where: { studentId: session.profile.id },
+      create: { studentId: session.profile.id, dosenId: advisor.id },
+      update: { dosenId: advisor.id, status: "PENDING", reviewedAt: null },
+      include: { dosen: { select: { id: true, nama: true } } },
+    });
+    response.json({ request: advisorRequest });
+  } catch (error) {
+    console.error("Gagal mengirim permohonan dosen PA:", error);
+    response.status(500).json({ message: "Permohonan dosen PA gagal dikirim." });
+  }
+});
+
+authRouter.patch("/advisor-requests/:requestId", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "dosen") {
+    response.status(403).json({ message: "Hanya dosen yang dapat memutuskan permohonan PA." });
+    return;
+  }
+
+  const requestId = Number(request.params.requestId);
+  const decision = request.body?.decision;
+  if (!Number.isSafeInteger(requestId) || requestId < 1 || !["approved", "rejected"].includes(decision)) {
+    response.status(400).json({ message: "ID permohonan atau keputusan tidak valid." });
+    return;
+  }
+
+  try {
+    const result = await database.$transaction(async (transaction) => {
+      const pendingRequest = await transaction.advisorRequest.findFirst({
+        where: { id: requestId, dosenId: session.profile.id, status: "PENDING" },
+        select: { id: true, studentId: true, dosenId: true },
+      });
+      if (!pendingRequest) {
+        return null;
+      }
+
+      const status = decision === "approved" ? "APPROVED" : "REJECTED";
+      const updated = await transaction.advisorRequest.updateMany({
+        where: { id: requestId, dosenId: session.profile.id, status: "PENDING" },
+        data: { status, reviewedAt: new Date() },
+      });
+      if (updated.count !== 1) {
+        return null;
+      }
+      if (status === "APPROVED") {
+        await transaction.mahasiswa.update({
+          where: { id: pendingRequest.studentId },
+          data: { dosenPaId: pendingRequest.dosenId },
+        });
+      }
+
+      return transaction.advisorRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          dosen: { select: { id: true, nama: true } },
+          student: { select: { id: true, nim: true, nama: true, jurusan: true } },
+        },
+      });
+    });
+
+    if (!result) {
+      response.status(404).json({ message: "Permohonan tidak ditemukan atau sudah diproses." });
+      return;
+    }
+    response.json({ request: result });
+  } catch (error) {
+    console.error("Gagal memutuskan permohonan dosen PA:", error);
+    response.status(500).json({ message: "Keputusan permohonan gagal disimpan." });
+  }
+});
 authRouter.get("/points", async (request, response) => {
   const session = getSessionForRequest(request, response);
   if (!session) {

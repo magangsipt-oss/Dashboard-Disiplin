@@ -16,10 +16,32 @@ model Mahasiswa {
   pointScore  Int           @default(100) @map("Poin")
   timestamp   DateTime      @default(now())
   pointChanges PointChange[]
+  dosenPaId   Int?          @map("DosenPAId")
+  dosenPa     Dosen?        @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
+  advisorRequest AdvisorRequest?
 
   @@map("Mahasiswa")
 }
 
+enum AdvisorRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AdvisorRequest {
+  id        Int                  @id @default(autoincrement())
+  studentId Int                  @unique
+  dosenId   Int
+  status    AdvisorRequestStatus @default(PENDING)
+  createdAt DateTime             @default(now())
+  reviewedAt DateTime?
+  student   Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dosen     Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+
+  @@index([dosenId, status, createdAt])
+  @@map("PermohonanDosenPA")
+}
 enum PointChangeType {
   LATE
   UNEXCUSED_ABSENCE
@@ -50,6 +72,8 @@ model Dosen {
   nama      String   @map("Nama")
   password  String   @db.VarChar(255) @map("Password")
   timestamp DateTime @default(now())
+  mahasiswaBimbingan Mahasiswa[]
+  advisorRequests    AdvisorRequest[]
 
   @@map("Dosen")
 }

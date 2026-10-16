@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ShieldCheck, 
   UserCheck, 
+  GraduationCap,
   Award, 
   MessageSquare, 
   Clock, 
@@ -17,7 +18,6 @@ import {
   FileText,
   Plus,
   Send,
-  User,
   ArrowLeft,
   ArrowRight,
   HelpCircle,
@@ -36,6 +36,7 @@ export default function App() {
   const [showSKPIModal, setShowSKPIModal] = useState(false);
   const [showSanggahModal, setShowSanggahModal] = useState(false);
   const [showKonselingModal, setShowKonselingModal] = useState(false);
+  const [showLecturerProfile, setShowLecturerProfile] = useState(false);
 
   const [loginError, setLoginError] = useState('');
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
@@ -57,9 +58,9 @@ export default function App() {
       { id: 'konseling', label: 'Konseling' },
     ],
     dosen: [
-      { id: 'dashboard', label: 'Ringkasan' },
       { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
       { id: 'konseling', label: 'Catatan & Konseling' },
+      { id: 'approval', label: 'Approval' },
     ],
     admin: [
       { id: 'dashboard', label: 'Ringkasan' },
@@ -89,7 +90,9 @@ export default function App() {
       .then((data) => {
         if (isMounted && data?.profile) {
           setAuthenticatedUser(data.profile);
-          setActiveTab('dashboard');
+          setActiveTab(
+            data.profile.role === 'dosen' ? 'bimbingan' : 'dashboard',
+          );
           setActivePage('dashboard');
         }
       })
@@ -133,7 +136,7 @@ export default function App() {
     revealElements.forEach((element) => observer.observe(element));
 
     return () => observer.disconnect();
-  }, [activePage]);
+  }, [activePage, activeTab]);
 
   useEffect(() => {
     if (activePage !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -297,7 +300,19 @@ export default function App() {
                 >
                   <div>
                     <div className="w-14 h-14 bg-red-50 text-red-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-800 group-hover:text-white transition-all shadow-sm">
-                      <User className="w-8 h-8" />
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-8 h-8"
+                      >
+                        <circle cx="12" cy="7" r="4" />
+                        <path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z" />
+                      </svg>
                     </div>
                     <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Mahasiswa</h4>
                     <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
@@ -319,7 +334,7 @@ export default function App() {
                 >
                   <div>
                     <div className="w-14 h-14 bg-rose-50 text-rose-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-rose-800 group-hover:text-white transition-all shadow-sm">
-                      <UserCheck className="w-8 h-8" />
+                      <GraduationCap className="w-8 h-8" />
                     </div>
                     <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-rose-800 transition-colors">Akses Dosen PA</h4>
                     <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
@@ -830,51 +845,100 @@ export default function App() {
 
             {authenticatedUser?.role === 'dosen' && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
-                <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Dashboard Dosen PA / Prodi</p>
-                  <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
-                    Monitoring Mahasiswa Bimbingan
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
-                    Pantau zona risiko, tinjau rekam jejak presensi dari e-Campus, dan catat tindak lanjut konseling mahasiswa bimbingan.
-                  </p>
+                <section data-scroll-reveal className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl md:flex-row md:items-center sm:p-8">
+                  <div className="z-10 space-y-2">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-900/40 px-3 py-1 text-xs font-semibold text-amber-300">
+                      <Clock className="h-3.5 w-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
+                    </div>
+                    <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                      Selamat Datang, {authenticatedUser?.name || 'Dosen'}
+                    </h2>
+                    <p className="text-sm text-red-100" data-testid="database-profile">
+                      {authenticatedUser?.details
+                        ?.filter((detail) => detail.label === 'NIDN' || detail.label === 'NIP')
+                        .map((detail) => `${detail.label}: ${detail.value}`)
+                        .join(' • ')}
+                    </p>
+                  </div>
+
+                  <div className="flex min-w-[280px] items-center gap-4 rounded-2xl border border-red-800/60 bg-[#581c1c]/95 p-4 backdrop-blur-sm sm:p-5">
+                    <button
+                      type="button"
+                      onClick={() => setShowLecturerProfile(true)}
+                      aria-label="Tampilkan informasi lengkap dosen"
+                      title="Lihat informasi dosen"
+                      className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 transition hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                    >
+                      <GraduationCap className="h-7 w-7" />
+                    </button>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-red-200">Profil akun</p>
+                      <p className="text-base font-extrabold leading-snug text-white">
+                        {authenticatedUser?.roleLabel}
+                      </p>
+                      <p className="mt-0.5 text-xs text-red-200">
+                        Terdaftar: {authenticatedUser?.createdAt
+                          ? new Date(authenticatedUser.createdAt).toLocaleDateString('id-ID')
+                          : '-'}
+                      </p>
+                    </div>
+                  </div>
                 </section>
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
                   Data mahasiswa bimbingan, presensi e-Campus, dan konseling belum terhubung ke API. Panel ini menampilkan rancangan alur sesuai use case.
                 </p>
 
-                <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                  {[
-                    { label: 'Mahasiswa bimbingan', icon: UserCheck },
-                    { label: 'Zona kuning / merah', icon: AlertCircle },
-                    { label: 'Perlu tindak lanjut', icon: MessageSquare },
-                  ].map(({ label, icon: Icon }) => (
-                    <div key={label} data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
-                        <Icon className="h-5 w-5 text-red-800" />
+                {activeTab !== 'approval' && (
+                  <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    {[
+                      { label: 'Mahasiswa bimbingan', icon: UserCheck },
+                      { label: 'Zona kuning / merah', icon: AlertCircle },
+                      { label: 'Perlu tindak lanjut', icon: MessageSquare },
+                    ].map(({ label, icon: Icon }) => (
+                      <div key={label} data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
+                          <Icon className="h-5 w-5 text-red-800" />
+                        </div>
+                        <p className="mt-3 text-3xl font-extrabold text-slate-900">--</p>
+                        <p className="mt-1 text-xs text-slate-500">Menunggu sinkronisasi data</p>
                       </div>
-                      <p className="mt-3 text-3xl font-extrabold text-slate-900">--</p>
-                      <p className="mt-1 text-xs text-slate-500">Menunggu sinkronisasi data</p>
-                    </div>
-                  ))}
-                </section>
+                    ))}
+                  </section>
+                )}
 
-                <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-                  <h3 className="text-lg font-extrabold text-slate-900">
-                    {activeTab === 'konseling' ? 'Catatan & Konseling Kedisiplinan' : 'Daftar Mahasiswa Bimbingan'}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {activeTab === 'konseling'
-                      ? 'Riwayat catatan pembinaan dan jadwal konseling akan tersedia setelah layanan konseling diaktifkan.'
-                      : 'Gunakan daftar ini untuk memfilter mahasiswa berdasarkan zona risiko dan membuka detail rekam jejak.'}
-                  </p>
-                  <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                    <p className="font-semibold text-slate-700">Belum ada data untuk ditampilkan</p>
-                    <p className="mt-1 text-sm text-slate-500">Daftar dan detail mahasiswa akan dimuat dari layanan backend.</p>
-                  </div>
-                </section>
+                {activeTab === 'approval' ? (
+                  <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      Permohonan Mahasiswa Bimbingan
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Daftar mahasiswa yang mengajukan untuk menjadi mahasiswa bimbingan Anda.
+                    </p>
+                    <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                      <p className="font-semibold text-slate-700">Data permohonan belum tersedia</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Pengajuan mahasiswa akan ditampilkan setelah layanan pengajuan bimbingan tersedia.
+                      </p>
+                    </div>
+                  </section>
+                ) : (
+                  <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      {activeTab === 'konseling' ? 'Catatan & Konseling Kedisiplinan' : 'Daftar Mahasiswa Bimbingan'}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {activeTab === 'konseling'
+                        ? 'Riwayat catatan pembinaan dan jadwal konseling akan tersedia setelah layanan konseling diaktifkan.'
+                        : 'Gunakan daftar ini untuk memfilter mahasiswa berdasarkan zona risiko dan membuka detail rekam jejak.'}
+                    </p>
+                    <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                      <p className="font-semibold text-slate-700">Belum ada data untuk ditampilkan</p>
+                      <p className="mt-1 text-sm text-slate-500">Daftar dan detail mahasiswa akan dimuat dari layanan backend.</p>
+                    </div>
+                  </section>
+                )}
               </main>
             )}
 
@@ -934,6 +998,86 @@ export default function App() {
               </main>
             )}
           </div>
+        </div>
+      )}
+
+      {showLecturerProfile && authenticatedUser?.role === 'dosen' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+          onClick={() => setShowLecturerProfile(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lecturer-profile-title"
+            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#450a0a] via-[#7f1d1d] to-[#991b1b] px-6 py-7 text-white sm:px-8">
+              <div aria-hidden="true" className="absolute -right-10 -top-16 h-48 w-48 rounded-full border-[24px] border-white/5" />
+              <div aria-hidden="true" className="absolute -bottom-24 right-24 h-40 w-40 rounded-full bg-red-400/10 blur-2xl" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="text-left">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
+                    Profil Dosen
+                  </p>
+                  <h2 id="lecturer-profile-title" className="mt-1 text-xl font-extrabold sm:text-2xl">
+                    {authenticatedUser.name}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLecturerProfile(false)}
+                  aria-label="Tutup informasi dosen"
+                  className="rounded-xl border border-white/15 bg-white/10 p-2 text-white/80 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-5 p-6 text-left sm:p-8">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Informasi Identitas</h3>
+                <p className="mt-1 text-xs text-slate-500">Nomor identitas yang terdaftar pada akun dosen.</p>
+              </div>
+              <dl className="space-y-4">
+                {authenticatedUser.details?.map((detail) => (
+                  <div key={detail.label}>
+                    <dt className="mb-2 text-sm font-bold text-slate-800">
+                      {detail.label}
+                    </dt>
+                    <dd className="w-full break-all rounded-2xl border border-slate-200 bg-blue-50 px-4 py-4 text-sm font-medium text-slate-900">
+                      {detail.value}
+                    </dd>
+                  </div>
+                ))}
+                <div>
+                  <dt className="mb-2 text-sm font-bold text-slate-800">
+                    Terdaftar sejak
+                  </dt>
+                  <dd className="w-full break-all rounded-2xl border border-slate-200 bg-blue-50 px-4 py-4 text-sm font-medium text-slate-900">
+                    {authenticatedUser.createdAt
+                      ? new Date(authenticatedUser.createdAt).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })
+                      : '-'}
+                  </dd>
+                </div>
+              </dl>
+              <div className="flex justify-end border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowLecturerProfile(false)}
+                  className="rounded-xl bg-red-800 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:bg-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 focus-visible:ring-offset-2"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 

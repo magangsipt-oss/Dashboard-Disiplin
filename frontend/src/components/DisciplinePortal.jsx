@@ -16,7 +16,6 @@ import {
   AlertCircle,
   FileText,
   Plus,
-  Send,
   User,
   ArrowLeft,
   ArrowRight,
@@ -24,7 +23,7 @@ import {
   MapPin,
   Mail,
   Phone,
-  X
+  X,
 } from 'lucide-react';
 
 export default function App() {
@@ -39,6 +38,17 @@ export default function App() {
 
   const [loginError, setLoginError] = useState('');
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
+  const [studentPoints, setStudentPoints] = useState(null);
+  const [isLoadingStudentPoints, setIsLoadingStudentPoints] = useState(false);
+  const [studentPointsError, setStudentPointsError] = useState('');
+  const [pointChangeForm, setPointChangeForm] = useState({
+    nim: '',
+    type: 'late',
+    reason: '',
+  });
+  const [isSubmittingPointChange, setIsSubmittingPointChange] = useState(false);
+  const [pointChangeStatus, setPointChangeStatus] = useState('');
+  const [pointChangeError, setPointChangeError] = useState('');
 
   const officialLogoUrl = "/poltek-simas-berau.png";
   const bgCampusImage = "/campus.svg";
@@ -91,6 +101,37 @@ export default function App() {
           setAuthenticatedUser(data.profile);
           setActiveTab('dashboard');
           setActivePage('dashboard');
+          if (data.profile.role === 'mhs') {
+            setIsLoadingStudentPoints(true);
+            fetch('/api/auth/points')
+              .then(async (response) => {
+                const points = await response.json();
+                if (!response.ok) {
+                  throw new Error(points.message || 'Data poin mahasiswa gagal dimuat.');
+                }
+                return points;
+              })
+              .then((points) => {
+                if (isMounted) {
+                  setStudentPoints(points);
+                  setStudentPointsError('');
+                }
+              })
+              .catch((error) => {
+                if (isMounted) {
+                  setStudentPointsError(
+                    error instanceof Error
+                      ? error.message
+                      : 'Data poin mahasiswa gagal dimuat.',
+                  );
+                }
+              })
+              .finally(() => {
+                if (isMounted) {
+                  setIsLoadingStudentPoints(false);
+                }
+              });
+          }
         }
       })
       .catch((error) => {
@@ -163,7 +204,41 @@ export default function App() {
       setLoginError('Koneksi logout gagal. Muat ulang halaman untuk memeriksa sesi.');
     } finally {
       setAuthenticatedUser(null);
+      setStudentPoints(null);
       setActivePage('landing');
+    }
+  };
+
+  const handlePointChangeSubmit = async (event) => {
+    event.preventDefault();
+    setPointChangeStatus('');
+    setPointChangeError('');
+    setIsSubmittingPointChange(true);
+
+    try {
+      const response = await fetch('/api/auth/points/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pointChangeForm),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Perubahan poin gagal disimpan.');
+      }
+
+      const sign = data.delta > 0 ? '+' : '';
+      setPointChangeStatus(
+        `Poin ${data.name} berhasil dicatat: ${sign}${data.delta} (total ${data.score}, ${data.predicate}).`,
+      );
+      setPointChangeForm((current) => ({ ...current, reason: '' }));
+    } catch (error) {
+      setPointChangeError(
+        error instanceof Error
+          ? error.message
+          : 'Perubahan poin gagal disimpan.',
+      );
+    } finally {
+      setIsSubmittingPointChange(false);
     }
   };
 
@@ -644,24 +719,46 @@ export default function App() {
               </div>
 
               <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
-                Profil dimuat dari database. Rekam jejak, skor, klaim kegiatan, dan konseling akan ditampilkan setelah layanan data SiDisiplin serta integrasi e-Campus tersedia.
+                Skor kedisiplinan dimulai dari 100 poin, dapat berkurang karena pelanggaran, dan bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi. Skor maksimal adalah 200 poin.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Score Kedisiplinan</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Skor Kedisiplinan</span>
                     <Bookmark className="w-5 h-5 text-red-800" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">--</span>
+                    <span className="text-3xl font-extrabold text-slate-900">
+                      {isLoadingStudentPoints ? '…' : studentPointsError ? '--' : studentPoints?.score ?? '--'}
+                    </span>
                     <span className="text-xs text-slate-400 font-semibold">Poin</span>
                   </div>
                   <div className="mt-3 space-y-1.5">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-500">Zona risiko</span>
-                      <span className="font-semibold text-slate-700">Menunggu data</span>
+                      <span className="text-slate-500">Predikat</span>
+                      <span className={`font-semibold ${
+                        studentPoints?.score >= 90
+                          ? 'text-emerald-700'
+                          : studentPoints?.score > 50
+                            ? 'text-amber-700'
+                            : studentPoints
+                              ? 'text-red-700'
+                              : 'text-slate-700'
+                      }`}>
+                        {isLoadingStudentPoints
+                          ? 'Memuat data…'
+                          : studentPointsError
+                            ? 'Gagal dimuat'
+                            : studentPoints?.predicate ?? 'Belum tersedia'}
+                      </span>
                     </div>
+                    <p className="text-[10px] leading-relaxed text-slate-500">
+                      Disiplin 90–200 · Kurang disiplin 51–89 · Tidak disiplin 0–50
+                    </p>
+                    {studentPointsError && (
+                      <p className="text-xs text-red-700" role="alert">{studentPointsError}</p>
+                    )}
                   </div>
                 </div>
 
@@ -682,16 +779,18 @@ export default function App() {
 
                 <div data-scroll-reveal data-reveal-delay="240" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Poin SKPI / Kegiatan</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Poin Lomba / Kegiatan</span>
                     <TrendingUp className="w-5 h-5 text-rose-600" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">--</span>
+                    <span className="text-3xl font-extrabold text-slate-900">
+                      {isLoadingStudentPoints ? '…' : studentPointsError ? '--' : studentPoints?.activityPoints ?? '--'}
+                    </span>
                     <span className="text-xs text-slate-400 font-semibold">Poin</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
-                    <span>Kegiatan terverifikasi</span>
-                    <span className="font-semibold">--</span>
+                    <span>Lomba/kegiatan terverifikasi</span>
+                    <span className="font-semibold">{studentPointsError ? '--' : studentPoints?.verifiedActivityCount ?? '--'}</span>
                   </div>
                 </div>
 
@@ -725,7 +824,9 @@ export default function App() {
                       {activeTab === 'konseling' && 'Pengawasan & Bimbingan Konseling PA'}
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Sumber presensi yang direncanakan: e-Campus. Sinkronisasi belum aktif.
+                      {activeTab === 'dashboard'
+                        ? 'Riwayat perubahan skor dari pelanggaran dan kegiatan yang telah diverifikasi.'
+                        : 'Sumber presensi yang direncanakan: e-Campus. Sinkronisasi belum aktif.'}
                     </p>
                   </div>
 
@@ -752,23 +853,68 @@ export default function App() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
-                        <th className="py-3 px-4">Mata Kuliah / Kegiatan</th>
-                        <th className="py-3 px-4">Waktu Presensi</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Poin Impact</th>
-                        <th className="py-3 px-4 text-right">Aksi</th>
-                      </tr>
+                      {activeTab === 'dashboard' ? (
+                        <tr className="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                          <th className="py-3 px-4">Waktu</th>
+                          <th className="py-3 px-4">Jenis perubahan</th>
+                          <th className="py-3 px-4">Catatan</th>
+                          <th className="py-3 px-4">Perubahan</th>
+                          <th className="py-3 px-4">Total poin</th>
+                        </tr>
+                      ) : (
+                        <tr className="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                          <th className="py-3 px-4">Mata Kuliah / Kegiatan</th>
+                          <th className="py-3 px-4">Waktu Presensi</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4">Poin Impact</th>
+                          <th className="py-3 px-4 text-right">Aksi</th>
+                        </tr>
+                      )}
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
-                      <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center">
-                          <p className="font-semibold text-slate-700">Belum ada rekam jejak untuk ditampilkan</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Presensi akan dimuat dari e-Campus setelah integrasi API tersedia.
-                          </p>
-                        </td>
-                      </tr>
+                      {activeTab === 'dashboard' && isLoadingStudentPoints && (
+                        <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">Memuat riwayat poin…</td></tr>
+                      )}
+                      {activeTab === 'dashboard' && studentPointsError && (
+                        <tr><td colSpan={5} className="px-4 py-10 text-center text-red-700" role="alert">{studentPointsError}</td></tr>
+                      )}
+                      {activeTab === 'dashboard' && !isLoadingStudentPoints && !studentPointsError && studentPoints?.changes?.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-10 text-center">
+                            <p className="font-semibold text-slate-700">Belum ada perubahan poin</p>
+                            <p className="mt-1 text-xs text-slate-500">Skor awal Anda adalah 100 poin.</p>
+                          </td>
+                        </tr>
+                      )}
+                      {activeTab === 'dashboard' && studentPoints?.changes?.map((change) => (
+                        <tr key={change.id}>
+                          <td className="px-4 py-3 text-xs text-slate-600">{new Date(change.createdAt).toLocaleString('id-ID')}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-800">
+                            {{
+                              LATE: 'Terlambat',
+                              UNEXCUSED_ABSENCE: 'Tidak hadir tanpa keterangan',
+                              DISCIPLINE_VIOLATION: 'Pelanggaran tata tertib',
+                              COMPETITION: 'Mengikuti lomba',
+                              NON_ACADEMIC_ACTIVITY: 'Kegiatan non-akademik',
+                            }[change.type] ?? change.type}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{change.reason}</td>
+                          <td className={`px-4 py-3 font-bold ${change.delta > 0 ? 'text-emerald-700' : change.delta < 0 ? 'text-red-700' : 'text-slate-500'}`}>
+                            {change.delta > 0 ? '+' : ''}{change.delta}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-800">{change.scoreAfter}</td>
+                        </tr>
+                      ))}
+                      {activeTab !== 'dashboard' && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-10 text-center">
+                            <p className="font-semibold text-slate-700">Belum ada rekam jejak untuk ditampilkan</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Presensi akan dimuat dari e-Campus setelah integrasi API tersedia.
+                            </p>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -891,7 +1037,7 @@ export default function App() {
                 </section>
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-                  Profil akun sudah dimuat dari database. Antrean verifikasi, aturan poin, pemulihan, sinkronisasi e-Campus, dan administrasi sistem belum tersedia melalui API.
+                  Perubahan poin dapat dicatat pada menu Aturan Poin. Verifikasi klaim, sinkronisasi e-Campus, pemulihan, dan antrean administrasi lainnya belum tersedia melalui API.
                 </p>
 
                 <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -919,17 +1065,83 @@ export default function App() {
                     {activeTab === 'sanggah' && 'Tinjau alasan dan dokumen pendukung, lalu setujui atau tolak sanggahan dengan catatan.'}
                     {activeTab === 'verifikasi' && 'Periksa bukti sertifikat, kategori kegiatan, dan bobot poin sebelum menyetujui atau menolak klaim.'}
                     {activeTab === 'kelulusan' && 'Tinjau skor kedisiplinan dan portofolio kegiatan, lalu siapkan rekap status kelulusan dan SKPI.'}
-                    {activeTab === 'aturan' && 'Kelola bobot poin presensi, poin kegiatan, serta ambang batas kelulusan sesuai kebijakan kampus.'}
+                    {activeTab === 'aturan' && 'Skor awal 100; terlambat −2, tidak hadir tanpa keterangan −5, pelanggaran tata tertib −10, lomba terverifikasi +10, dan kegiatan non-akademik terverifikasi +5. Skor dibatasi 0–200.'}
                     {activeTab === 'redemption' && 'Tinjau bukti tugas pemulihan mahasiswa dan catat keputusan serta poin pemulihan.'}
                     {activeTab === 'sinkronisasi' && 'Pantau sinkronisasi presensi e-Campus, hasil pembaruan, dan catatan kegagalan API.'}
                     {activeTab === 'users' && 'Kelola akun, peran, status akses, dan permintaan reset kata sandi pengguna.'}
                     {activeTab === 'maintenance' && 'Pantau kesehatan sistem, log aktivitas, dan proses pemeliharaan atau backup.'}
                     {activeTab === 'dashboard' && 'Pilih menu untuk membuka antrean kerja dan fungsi administrasi yang dibutuhkan.'}
                   </p>
-                  <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                    <p className="font-semibold text-slate-700">Fungsi belum terhubung ke backend</p>
-                    <p className="mt-1 text-sm text-slate-500">Bagian ini adalah struktur antarmuka sesuai use case; data dan aksi akan aktif setelah endpoint terkait dibuat.</p>
-                  </div>
+                  {activeTab === 'aturan' ? (
+                    <form onSubmit={handlePointChangeSubmit} className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="point-student-nim" className="mb-1.5 block text-sm font-bold text-slate-700">NIM Mahasiswa</label>
+                        <input
+                          id="point-student-nim"
+                          type="text"
+                          inputMode="numeric"
+                          required
+                          value={pointChangeForm.nim}
+                          onChange={(event) => setPointChangeForm((current) => ({ ...current, nim: event.target.value }))}
+                          placeholder="Masukkan NIM mahasiswa"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="point-change-type" className="mb-1.5 block text-sm font-bold text-slate-700">Jenis perubahan poin</label>
+                        <select
+                          id="point-change-type"
+                          value={pointChangeForm.type}
+                          onChange={(event) => setPointChangeForm((current) => ({ ...current, type: event.target.value }))}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
+                        >
+                          <option value="late">Terlambat (−2 poin)</option>
+                          <option value="unexcused_absence">Tidak hadir tanpa keterangan (−5 poin)</option>
+                          <option value="discipline_violation">Pelanggaran tata tertib (−10 poin)</option>
+                          <option value="competition">Mengikuti lomba terverifikasi (+10 poin)</option>
+                          <option value="non_academic_activity">Kegiatan non-akademik terverifikasi (+5 poin)</option>
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label htmlFor="point-change-reason" className="mb-1.5 block text-sm font-bold text-slate-700">Catatan / bukti pendukung</label>
+                        <textarea
+                          id="point-change-reason"
+                          required
+                          maxLength={500}
+                          rows={3}
+                          value={pointChangeForm.reason}
+                          onChange={(event) => setPointChangeForm((current) => ({ ...current, reason: event.target.value }))}
+                          placeholder="Tuliskan keterangan pelanggaran atau kegiatan yang telah diverifikasi"
+                          className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
+                        />
+                      </div>
+                      {pointChangeError && (
+                        <p className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                          {pointChangeError}
+                        </p>
+                      )}
+                      {pointChangeStatus && (
+                        <p className="sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+                          {pointChangeStatus}
+                        </p>
+                      )}
+                      <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs text-slate-500">Skor dibatasi pada rentang 0–200. Pastikan kegiatan positif telah diverifikasi.</p>
+                        <button
+                          type="submit"
+                          disabled={isSubmittingPointChange}
+                          className="rounded-xl bg-red-800 px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {isSubmittingPointChange ? 'Menyimpan...' : 'Simpan Perubahan Poin'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                      <p className="font-semibold text-slate-700">Fungsi belum terhubung ke backend</p>
+                      <p className="mt-1 text-sm text-slate-500">Bagian ini adalah struktur antarmuka sesuai use case; data dan aksi akan aktif setelah endpoint terkait dibuat.</p>
+                    </div>
+                  )}
                 </section>
               </main>
             )}

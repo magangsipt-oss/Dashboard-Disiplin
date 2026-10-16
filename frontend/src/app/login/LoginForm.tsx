@@ -69,9 +69,9 @@ export default function LoginForm({ role }: { role: LoginRole }) {
   return (
     <main
       className="relative flex min-h-screen items-center justify-center overflow-hidden bg-cover bg-center p-4 font-sans"
-      style={{ backgroundImage: "url(/campus.svg)" }}
+      style={{ backgroundImage: "url(/portal-access-background.jpg)" }}
     >
-      <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px]" />
 
       <section className="relative z-10 w-full max-w-[380px] rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-6 shadow-xl backdrop-blur-sm sm:px-7 sm:py-7">
         <header className="mb-5 text-center">

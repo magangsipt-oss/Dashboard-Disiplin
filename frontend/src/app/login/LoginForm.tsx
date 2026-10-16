@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, GraduationCap } from "lucide-react";
+import { ArrowLeft, GraduationCap, ShieldCheck } from "lucide-react";
 
 export type LoginRole = "mhs" | "dosen" | "admin";
 
@@ -34,6 +34,7 @@ export default function LoginForm({ role }: { role: LoginRole }) {
   const [error, setError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const details = roleDetails[role];
+  const RoleIcon = role === "dosen" ? GraduationCap : ShieldCheck;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,85 +73,101 @@ export default function LoginForm({ role }: { role: LoginRole }) {
     >
       <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" />
 
-      <section className="relative z-10 w-full max-w-xl rounded-3xl border border-slate-200 bg-white/95 px-7 py-10 shadow-sm sm:px-11 sm:py-12">
-          <header className="mb-10 text-center">
-            <GraduationCap
+      <section className="relative z-10 w-full max-w-[380px] rounded-2xl border border-slate-200/80 bg-white/95 px-6 py-6 shadow-xl backdrop-blur-sm sm:px-7 sm:py-7">
+        <header className="mb-5 text-center">
+          {role === "mhs" ? (
+            <svg
               aria-hidden="true"
-              className="mx-auto mb-5 h-14 w-14 text-orange-700"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="mx-auto mb-2.5 h-9 w-9 text-red-700"
+            >
+              <circle cx="12" cy="7" r="4" />
+              <path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z" />
+            </svg>
+          ) : (
+            <RoleIcon
+              aria-hidden="true"
+              className="mx-auto mb-2.5 h-9 w-9 text-orange-700"
               strokeWidth={1.8}
             />
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Login {details.label}
-            </h1>
-            <p className="mt-8 text-base text-slate-500 sm:text-lg">
-              Masukkan identitas dan kata sandi Anda
-            </p>
-          </header>
+          )}
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+            Login {details.label}
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+            Masukkan identitas dan kata sandi Anda
+          </p>
+        </header>
 
-          <form onSubmit={handleSubmit} className="space-y-8 text-left">
-            <div>
-              <label
-                htmlFor="identity"
-                className="mb-3 block text-base font-bold text-slate-800"
-              >
-                {details.identityLabel}
-              </label>
-              <input
-                id="identity"
-                type="text"
-                required
-                autoComplete="username"
-                placeholder={details.identityPlaceholder}
-                value={identity}
-                onChange={(event) => setIdentity(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-blue-50 px-5 py-5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="mb-3 block text-base font-bold text-slate-800"
-              >
-                Kata Sandi
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                autoComplete="current-password"
-                placeholder="Masukkan kata sandi"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-blue-50 px-5 py-5 text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
-              />
-            </div>
-
-            {error && (
-              <p
-                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
-                role="alert"
-              >
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className="mt-2 w-full rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-4 text-base font-bold text-white shadow-lg shadow-red-900/15 transition hover:from-red-900 hover:to-red-800 disabled:cursor-wait disabled:opacity-60"
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
+          <div>
+            <label
+              htmlFor="identity"
+              className="mb-1.5 block text-xs font-bold text-slate-700"
             >
-              {isLoggingIn ? "Memeriksa akun..." : "Masuk Dashboard"}
-            </button>
-          </form>
+              {details.identityLabel}
+            </label>
+            <input
+              id="identity"
+              type="text"
+              required
+              autoComplete="username"
+              placeholder={details.identityPlaceholder}
+              value={identity}
+              onChange={(event) => setIdentity(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-blue-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
+            />
+          </div>
 
-          <a
-            href="/"
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-4 text-base font-bold text-white shadow-lg shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
+          <div>
+            <label
+              htmlFor="password"
+              className="mb-1.5 block text-xs font-bold text-slate-700"
+            >
+              Kata Sandi
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="Masukkan kata sandi"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-blue-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
+            />
+          </div>
+
+          {error && (
+            <p
+              className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-medium text-red-800"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoggingIn}
+            className="mt-1 w-full rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800 disabled:cursor-wait disabled:opacity-60"
           >
-            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-            Kembali ke Menu Utama
-          </a>
+            {isLoggingIn ? "Memeriksa akun..." : "Masuk Dashboard"}
+          </button>
+        </form>
+
+        <a
+          href="/"
+          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
+        >
+          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+          Kembali ke Menu Utama
+        </a>
       </section>
     </main>
   );

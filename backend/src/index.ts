@@ -32,7 +32,7 @@ app.get("/api/health", async (_request, response) => {
 app.listen(port, async () => {
   try {
     await Promise.all(authDatabases.map(({ client }) => client.$connect()));
-    console.log("Prisma terhubung ke database Mahasiswa, Dosen, dan Kemahasiswaan");
+    console.log("Prisma terhubung ke database dashboard_disiplin");
   } catch (error) {
     console.error("Gagal terhubung ke satu atau lebih database:", error);
   }

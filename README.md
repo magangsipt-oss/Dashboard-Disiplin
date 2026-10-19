@@ -20,11 +20,12 @@ agar indikator koneksi API di portal menunjukkan status terhubung.
 ## Database PostgreSQL
 
 Aplikasi menggunakan satu database PostgreSQL bernama `dashboard_disiplin`.
-Di dalamnya terdapat tiga tabel:
+Tabel utama yang digunakan meliputi:
 
 - `Mahasiswa`: `id`, `NIM`, `Nama`, `Password`, `Jurusan`, `timestamp`.
 - `Dosen`: `id`, `NIDN`, `NIP`, `Nama`, `Password`, `timestamp`.
 - `Kemahasiswaan`: `id`, `NIP`, `Nama`, `Password`, `timestamp`.
+- `CatatanKonseling`: catatan pembinaan atau panggilan konseling yang dibuat Dosen PA untuk mahasiswa bimbingannya.
 
 Atur `DATABASE_URL` pada `backend/.env` agar menunjuk ke database tersebut.
 Contoh format URL:
@@ -94,7 +95,9 @@ di-hash harus memakai format internal `scrypt$...` yang dihasilkan backend.
 Jangan kirim atau menampilkan password dalam respons API.
 
 Statistik poin, presensi, SKPI, dan aktivitas pada dashboard masih data demo
-sampai tabel dan API untuk data tersebut dibuat.
+sampai tabel dan API untuk data tersebut dibuat. Catatan konseling disimpan
+oleh Dosen PA dan ditampilkan sebagai riwayat baca-saja pada dashboard
+mahasiswa.
 
 ## Prisma
 
@@ -104,6 +107,10 @@ Jalankan dari folder `backend`:
 npm.cmd run prisma:validate
 npm.cmd run prisma:generate
 ```
+
+Setelah memperbarui skema, terapkan perubahan tabel dengan
+`npm.cmd run prisma:push` sebelum menjalankan fitur konseling. Perintah ini
+menyesuaikan database yang terkonfigurasi dengan `schema.prisma`.
 
 Gunakan `npm.cmd run prisma:setup` hanya saat perlu membuat database baru dan
 mengimpor file ekspor data.

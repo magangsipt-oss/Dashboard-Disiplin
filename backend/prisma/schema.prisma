@@ -19,6 +19,7 @@ model Mahasiswa {
   dosenPaId   Int?          @map("DosenPAId")
   dosenPa     Dosen?        @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
   advisorRequest AdvisorRequest?
+  counselingRecords CounselingRecord[]
 
   @@map("Mahasiswa")
 }
@@ -42,6 +43,28 @@ model AdvisorRequest {
   @@index([dosenId, status, createdAt])
   @@map("PermohonanDosenPA")
 }
+
+enum CounselingRecordType {
+  GUIDANCE_NOTE
+  COUNSELING_CALL
+}
+
+model CounselingRecord {
+  id              Int                  @id @default(autoincrement())
+  studentId       Int
+  dosenId         Int
+  type            CounselingRecordType
+  note            String               @db.VarChar(2000)
+  counselingDate  DateTime             @db.Date
+  createdAt       DateTime             @default(now())
+  student         Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dosen           Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([dosenId, studentId, createdAt])
+  @@map("CatatanKonseling")
+}
+
 enum PointChangeType {
   LATE
   UNEXCUSED_ABSENCE
@@ -74,6 +97,7 @@ model Dosen {
   timestamp DateTime @default(now())
   mahasiswaBimbingan Mahasiswa[]
   advisorRequests    AdvisorRequest[]
+  counselingRecords CounselingRecord[]
 
   @@map("Dosen")
 }

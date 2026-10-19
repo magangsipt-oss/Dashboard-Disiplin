@@ -79,6 +79,10 @@ export default function App() {
   const officialLogoUrl = "/poltek-simas-berau.png";
   const bgCampusImage = "/portal-access-background.jpg";
   const portalAccessBackground = "/portal-access-background.jpg";
+  const campusAddress =
+    "Politeknik Sinar Mas Berau Coal, Jl. Raja Alam II, Kel. Rinding, Teluk Bayur, Kabupaten Berau, Kalimantan Timur 77315";
+  const campusMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(campusAddress)}`;
+  const campusMapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(campusAddress)}&output=embed`;
   const heroImages = [
     '/campus-team.png',
     '/header-student-team.png',
@@ -579,13 +583,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="font-extrabold text-slate-900 text-lg leading-none tracking-tight">Poltek Simas Berau</h1>
-                    <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse"></span>
-                      Portal Resmi
-                    </span>
-                  </div>
+                  <h1 className="font-extrabold text-slate-900 text-lg leading-none tracking-tight">Poltek Simas Berau</h1>
                   <p className="text-xs text-slate-500 mt-0.5 font-medium">Politeknik Sinar Mas Berau Coal — Tanjung Redeb, Berau</p>
                 </div>
               </div>
@@ -617,9 +615,6 @@ export default function App() {
           <nav className="bg-gradient-to-r from-red-950 via-red-900 to-rose-950 text-white px-6 py-2.5 shadow-md relative z-20 border-t border-red-800/40">
             <div className="max-w-7xl mx-auto flex justify-between items-center">
               <div className="flex items-center gap-7 text-xs font-semibold">
-                <span className="font-extrabold text-amber-300 text-sm tracking-wide flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> SiDisiplin PSB Portal
-                </span>
                 <a href="#" className="hover:text-amber-200 transition-colors py-1 border-b-2 border-amber-300 font-bold">Beranda</a>
                 <a href="#tentang-website" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Tentang Website</a>
                 <a href="#regulasi-poin" className="hover:text-amber-200 transition-colors py-1 text-slate-200">Regulasi Poin SKPI</a>
@@ -849,7 +844,7 @@ export default function App() {
             </div>
           </section>
 
-          <section id="regulasi-poin" data-scroll-reveal className="scroll-mt-6 bg-slate-50 px-6 py-14">
+          <section id="regulasi-poin" data-scroll-reveal className="scroll-mt-6 bg-slate-50 px-6 pt-14 pb-8">
             <div className="max-w-5xl mx-auto">
               <div className="max-w-3xl">
                 <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
@@ -934,9 +929,58 @@ export default function App() {
                 </div>
               </div>
 
-              <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
-                Besaran poin dan keputusan akhir mengikuti regulasi resmi kampus serta hasil verifikasi. Jika catatan presensi tidak sesuai, mahasiswa dapat mengajukan sanggahan untuk ditinjau.
-              </p>
+            </div>
+          </section>
+
+          <section id="lokasi-kampus" data-scroll-reveal className="scroll-mt-6 border-t border-red-100 bg-slate-50 px-6 pt-6 pb-10 sm:pt-8 sm:pb-12">
+            <div className="mx-auto max-w-5xl">
+              <div className="mb-5 text-center">
+                <h2 data-scroll-reveal data-reveal="text" className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+                  Temukan Kampus Kami
+                </h2>
+              </div>
+
+              <div className="grid overflow-hidden rounded-2xl border border-red-900/10 bg-gradient-to-br from-[#450a0a] via-[#7f1d1d] to-[#991b1b] shadow-xl md:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="flex flex-col items-start justify-center p-6 text-white sm:p-8">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-200/30 bg-amber-300/15 text-amber-300">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-extrabold sm:text-xl">
+                    Politeknik Sinar Mas Berau Coal
+                  </h3>
+                  <p className="mt-2 max-w-md text-sm leading-relaxed text-red-100">
+                    Jl. Raja Alam II, Kel. Rinding, Kec. Teluk Bayur, Kabupaten Berau, Kalimantan Timur 77315
+                  </p>
+                  <a
+                    href={campusMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2.5 text-sm font-extrabold text-red-950 shadow transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-100"
+                  >
+                    Buka Google Maps <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+
+                <a
+                  href={campusMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Buka lokasi Politeknik Sinar Mas Berau Coal di Google Maps"
+                  className="group relative m-4 mt-0 block overflow-hidden rounded-xl border border-white/20 bg-slate-200 shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 md:my-4 md:ml-0"
+                >
+                  <iframe
+                    title="Peta lokasi Politeknik Sinar Mas Berau Coal"
+                    src={campusMapEmbedUrl}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="pointer-events-none h-48 w-full sm:h-52 md:h-full md:min-h-[220px]"
+                  />
+                  <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-slate-950/80 to-transparent px-3 pb-3 pt-8 text-xs font-bold text-white opacity-90 transition group-hover:opacity-100">
+                    <span>Klik peta untuk membuka</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                </a>
+              </div>
             </div>
           </section>
 
@@ -1435,6 +1479,14 @@ export default function App() {
                     <div>
                       <p className="font-bold">Kampus Utama Politeknik Sinar Mas Berau Coal</p>
                       <p className="text-slate-200">Jl. Raja Alam II, Kel. Rinding / Sei Bedungun, Kec. Teluk Bayur / Tanjung Redeb, Kab. Berau, Kalimantan Timur 77315</p>
+                      <a
+                        href={campusMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 font-bold text-amber-300 transition hover:text-amber-200 hover:underline"
+                      >
+                        Buka lokasi di Google Maps <ArrowRight className="h-3.5 w-3.5" />
+                      </a>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">

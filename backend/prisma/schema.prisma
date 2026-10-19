@@ -8,15 +8,15 @@ datasource db {
 }
 
 model Mahasiswa {
-  id          Int           @id @default(autoincrement())
+  id          Int           @id @default(autoincrement()) @map("ID")
   nim         Int           @unique @map("NIM")
   nama        String        @map("Nama")
   password    String        @db.VarChar(255) @map("Password")
   jurusan     String        @map("Jurusan")
   pointScore  Int           @default(100) @map("Poin")
-  timestamp   DateTime      @default(now())
+  timestamp   DateTime      @default(now()) @map("Timestamp")
   pointChanges PointChange[]
-  dosenPaId   Int?          @map("DosenPAId")
+  dosenPaId   Int?          @map("DPA_ID")
   dosenPa     Dosen?        @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
   advisorRequest AdvisorRequest?
   counselingRecords CounselingRecord[]
@@ -31,17 +31,17 @@ enum AdvisorRequestStatus {
 }
 
 model AdvisorRequest {
-  id        Int                  @id @default(autoincrement())
-  studentId Int                  @unique
-  dosenId   Int
-  status    AdvisorRequestStatus @default(PENDING)
-  createdAt DateTime             @default(now())
-  reviewedAt DateTime?
-  student   Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  dosen     Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+  id           Int                  @id @default(autoincrement()) @map("ID")
+  studentId    Int                  @unique(map: "Permohonan_DPA_mahasiswa_id_key") @map("Mahasiswa_ID")
+  dosenId      Int                  @map("Dosen_ID")
+  status       AdvisorRequestStatus @default(PENDING) @map("Status")
+  createdAt    DateTime             @default(now()) @map("Pengajuan")
+  reviewedAt   DateTime?            @map("Di_Setujui")
+  student      Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "Permohonan_DPA_mahasiswa_id_fkey")
+  dosen        Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade, map: "Permohonan_DPA_dosen_id_fkey")
 
-  @@index([dosenId, status, createdAt])
-  @@map("PermohonanDosenPA")
+  @@index([dosenId, status, createdAt], map: "Permohonan_DPA_dosen_id_status_pengajuan_idx")
+  @@map("Permohonan_DPA")
 }
 
 enum CounselingRecordType {
@@ -89,7 +89,7 @@ model PointChange {
 }
 
 model Dosen {
-  id        Int      @id @default(autoincrement())
+  id        Int      @id @default(autoincrement()) @map("ID")
   nidn      BigInt   @unique @map("NIDN")
   nip       BigInt   @unique @map("NIP")
   nama      String   @map("Nama")
@@ -103,11 +103,11 @@ model Dosen {
 }
 
 model Kemahasiswaan {
-  id        Int      @id @default(autoincrement())
+  id        Int      @id @default(autoincrement()) @map("ID")
   nip       BigInt   @unique @map("NIP")
   nama      String   @map("Nama")
   password  String   @db.VarChar(255) @map("Password")
-  timestamp DateTime @default(now())
+  timestamp DateTime @default(now()) @map("Timestamp")
 
   @@map("Kemahasiswaan")
 }

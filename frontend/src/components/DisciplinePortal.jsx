@@ -34,7 +34,6 @@ export default function App() {
 
   const [showSKPIModal, setShowSKPIModal] = useState(false);
   const [showSanggahModal, setShowSanggahModal] = useState(false);
-  const [showKonselingModal, setShowKonselingModal] = useState(false);
 
   const [loginError, setLoginError] = useState('');
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
@@ -54,6 +53,20 @@ export default function App() {
   const [advisorRequestError, setAdvisorRequestError] = useState('');
   const [advisorDecisionStatus, setAdvisorDecisionStatus] = useState('');
   const [updatingAdvisorRequestId, setUpdatingAdvisorRequestId] = useState(null);
+  const [counselingRecords, setCounselingRecords] = useState([]);
+  const [isLoadingCounseling, setIsLoadingCounseling] = useState(false);
+  const [counselingError, setCounselingError] = useState('');
+  const [counselingStudents, setCounselingStudents] = useState([]);
+  const [counselingStudentsError, setCounselingStudentsError] = useState('');
+  const [counselingFilter, setCounselingFilter] = useState('ALL');
+  const [selectedCounselingStudentId, setSelectedCounselingStudentId] = useState('');
+  const [counselingForm, setCounselingForm] = useState({
+    type: 'GUIDANCE_NOTE',
+    note: '',
+    counselingDate: '',
+  });
+  const [isSavingCounseling, setIsSavingCounseling] = useState(false);
+  const [counselingStatus, setCounselingStatus] = useState('');
   const [pointChangeForm, setPointChangeForm] = useState({
     nim: '',
     type: 'late',
@@ -99,6 +112,21 @@ export default function App() {
   };
   const dashboardNavigation =
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
+  const filteredCounselingStudents = counselingStudents.filter((student) => {
+    if (counselingFilter === 'RED') {
+      return student.pointScore <= 50;
+    }
+    if (counselingFilter === 'YELLOW') {
+      return student.pointScore > 50 && student.pointScore < 90;
+    }
+    if (counselingFilter === 'GREEN') {
+      return student.pointScore >= 90;
+    }
+    return true;
+  });
+  const selectedCounselingStudent = counselingStudents.find(
+    (student) => String(student.id) === selectedCounselingStudentId,
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -302,6 +330,66 @@ export default function App() {
   }, [authenticatedUser?.role, activePage]);
 
   useEffect(() => {
+    const role = authenticatedUser?.role;
+    const isStudentCounseling =
+      role === 'mhs' && activeTab === 'konseling';
+    const isAdvisorCounseling =
+      role === 'dosen' && ['bimbingan', 'konseling'].includes(activeTab);
+    if (activePage !== 'dashboard' || (!isStudentCounseling && !isAdvisorCounseling)) {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadCounseling = async (showLoading) => {
+      if (showLoading) {
+        setIsLoadingCounseling(true);
+      }
+      if (isStudentCounseling) {
+        setCounselingError('');
+      } else {
+        setCounselingStudentsError('');
+      }
+
+      try {
+        const response = await fetch('/api/auth/counseling');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Data konseling gagal dimuat.');
+        }
+        if (isMounted) {
+          if (isStudentCounseling) {
+            setCounselingRecords(data.records ?? []);
+          } else {
+            setCounselingStudents(data.students ?? []);
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
+          const message = error instanceof Error
+            ? error.message
+            : 'Data konseling gagal dimuat.';
+          if (isStudentCounseling) {
+            setCounselingError(message);
+          } else {
+            setCounselingStudentsError(message);
+          }
+        }
+      } finally {
+        if (isMounted && showLoading) {
+          setIsLoadingCounseling(false);
+        }
+      }
+    };
+
+    loadCounseling(true);
+    const refreshTimer = window.setInterval(() => loadCounseling(false), 15000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [authenticatedUser?.role, activePage, activeTab]);
+
+  useEffect(() => {
     if (activePage !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return undefined;
     }
@@ -430,6 +518,42 @@ export default function App() {
       );
     } finally {
       setUpdatingAdvisorRequestId(null);
+    }
+  };
+
+  const handleCounselingSubmit = async (event) => {
+    event.preventDefault();
+    setCounselingStudentsError('');
+    setCounselingStatus('');
+    setIsSavingCounseling(true);
+
+    try {
+      const response = await fetch('/api/auth/counseling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: Number(selectedCounselingStudentId),
+          ...counselingForm,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Catatan konseling gagal disimpan.');
+      }
+
+      setCounselingStudents((current) => current.map((student) => (
+        student.id === Number(selectedCounselingStudentId)
+          ? { ...student, counselingRecords: [data.record, ...student.counselingRecords] }
+          : student
+      )));
+      setCounselingStatus('Catatan tersimpan dan akan tampil di dashboard mahasiswa.');
+      setCounselingForm((current) => ({ ...current, note: '' }));
+    } catch (error) {
+      setCounselingStudentsError(
+        error instanceof Error ? error.message : 'Catatan konseling gagal disimpan.',
+      );
+    } finally {
+      setIsSavingCounseling(false);
     }
   };
 
@@ -1027,10 +1151,10 @@ export default function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowKonselingModal(true)}
+                    onClick={() => setActiveTab('konseling')}
                     className="mt-3 border-t border-slate-100 pt-2 text-left text-xs font-semibold text-red-800 hover:underline"
                   >
-                    Ajukan / Lihat Catatan PA →
+                    Lihat Catatan & Panggilan PA →
                   </button>
                 </div>
                   </div>
@@ -1094,7 +1218,72 @@ export default function App() {
                 </section>
               )}
 
-              {activeTab !== 'dosen-pa' && (
+              {activeTab === 'konseling' && (
+                <section data-scroll-reveal className="space-y-5">
+                  <div className="rounded-2xl border border-purple-200 bg-purple-50/95 p-5 shadow-sm sm:p-6">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-700">
+                        <MessageSquare className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-purple-950">Catatan Pembinaan & Panggilan Konseling</h3>
+                        <p className="mt-1 text-sm leading-relaxed text-purple-900">
+                          Informasi ini dikirim oleh Dosen PA Anda. Mahasiswa dapat melihat catatan dan jadwal tindak lanjut di sini.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {counselingError && (
+                    <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                      {counselingError}
+                    </p>
+                  )}
+
+                  {isLoadingCounseling ? (
+                    <div className="rounded-2xl border border-slate-200 bg-white/95 px-5 py-12 text-center text-sm text-slate-500 shadow-lg">
+                      Memuat catatan konseling...
+                    </div>
+                  ) : counselingRecords.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/95 px-5 py-12 text-center shadow-lg">
+                      <MessageSquare className="mx-auto h-8 w-8 text-slate-400" />
+                      <p className="mt-3 font-semibold text-slate-700">Belum ada catatan pembinaan atau panggilan konseling</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Catatan dari Dosen PA akan muncul di sini setelah dikirim.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {counselingRecords.map((record) => (
+                        <article key={record.id} className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+                          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                            <div>
+                              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+                                record.type === 'COUNSELING_CALL'
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : 'bg-blue-100 text-blue-900'
+                              }`}>
+                                {record.type === 'COUNSELING_CALL' ? 'Panggilan Konseling' : 'Catatan Pembinaan'}
+                              </span>
+                              <p className="mt-2 text-sm font-bold text-slate-900">Dosen PA: {record.dosen.nama}</p>
+                            </div>
+                            <div className="text-right text-xs text-slate-500">
+                              <p>Dicatat {new Date(record.createdAt).toLocaleString('id-ID')}</p>
+                              <p className="mt-1 font-semibold text-slate-700">
+                                {record.type === 'COUNSELING_CALL' ? 'Jadwal' : 'Tanggal konseling'}:{' '}
+                                {new Date(record.counselingDate).toLocaleDateString('id-ID', { timeZone: 'UTC' })}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{record.note}</p>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {activeTab !== 'dosen-pa' && activeTab !== 'konseling' && (
                 <>
               <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
@@ -1296,7 +1485,7 @@ export default function App() {
                 </section>
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-                  Permohonan dosen PA sudah terhubung. Data presensi e-Campus dan konseling masih menunggu integrasi.
+                  Permohonan dosen PA sudah terhubung. Data presensi e-Campus masih menunggu integrasi; catatan pembinaan dan panggilan konseling dapat dikelola melalui menu konseling.
                 </p>
 
                 {advisorRequests.length > 0 && (
@@ -1317,17 +1506,19 @@ export default function App() {
                 {activeTab !== 'approval' && (
                   <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                     {[
-                      { label: 'Mahasiswa bimbingan', icon: UserCheck },
-                      { label: 'Zona kuning / merah', icon: AlertCircle },
-                      { label: 'Perlu tindak lanjut', icon: MessageSquare },
-                    ].map(({ label, icon: Icon }) => (
+                      { label: 'Mahasiswa bimbingan', icon: UserCheck, value: counselingStudents.length },
+                      { label: 'Zona kuning / merah', icon: AlertCircle, value: counselingStudents.filter((student) => student.pointScore < 90).length },
+                      { label: 'Catatan konseling', icon: MessageSquare, value: counselingStudents.reduce((total, student) => total + student.counselingRecords.length, 0) },
+                    ].map(({ label, icon: Icon, value }) => (
                       <div key={label} data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
                           <Icon className="h-5 w-5 text-red-800" />
                         </div>
-                        <p className="mt-3 text-3xl font-extrabold text-slate-900">--</p>
-                        <p className="mt-1 text-xs text-slate-500">Menunggu sinkronisasi data</p>
+                        <p className="mt-3 text-3xl font-extrabold text-slate-900">
+                          {isLoadingCounseling ? '…' : value}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">Data mahasiswa bimbingan Anda</p>
                       </div>
                     ))}
                   </section>
@@ -1392,19 +1583,201 @@ export default function App() {
                       </div>
                     )}
                   </section>
+                ) : activeTab === 'konseling' ? (
+                  <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-extrabold text-slate-900">Monitoring & Konseling Kedisiplinan</h3>
+                        <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                          Pilih mahasiswa bimbingan untuk meninjau skor, tren perubahan poin, dan catatan konseling sebelumnya.
+                        </p>
+                      </div>
+                      <div>
+                        <label htmlFor="counseling-risk-filter" className="mb-1 block text-xs font-bold text-slate-600">Filter zona risiko</label>
+                        <select
+                          id="counseling-risk-filter"
+                          value={counselingFilter}
+                          onChange={(event) => setCounselingFilter(event.target.value)}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-700"
+                        >
+                          <option value="ALL">Semua mahasiswa</option>
+                          <option value="RED">Merah / kritis (0–50)</option>
+                          <option value="YELLOW">Kuning (51–89)</option>
+                          <option value="GREEN">Hijau (90–200)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {counselingStudentsError && (
+                      <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                        {counselingStudentsError}
+                      </p>
+                    )}
+                    {counselingStatus && (
+                      <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+                        {counselingStatus}
+                      </p>
+                    )}
+
+                    {isLoadingCounseling ? (
+                      <p className="mt-5 rounded-xl bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">Memuat mahasiswa bimbingan...</p>
+                    ) : counselingStudents.length === 0 ? (
+                      <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                        <p className="font-semibold text-slate-700">Belum ada mahasiswa bimbingan</p>
+                        <p className="mt-1 text-sm text-slate-500">Mahasiswa yang menetapkan Anda sebagai Dosen PA akan muncul di sini.</p>
+                      </div>
+                    ) : (
+                      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
+                        <div className="space-y-2">
+                          {filteredCounselingStudents.map((student) => {
+                            const zone = student.pointScore <= 50
+                              ? 'Merah'
+                              : student.pointScore < 90
+                                ? 'Kuning'
+                                : 'Hijau';
+                            const zoneClass = zone === 'Merah'
+                              ? 'bg-red-100 text-red-800'
+                              : zone === 'Kuning'
+                                ? 'bg-amber-100 text-amber-900'
+                                : 'bg-emerald-100 text-emerald-800';
+                            return (
+                              <button
+                                key={student.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCounselingStudentId(String(student.id));
+                                  setCounselingStatus('');
+                                }}
+                                className={`w-full rounded-xl border p-4 text-left transition ${
+                                  selectedCounselingStudentId === String(student.id)
+                                    ? 'border-red-700 bg-red-50'
+                                    : 'border-slate-200 bg-white hover:border-red-300'
+                                }`}
+                              >
+                                <span className="flex items-start justify-between gap-2">
+                                  <span>
+                                    <span className="block font-bold text-slate-900">{student.nama}</span>
+                                    <span className="mt-1 block text-xs text-slate-500">NIM {student.nim} · {student.jurusan}</span>
+                                  </span>
+                                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${zoneClass}`}>{zone}</span>
+                                </span>
+                                <span className="mt-3 block text-xs font-semibold text-slate-600">Skor kedisiplinan: {student.pointScore}</span>
+                              </button>
+                            );
+                          })}
+                          {filteredCounselingStudents.length === 0 && (
+                            <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                              Tidak ada mahasiswa pada zona risiko yang dipilih.
+                            </p>
+                          )}
+                        </div>
+
+                        {selectedCounselingStudent ? (
+                          <div className="space-y-5">
+                            <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <h4 className="font-bold text-slate-900">{selectedCounselingStudent.nama}</h4>
+                              <p className="mt-1 text-sm text-slate-600">
+                                NIM {selectedCounselingStudent.nim} · {selectedCounselingStudent.jurusan} · Skor {selectedCounselingStudent.pointScore}
+                              </p>
+                              <h5 className="mt-4 text-sm font-bold text-slate-800">Riwayat perubahan poin</h5>
+                              {selectedCounselingStudent.pointChanges.length === 0 ? (
+                                <p className="mt-2 text-sm text-slate-500">Belum ada perubahan poin.</p>
+                              ) : (
+                                <ul className="mt-2 space-y-2">
+                                  {selectedCounselingStudent.pointChanges.map((change) => (
+                                    <li key={change.id} className="flex flex-wrap justify-between gap-2 text-xs text-slate-600">
+                                      <span>{change.reason} · skor {change.scoreAfter} ({change.delta > 0 ? '+' : ''}{change.delta})</span>
+                                      <span>{new Date(change.createdAt).toLocaleDateString('id-ID')}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </article>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900">Riwayat catatan pembinaan</h4>
+                              {selectedCounselingStudent.counselingRecords.length === 0 ? (
+                                <p className="mt-2 rounded-xl bg-slate-50 px-4 py-5 text-sm text-slate-500">Belum ada catatan untuk mahasiswa ini.</p>
+                              ) : (
+                                <div className="mt-3 space-y-3">
+                                  {selectedCounselingStudent.counselingRecords.map((record) => (
+                                    <article key={record.id} className="rounded-xl border border-slate-200 p-4">
+                                      <p className="text-xs font-bold text-slate-700">
+                                        {record.type === 'COUNSELING_CALL' ? 'Panggilan konseling' : 'Catatan pembinaan'}
+                                        {' · '}
+                                        {new Date(record.counselingDate).toLocaleDateString('id-ID', { timeZone: 'UTC' })}
+                                      </p>
+                                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{record.note}</p>
+                                    </article>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <form onSubmit={handleCounselingSubmit} className="space-y-4 rounded-xl border border-red-100 bg-red-50/60 p-4">
+                              <h4 className="font-bold text-slate-900">Beri catatan / panggilan konseling</h4>
+                              <div>
+                                <label htmlFor="counseling-type" className="mb-1 block text-xs font-bold text-slate-700">Jenis tindak lanjut</label>
+                                <select
+                                  id="counseling-type"
+                                  value={counselingForm.type}
+                                  onChange={(event) => setCounselingForm((current) => ({ ...current, type: event.target.value }))}
+                                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                                >
+                                  <option value="GUIDANCE_NOTE">Catatan pembinaan</option>
+                                  <option value="COUNSELING_CALL">Panggilan konseling</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label htmlFor="counseling-date" className="mb-1 block text-xs font-bold text-slate-700">Tanggal konseling / tindak lanjut</label>
+                                <input
+                                  id="counseling-date"
+                                  type="date"
+                                  required
+                                  value={counselingForm.counselingDate}
+                                  onChange={(event) => setCounselingForm((current) => ({ ...current, counselingDate: event.target.value }))}
+                                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label htmlFor="counseling-note" className="mb-1 block text-xs font-bold text-slate-700">Catatan pembinaan</label>
+                                <textarea
+                                  id="counseling-note"
+                                  required
+                                  maxLength={2000}
+                                  rows={4}
+                                  value={counselingForm.note}
+                                  onChange={(event) => setCounselingForm((current) => ({ ...current, note: event.target.value }))}
+                                  placeholder="Tulis ringkasan pembinaan atau informasi panggilan konseling untuk mahasiswa."
+                                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                                />
+                              </div>
+                              <button
+                                type="submit"
+                                disabled={isSavingCounseling}
+                                className="rounded-lg bg-red-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isSavingCounseling ? 'Menyimpan...' : 'Simpan & kirim catatan'}
+                              </button>
+                            </form>
+                          </div>
+                        ) : (
+                          <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                            Pilih nama mahasiswa untuk melihat detail dan menambahkan catatan konseling.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
                 ) : (
                   <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-                    <h3 className="text-lg font-extrabold text-slate-900">
-                      {activeTab === 'konseling' ? 'Catatan & Konseling Kedisiplinan' : 'Daftar Mahasiswa Bimbingan'}
-                    </h3>
+                    <h3 className="text-lg font-extrabold text-slate-900">Daftar Mahasiswa Bimbingan</h3>
                     <p className="mt-1 text-sm text-slate-500">
-                      {activeTab === 'konseling'
-                        ? 'Riwayat catatan pembinaan dan jadwal konseling akan tersedia setelah layanan konseling diaktifkan.'
-                        : 'Gunakan daftar ini untuk memfilter mahasiswa berdasarkan zona risiko dan membuka detail rekam jejak.'}
+                      Gunakan menu Catatan & Konseling untuk memfilter mahasiswa berdasarkan zona risiko dan membuka detail tindak lanjut.
                     </p>
                     <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                      <p className="font-semibold text-slate-700">Belum ada data untuk ditampilkan</p>
-                      <p className="mt-1 text-sm text-slate-500">Daftar dan detail mahasiswa akan dimuat dari layanan backend.</p>
+                      <p className="font-semibold text-slate-700">Buka menu Catatan & Konseling</p>
+                      <p className="mt-1 text-sm text-slate-500">Daftar mahasiswa bimbingan, skor, dan catatan tersedia di menu tersebut.</p>
                     </div>
                   </section>
                 )}
@@ -1647,60 +2020,6 @@ export default function App() {
                   className="px-4 py-2 bg-red-800 text-white font-bold rounded-xl shadow hover:bg-red-900"
                 >
                   Kirim Pengajuan Sanggah
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showKonselingModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-lg">Pengajuan Konseling Dosen PA</h3>
-              <button 
-                onClick={() => setShowKonselingModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); setShowKonselingModal(false); }} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Dosen PA Pembimbing</label>
-                <input 
-                  type="text" 
-                  disabled 
-                  value={advisor?.nama ?? 'Pilih dosen PA melalui menu Dosen PA'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 font-bold text-slate-700 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Topik Bimbingan / Topik Kendala</label>
-                <textarea 
-                  required 
-                  rows={3}
-                  placeholder="Tuliskan hal yang ingin dikonsultasikan terkait akademik atau kedisiplinan..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs"
-                ></textarea>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => setShowKonselingModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl"
-                >
-                  Batal
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 bg-red-800 text-white font-bold rounded-xl shadow hover:bg-red-900"
-                >
-                  Kirim Pengajuan Konseling
                 </button>
               </div>
             </form>

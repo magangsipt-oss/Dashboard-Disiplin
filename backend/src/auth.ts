@@ -511,6 +511,139 @@ authRouter.patch("/advisor-requests/:requestId", async (request, response) => {
     response.status(500).json({ message: "Keputusan permohonan gagal disimpan." });
   }
 });
+
+authRouter.get("/counseling", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "mhs" && session.profile.role !== "dosen") {
+    response.status(403).json({ message: "Catatan konseling hanya tersedia untuk mahasiswa dan dosen PA." });
+    return;
+  }
+
+  try {
+    if (session.profile.role === "mhs") {
+      const records = await database.counselingRecord.findMany({
+        where: { studentId: session.profile.id },
+        orderBy: [{ counselingDate: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          type: true,
+          note: true,
+          counselingDate: true,
+          createdAt: true,
+          dosen: { select: { nama: true } },
+        },
+      });
+      response.json({ records });
+      return;
+    }
+
+    const students = await database.mahasiswa.findMany({
+      where: { dosenPaId: session.profile.id },
+      orderBy: { nama: "asc" },
+      select: {
+        id: true,
+        nim: true,
+        nama: true,
+        jurusan: true,
+        pointScore: true,
+        pointChanges: {
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: {
+            id: true,
+            type: true,
+            delta: true,
+            scoreAfter: true,
+            reason: true,
+            createdAt: true,
+          },
+        },
+        counselingRecords: {
+          orderBy: [{ counselingDate: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            type: true,
+            note: true,
+            counselingDate: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+    response.json({ students });
+  } catch (error) {
+    console.error("Gagal memuat data konseling:", error);
+    response.status(500).json({ message: "Data konseling gagal dimuat." });
+  }
+});
+
+authRouter.post("/counseling", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "dosen") {
+    response.status(403).json({ message: "Hanya dosen PA yang dapat mencatat pembinaan dan panggilan konseling." });
+    return;
+  }
+
+  const { studentId, type, note, counselingDate } = request.body ?? {};
+  if (
+    typeof studentId !== "number" ||
+    !Number.isSafeInteger(studentId) ||
+    studentId < 1 ||
+    !["GUIDANCE_NOTE", "COUNSELING_CALL"].includes(type) ||
+    typeof note !== "string" ||
+    note.trim().length === 0 ||
+    note.trim().length > 2000 ||
+    typeof counselingDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(counselingDate) ||
+    Number.isNaN(Date.parse(`${counselingDate}T00:00:00.000Z`)) ||
+    new Date(`${counselingDate}T00:00:00.000Z`).toISOString().slice(0, 10) !== counselingDate
+  ) {
+    response.status(400).json({ message: "Mahasiswa, jenis catatan, isi catatan, dan tanggal konseling wajib diisi dengan benar." });
+    return;
+  }
+
+  try {
+    const student = await database.mahasiswa.findFirst({
+      where: { id: studentId, dosenPaId: session.profile.id },
+      select: { id: true },
+    });
+    if (!student) {
+      response.status(404).json({ message: "Mahasiswa bukan bagian dari bimbingan dosen ini." });
+      return;
+    }
+
+    const record = await database.counselingRecord.create({
+      data: {
+        studentId,
+        dosenId: session.profile.id,
+        type,
+        note: note.trim(),
+        counselingDate: new Date(`${counselingDate}T00:00:00.000Z`),
+      },
+      select: {
+        id: true,
+        type: true,
+        note: true,
+        counselingDate: true,
+        createdAt: true,
+        dosen: { select: { nama: true } },
+      },
+    });
+    response.status(201).json({ record });
+  } catch (error) {
+    console.error("Gagal menyimpan catatan konseling:", error);
+    response.status(500).json({ message: "Catatan konseling gagal disimpan." });
+  }
+});
+
 authRouter.get("/points", async (request, response) => {
   const session = getSessionForRequest(request, response);
   if (!session) {

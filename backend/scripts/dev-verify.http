@@ -1,0 +1,115 @@
+@baseUrl = http://localhost:5000
+@reporterNim = 23409901
+@studentNim = 23409902
+@adminNip = 000000000000000000
+@trackingCode = REPLACE_WITH_CODE_RETURNED_ONCE
+@reportId = REPLACE_WITH_REPORT_ID_FROM_ADMIN_QUEUE
+@pointChangeId = REPLACE_WITH_POINT_CHANGE_ID_FROM_VERIFICATION
+@appealId = REPLACE_WITH_APPEAL_ID
+@trainingId = REPLACE_WITH_TRAINING_ID
+
+### Login as a campus member (the response cookie authenticates the next request)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "role": "mhs",
+  "identity": "{{reporterNim}}",
+  "password": "REPLACE_WITH_PASSWORD"
+}
+
+### Submit an anonymous report; save kodePelacakan from the response immediately
+POST {{baseUrl}}/api/laporan
+Content-Type: multipart/form-data; boundary=disciplineReportBoundary
+
+--disciplineReportBoundary
+Content-Disposition: form-data; name="jenis"
+
+TEMUAN
+--disciplineReportBoundary
+Content-Disposition: form-data; name="pillar"
+
+PROSEDUR_K3
+--disciplineReportBoundary
+Content-Disposition: form-data; name="terlaporNim"
+
+{{studentNim}}
+--disciplineReportBoundary
+Content-Disposition: form-data; name="lokasi"
+
+Laboratorium Praktik
+--disciplineReportBoundary
+Content-Disposition: form-data; name="tanggalKejadian"
+
+2026-10-20
+--disciplineReportBoundary
+Content-Disposition: form-data; name="deskripsi"
+
+Mahasiswa tidak menggunakan alat pelindung diri saat kegiatan praktik berlangsung.
+--disciplineReportBoundary
+Content-Disposition: form-data; name="pernyataanBenar"
+
+true
+--disciplineReportBoundary--
+
+### Check report status using only its one-time code
+GET {{baseUrl}}/api/laporan/status?kode={{trackingCode}}
+
+### Log in as admin to verify; substitute configured admin identity/password
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "role": "admin",
+  "identity": "{{adminNip}}",
+  "password": "REPLACE_WITH_ADMIN_PASSWORD"
+}
+
+### Inspect the queue; response intentionally excludes kodeHash and reporter data
+GET {{baseUrl}}/api/admin/laporan?status=DITERIMA
+
+### Verify the selected report and match the reported NIM
+PATCH {{baseUrl}}/api/admin/laporan/{{reportId}}/verifikasi
+Content-Type: application/json
+
+{
+  "keputusan": "DIVERIFIKASI",
+  "aturanId": 1,
+  "nim": "{{studentNim}}",
+  "catatanUntukPelapor": "Laporan telah diperiksa."
+}
+
+### Log in as the reported student to inspect follow-up, tasks, and notices
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "role": "mhs",
+  "identity": "{{studentNim}}",
+  "password": "REPLACE_WITH_PASSWORD"
+}
+
+GET {{baseUrl}}/api/mahasiswa/tindak-lanjut
+
+###
+GET {{baseUrl}}/api/mahasiswa/pembinaan
+
+###
+GET {{baseUrl}}/api/mahasiswa/pemberitahuan
+
+### Submit a written reflection (at least 100 characters)
+POST {{baseUrl}}/api/pembinaan/{{trainingId}}/refleksi
+Content-Type: application/json
+
+{
+  "isiRefleksi": "Saya memahami pentingnya penggunaan APD selama kegiatan praktik. Ke depan saya akan memeriksa kelengkapan APD sebelum kegiatan dimulai dan mengikuti arahan keselamatan yang berlaku."
+}
+
+### Submit an appeal for a negative point change owned by the logged-in student
+POST {{baseUrl}}/api/sanggahan
+Content-Type: application/json
+
+{
+  "perubahanPoinId": "{{pointChangeId}}",
+  "alasan": "Saya ingin mengajukan pemeriksaan ulang karena pada waktu kejadian saya telah menggunakan alat pelindung diri yang diwajibkan."
+}

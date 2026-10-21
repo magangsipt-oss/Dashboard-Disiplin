@@ -47,10 +47,30 @@ export default function LoginForm({ role }: { role: LoginRole }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role, identity, password }),
       });
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: unknown = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        data = null;
+      }
+
       if (!response.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "message" in data &&
+          typeof data.message === "string"
+            ? data.message
+            : response.status >= 500
+              ? "Layanan login sedang tidak tersedia. Pastikan backend berjalan, lalu coba kembali."
+              : "Login gagal. Periksa identitas dan kata sandi.";
+        throw new Error(message);
+      }
+
+      if (typeof data !== "object" || data === null || !("profile" in data)) {
         throw new Error(
-          data.message || "Login gagal. Periksa identitas dan kata sandi.",
+          "Respons layanan login tidak valid. Pastikan backend berjalan, lalu coba kembali.",
         );
       }
 

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculatePointChange, getScorePredicate } from "../src/points";
+import {
+  calculatePointChange,
+  getPointChangeMetadata,
+  getScorePredicate,
+} from "../src/points";
 
 test("score predicates honor the configured threshold boundaries", () => {
   assert.equal(getScorePredicate(200), "Disiplin");
@@ -39,5 +43,28 @@ test("point changes stay within the 0 to 200 score range", () => {
   assert.deepEqual(calculatePointChange(198, "competition"), {
     score: 200,
     delta: 2,
+  });
+});
+
+test("point change metadata maps violations to the proposed pillars and levels", () => {
+  assert.deepEqual(getPointChangeMetadata("LATE"), {
+    pillar: "WAKTU",
+    severity: "RINGAN",
+  });
+  assert.deepEqual(getPointChangeMetadata("UNEXCUSED_ABSENCE"), {
+    pillar: "WAKTU",
+    severity: "SEDANG",
+  });
+  assert.deepEqual(getPointChangeMetadata("DISCIPLINE_VIOLATION"), {
+    pillar: "TATA_TERTIB",
+    severity: "BERAT",
+  });
+  assert.deepEqual(getPointChangeMetadata("COMPETITION"), {
+    pillar: null,
+    severity: null,
+  });
+  assert.deepEqual(getPointChangeMetadata("NON_ACADEMIC_ACTIVITY"), {
+    pillar: null,
+    severity: null,
   });
 });

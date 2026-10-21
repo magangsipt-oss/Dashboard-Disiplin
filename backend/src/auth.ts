@@ -517,6 +517,36 @@ authRouter.patch("/advisor-requests/:requestId", async (request, response) => {
   }
 });
 
+authRouter.get("/advisor/students", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "dosen") {
+    response.status(403).json({ message: "Hanya akun dosen yang dapat melihat mahasiswa bimbingan." });
+    return;
+  }
+
+  try {
+    const students = await database.mahasiswa.findMany({
+      where: { dosenPaId: session.profile.id },
+      orderBy: { nama: "asc" },
+      select: {
+        id: true,
+        nim: true,
+        nama: true,
+        jurusan: true,
+        pointScore: true,
+      },
+    });
+    response.json({ students });
+  } catch (error) {
+    console.error("Gagal memuat daftar mahasiswa bimbingan:", error);
+    response.status(500).json({ message: "Daftar mahasiswa bimbingan gagal dimuat." });
+  }
+});
+
 authRouter.get("/counseling", async (request, response) => {
   const session = getSessionForRequest(request, response);
   if (!session) {

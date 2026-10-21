@@ -87,12 +87,15 @@ export default function App() {
   const [advisorRequestError, setAdvisorRequestError] = useState('');
   const [advisorDecisionStatus, setAdvisorDecisionStatus] = useState('');
   const [updatingAdvisorRequestId, setUpdatingAdvisorRequestId] = useState(null);
+  const [advisorStudents, setAdvisorStudents] = useState([]);
+  const [isLoadingAdvisorStudents, setIsLoadingAdvisorStudents] = useState(false);
+  const [advisorStudentsError, setAdvisorStudentsError] = useState('');
   const [counselingRecords, setCounselingRecords] = useState([]);
   const [isLoadingCounseling, setIsLoadingCounseling] = useState(false);
   const [counselingError, setCounselingError] = useState('');
   const [counselingStudents, setCounselingStudents] = useState([]);
   const [counselingStudentsError, setCounselingStudentsError] = useState('');
-  const [counselingFilter, setCounselingFilter] = useState('ALL');
+  const [studentRiskFilter, setStudentRiskFilter] = useState('ALL');
   const [selectedCounselingStudentId, setSelectedCounselingStudentId] = useState('');
   const [counselingForm, setCounselingForm] = useState({
     type: 'GUIDANCE_NOTE',
@@ -151,15 +154,15 @@ export default function App() {
   };
   const dashboardNavigation =
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
-  const filteredCounselingStudents = counselingStudents.filter((student) => {
-    if (counselingFilter === 'RED') {
+  const filteredAdvisorStudents = advisorStudents.filter((student) => {
+    if (studentRiskFilter === 'UNDISCIPLINED') {
       return student.pointScore <= 50;
     }
-    if (counselingFilter === 'YELLOW') {
-      return student.pointScore > 50 && student.pointScore < 90;
+    if (studentRiskFilter === 'LESS_DISCIPLINED') {
+      return student.pointScore > 50 && student.pointScore < 100;
     }
-    if (counselingFilter === 'GREEN') {
-      return student.pointScore >= 90;
+    if (studentRiskFilter === 'DISCIPLINED') {
+      return student.pointScore >= 100;
     }
     return true;
   });
@@ -369,6 +372,49 @@ export default function App() {
   }, [authenticatedUser?.role, activePage]);
 
   useEffect(() => {
+    if (authenticatedUser?.role !== 'dosen' || activePage !== 'dashboard') {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadAdvisorStudents = async (showLoading) => {
+      if (showLoading) {
+        setIsLoadingAdvisorStudents(true);
+      }
+      try {
+        const response = await fetch('/api/auth/advisor/students');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Daftar mahasiswa bimbingan gagal dimuat.');
+        }
+        if (isMounted) {
+          setAdvisorStudents(data.students ?? []);
+          setAdvisorStudentsError('');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setAdvisorStudentsError(
+            error instanceof Error
+              ? error.message
+              : 'Daftar mahasiswa bimbingan gagal dimuat.',
+          );
+        }
+      } finally {
+        if (isMounted && showLoading) {
+          setIsLoadingAdvisorStudents(false);
+        }
+      }
+    };
+
+    loadAdvisorStudents(true);
+    const refreshTimer = window.setInterval(() => loadAdvisorStudents(false), 15000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [authenticatedUser?.role, activePage]);
+
+  useEffect(() => {
     const role = authenticatedUser?.role;
     const isStudentCounseling =
       role === 'mhs' && activeTab === 'konseling';
@@ -548,9 +594,27 @@ export default function App() {
       setAdvisorRequests((current) => current.filter((item) => item.id !== requestId));
       setAdvisorDecisionStatus(
         decision === 'approved'
-          ? `Permohonan ${data.request.mahasiswa.nama} disetujui.`
-          : `Permohonan ${data.request.mahasiswa.nama} ditolak.`,
+          ? `Permohonan ${data.request.student.nama} disetujui.`
+          : `Permohonan ${data.request.student.nama} ditolak.`,
       );
+
+      if (decision === 'approved') {
+        try {
+          const studentsResponse = await fetch('/api/auth/advisor/students');
+          const studentsData = await studentsResponse.json();
+          if (!studentsResponse.ok) {
+            throw new Error(studentsData.message || 'Daftar mahasiswa bimbingan gagal dimuat.');
+          }
+          setAdvisorStudents(studentsData.students ?? []);
+          setAdvisorStudentsError('');
+        } catch (error) {
+          setAdvisorStudentsError(
+            error instanceof Error
+              ? error.message
+              : 'Daftar mahasiswa bimbingan gagal dimuat.',
+          );
+        }
+      }
     } catch (error) {
       setAdvisorRequestError(
         error instanceof Error ? error.message : 'Keputusan permohonan gagal disimpan.',
@@ -1683,9 +1747,9 @@ export default function App() {
                 {activeTab !== 'approval' && (
                   <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                     {[
-                      { label: 'Mahasiswa bimbingan', icon: UserCheck, value: counselingStudents.length },
-                      { label: 'Zona kuning / merah', icon: AlertCircle, value: counselingStudents.filter((student) => student.pointScore < 90).length },
-                      { label: 'Catatan konseling', icon: MessageSquare, value: counselingStudents.reduce((total, student) => total + student.counselingRecords.length, 0) },
+                      { label: 'Mahasiswa bimbingan', icon: UserCheck, value: advisorStudents.length },
+                      { label: 'Kurang Disiplin', icon: AlertCircle, value: advisorStudents.filter((student) => student.pointScore > 50 && student.pointScore < 100).length },
+                      { label: 'Tidak Disiplin', icon: MessageSquare, value: advisorStudents.filter((student) => student.pointScore <= 50).length },
                     ].map(({ label, icon: Icon, value }) => (
                       <div key={label} data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg">
                         <div className="flex items-center justify-between">
@@ -1693,7 +1757,7 @@ export default function App() {
                           <Icon className="h-5 w-5 text-red-800" />
                         </div>
                         <p className="mt-3 text-3xl font-extrabold text-slate-900">
-                          {isLoadingCounseling ? '…' : value}
+                          {isLoadingAdvisorStudents ? '…' : value}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">Data mahasiswa bimbingan Anda</p>
                       </div>
@@ -1769,20 +1833,6 @@ export default function App() {
                           Pilih mahasiswa bimbingan untuk meninjau skor, tren perubahan poin, dan catatan konseling sebelumnya.
                         </p>
                       </div>
-                      <div>
-                        <label htmlFor="counseling-risk-filter" className="mb-1 block text-xs font-bold text-slate-600">Filter zona risiko</label>
-                        <select
-                          id="counseling-risk-filter"
-                          value={counselingFilter}
-                          onChange={(event) => setCounselingFilter(event.target.value)}
-                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-700"
-                        >
-                          <option value="ALL">Semua mahasiswa</option>
-                          <option value="RED">Merah / kritis (0–50)</option>
-                          <option value="YELLOW">Kuning (51–89)</option>
-                          <option value="GREEN">Hijau (90–200)</option>
-                        </select>
-                      </div>
                     </div>
 
                     {counselingStudentsError && (
@@ -1806,15 +1856,15 @@ export default function App() {
                     ) : (
                       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
                         <div className="space-y-2">
-                          {filteredCounselingStudents.map((student) => {
+                          {counselingStudents.map((student) => {
                             const zone = student.pointScore <= 50
-                              ? 'Merah'
-                              : student.pointScore < 90
-                                ? 'Kuning'
-                                : 'Hijau';
-                            const zoneClass = zone === 'Merah'
+                              ? 'Tidak Disiplin'
+                              : student.pointScore < 100
+                                ? 'Kurang Disiplin'
+                                : 'Disiplin';
+                            const zoneClass = zone === 'Tidak Disiplin'
                               ? 'bg-red-100 text-red-800'
-                              : zone === 'Kuning'
+                              : zone === 'Kurang Disiplin'
                                 ? 'bg-amber-100 text-amber-900'
                                 : 'bg-emerald-100 text-emerald-800';
                             return (
@@ -1842,11 +1892,6 @@ export default function App() {
                               </button>
                             );
                           })}
-                          {filteredCounselingStudents.length === 0 && (
-                            <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                              Tidak ada mahasiswa pada zona risiko yang dipilih.
-                            </p>
-                          )}
                         </div>
 
                         {selectedCounselingStudent ? (
@@ -1948,14 +1993,62 @@ export default function App() {
                   </section>
                 ) : (
                   <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-                    <h3 className="text-lg font-extrabold text-slate-900">Daftar Mahasiswa Bimbingan</h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Gunakan menu Catatan & Konseling untuk memfilter mahasiswa berdasarkan zona risiko dan membuka detail tindak lanjut.
-                    </p>
-                    <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                      <p className="font-semibold text-slate-700">Buka menu Catatan & Konseling</p>
-                      <p className="mt-1 text-sm text-slate-500">Daftar mahasiswa bimbingan, skor, dan catatan tersedia di menu tersebut.</p>
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-extrabold text-slate-900">Daftar Mahasiswa Bimbingan</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Mahasiswa yang pengajuan dosen PA-nya telah disetujui akan tampil di daftar ini.
+                        </p>
+                      </div>
+                      <div>
+                        <label htmlFor="student-risk-filter" className="mb-1 block text-xs font-bold text-slate-600">Filter zona risiko</label>
+                        <select
+                          id="student-risk-filter"
+                          value={studentRiskFilter}
+                          onChange={(event) => setStudentRiskFilter(event.target.value)}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-700"
+                        >
+                          <option value="ALL">Semua mahasiswa</option>
+                          <option value="UNDISCIPLINED">Tidak Disiplin (0–50)</option>
+                          <option value="LESS_DISCIPLINED">Kurang Disiplin (51–99)</option>
+                          <option value="DISCIPLINED">Disiplin (100–200)</option>
+                        </select>
+                      </div>
                     </div>
+                    {advisorStudentsError && (
+                      <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                        {advisorStudentsError}
+                      </p>
+                    )}
+                    {isLoadingAdvisorStudents ? (
+                      <p className="mt-5 rounded-xl bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">Memuat mahasiswa bimbingan...</p>
+                    ) : advisorStudents.length === 0 ? (
+                      <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                        <p className="font-semibold text-slate-700">Belum ada mahasiswa bimbingan</p>
+                        <p className="mt-1 text-sm text-slate-500">Mahasiswa akan muncul di sini setelah pengajuan DPA disetujui.</p>
+                      </div>
+                    ) : (
+                      <div className="mt-5 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        {filteredAdvisorStudents.map((student) => (
+                          <article key={student.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                            <div className="min-w-0">
+                              <h4 className="truncate font-bold text-slate-900">{student.nama}</h4>
+                              <p className="mt-1 text-sm text-slate-600">
+                                NIM {student.nim} <span className="mx-1 text-slate-300">·</span> {student.jurusan}
+                              </p>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-600 sm:text-right">
+                              Skor kedisiplinan: {student.pointScore}
+                            </p>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                    {!isLoadingAdvisorStudents && advisorStudents.length > 0 && filteredAdvisorStudents.length === 0 && (
+                      <p className="mt-5 rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                        Tidak ada mahasiswa pada zona risiko yang dipilih.
+                      </p>
+                    )}
                   </section>
                 )}
               </main>

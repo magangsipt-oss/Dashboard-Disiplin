@@ -90,8 +90,7 @@ export default function App() {
   ];
   const navigationByRole = {
     mhs: [
-      { id: 'dashboard', label: 'Ringkasan' },
-      { id: 'rekam-jejak', label: 'Rekam Jejak' },
+      { id: 'dashboard', label: 'Aktivitas' },
       { id: 'sanggah', label: 'Sanggah Presensi' },
       { id: 'klaim', label: 'Klaim Kegiatan' },
       { id: 'konseling', label: 'Konseling' },
@@ -1333,8 +1332,7 @@ export default function App() {
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">
-                      {activeTab === 'dashboard' && 'Ringkasan Rekam Jejak Kedisiplinan'}
-                      {activeTab === 'rekam-jejak' && 'Rekam Jejak Presensi e-Campus'}
+                      {activeTab === 'dashboard' && 'Ringkasan Aktivitas & Poin'}
                       {activeTab === 'sanggah' && 'Pengajuan Sanggah Presensi'}
                       {activeTab === 'klaim' && 'Klaim Poin Kegiatan Non-Akademik'}
                       {activeTab === 'konseling' && 'Pengawasan & Bimbingan Konseling PA'}
@@ -1436,65 +1434,6 @@ export default function App() {
                 </div>
               </div>
 
-              <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6 sm:p-8 space-y-6">
-                <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-                  <div className="w-10 h-10 bg-red-100 text-red-800 rounded-xl flex items-center justify-center font-bold">
-                    <HelpCircle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-extrabold text-slate-900">Tentang Portal SiDisiplin Poltek Simas Berau</h3>
-                    <p className="text-xs text-slate-500">Sistem Informasi Rekam Jejak Kedisiplinan, Presensi e-Campus, dan Poin SKPI Vokasi</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                  <div className="bg-slate-50 p-5 rounded-xl border border-slate-200/80 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-xs">1</div>
-                    <h4 className="font-bold text-slate-900">Presensi e-Campus</h4>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Rekam kehadiran kuliah dan praktikum diambil dari presensi yang dicatat dosen pada e-Campus dan disinkronkan ke dashboard.
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-50 p-5 rounded-xl border border-slate-200/80 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-xs">2</div>
-                    <h4 className="font-bold text-slate-900">Akumulasi Poin SKPI</h4>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Rekognisi kegiatan ekstrakurikuler, sertifikasi keahlian industri, dan prestasi lomba sebagai syarat kelulusan wajib mahasiswa vokasi.
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-50 p-5 rounded-xl border border-slate-200/80 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-xs">3</div>
-                    <h4 className="font-bold text-slate-900">Bimbingan Dosen PA</h4>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Fasilitas pemantauan kedisiplinan secara langsung oleh Dosen Pembimbing Akademik demi memastikan progress studi berjalan lancar.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-r from-red-900 to-rose-950 text-white p-5 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="w-6 h-6 text-amber-300 flex-shrink-0" />
-                    <div>
-                      <p className="font-bold">Kampus Utama Politeknik Sinar Mas Berau Coal</p>
-                      <p className="text-slate-200">Jl. Raja Alam II, Kel. Rinding / Sei Bedungun, Kec. Teluk Bayur / Tanjung Redeb, Kab. Berau, Kalimantan Timur 77315</p>
-                      <a
-                        href={campusMapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 font-bold text-amber-300 transition hover:text-amber-200 hover:underline"
-                      >
-                        Buka lokasi di Google Maps <ArrowRight className="h-3.5 w-3.5" />
-                      </a>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-amber-300 font-bold">Helpdesk Layanan Vokasi</p>
-                    <p className="text-slate-200">sekretariat@polteksimasberau.ac.id</p>
-                  </div>
-                </div>
-              </div>
                 </>
               )}
             </main>

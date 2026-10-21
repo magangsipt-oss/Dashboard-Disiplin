@@ -8,18 +8,21 @@ datasource db {
 }
 
 model Mahasiswa {
-  id          Int           @id @default(autoincrement()) @map("ID")
-  nim         Int           @unique @map("NIM")
-  nama        String        @map("Nama")
-  password    String        @db.VarChar(255) @map("Password")
-  jurusan     String        @map("Jurusan")
-  pointScore  Int           @default(100) @map("Poin")
-  timestamp   DateTime      @default(now()) @map("Timestamp")
-  pointChanges PointChange[]
-  dosenPaId   Int?          @map("DPA_ID")
-  dosenPa     Dosen?        @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
-  advisorRequest AdvisorRequest?
+  id                Int                @id @default(autoincrement()) @map("ID")
+  nim               Int                @unique @map("NIM")
+  nama              String             @map("Nama")
+  password          String             @map("Password") @db.VarChar(255)
+  jurusan           String             @map("Jurusan")
+  pointScore        Int                @default(100) @map("Poin")
+  timestamp         DateTime           @default(now()) @map("Timestamp")
+  pointChanges      PointChange[]
+  dosenPaId         Int?               @map("DPA_ID")
+  dosenPa           Dosen?             @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
+  advisorRequest    AdvisorRequest?
   counselingRecords CounselingRecord[]
+  sanggahans        Sanggahan[]
+  pembinaans        Pembinaan[]
+  pemberitahuan     Pemberitahuan[]
 
   @@map("Mahasiswa")
 }
@@ -31,14 +34,14 @@ enum AdvisorRequestStatus {
 }
 
 model AdvisorRequest {
-  id           Int                  @id @default(autoincrement()) @map("ID")
-  studentId    Int                  @unique(map: "Permohonan_DPA_mahasiswa_id_key") @map("Mahasiswa_ID")
-  dosenId      Int                  @map("Dosen_ID")
-  status       AdvisorRequestStatus @default(PENDING) @map("Status")
-  createdAt    DateTime             @default(now()) @map("Pengajuan")
-  reviewedAt   DateTime?            @map("Di_Setujui")
-  student      Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "Permohonan_DPA_mahasiswa_id_fkey")
-  dosen        Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade, map: "Permohonan_DPA_dosen_id_fkey")
+  id         Int                  @id @default(autoincrement()) @map("ID")
+  studentId  Int                  @unique(map: "Permohonan_DPA_mahasiswa_id_key") @map("Mahasiswa_ID")
+  dosenId    Int                  @map("Dosen_ID")
+  status     AdvisorRequestStatus @default(PENDING) @map("Status")
+  createdAt  DateTime             @default(now()) @map("Pengajuan")
+  reviewedAt DateTime?            @map("Di_Setujui")
+  student    Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "Permohonan_DPA_mahasiswa_id_fkey")
+  dosen      Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade, map: "Permohonan_DPA_dosen_id_fkey")
 
   @@index([dosenId, status, createdAt], map: "Permohonan_DPA_dosen_id_status_pengajuan_idx")
   @@map("Permohonan_DPA")
@@ -50,15 +53,15 @@ enum CounselingRecordType {
 }
 
 model CounselingRecord {
-  id              Int                  @id @default(autoincrement())
-  studentId       Int
-  dosenId         Int
-  type            CounselingRecordType
-  note            String               @db.VarChar(2000)
-  counselingDate  DateTime             @db.Date
-  createdAt       DateTime             @default(now())
-  student         Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  dosen           Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+  id             Int                  @id @default(autoincrement())
+  studentId      Int
+  dosenId        Int
+  type           CounselingRecordType
+  note           String               @db.VarChar(2000)
+  counselingDate DateTime             @db.Date
+  createdAt      DateTime             @default(now())
+  student        Mahasiswa            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dosen          Dosen                @relation(fields: [dosenId], references: [id], onDelete: Cascade)
 
   @@index([studentId, createdAt])
   @@index([dosenId, studentId, createdAt])
@@ -71,43 +74,195 @@ enum PointChangeType {
   DISCIPLINE_VIOLATION
   COMPETITION
   NON_ACADEMIC_ACTIVITY
+  REPORTED_VIOLATION
+  POINT_RESTORATION
+}
+
+enum DisciplinePillar {
+  WAKTU
+  AKADEMIK
+  TATA_TERTIB
+  PROSEDUR_K3
+  LINGKUNGAN
+}
+
+enum ViolationSeverity {
+  RINGAN
+  SEDANG
+  BERAT
+  SANGAT_BERAT
 }
 
 model PointChange {
-  id                  Int             @id @default(autoincrement())
-  studentId           Int
-  type                PointChangeType
-  delta               Int
-  scoreAfter          Int
-  reason              String          @db.VarChar(500)
-  recordedByIdentity  String          @db.VarChar(100)
-  createdAt           DateTime        @default(now())
-  student             Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                 Int                @id @default(autoincrement())
+  studentId          Int
+  type               PointChangeType
+  pillar             DisciplinePillar?
+  severity           ViolationSeverity?
+  delta              Int
+  scoreAfter         Int
+  reason             String             @db.VarChar(500)
+  recordedByIdentity String             @db.VarChar(100)
+  createdAt          DateTime           @default(now())
+  student            Mahasiswa          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sanggahans         Sanggahan[]
+  pembinaans         Pembinaan[]
+  laporan            Laporan?
 
   @@index([studentId, createdAt])
+  @@index([studentId, pillar])
   @@map("PerubahanPoin")
 }
 
+enum JenisLaporan {
+  TEMUAN
+  APRESIASI
+}
+
+enum StatusLaporan {
+  DITERIMA
+  DIVERIFIKASI
+  DITINDAKLANJUTI
+  DITOLAK
+}
+
+enum StatusSanggahan {
+  DIAJUKAN
+  DISETUJUI
+  DITOLAK
+}
+
+enum JenisPembinaan {
+  REFLEKSI_TERTULIS
+  KONSELING
+}
+
+enum StatusPembinaan {
+  DIMINTA
+  DIKIRIM
+  DISETUJUI
+  DITOLAK
+}
+
+model AturanPelanggaran {
+  id        Int               @id @default(autoincrement())
+  pillar    DisciplinePillar
+  nama      String            @db.VarChar(200)
+  severity  ViolationSeverity
+  bobotPoin Int
+  aktif     Boolean           @default(true)
+  laporan   Laporan[]
+
+  @@unique([pillar, nama])
+  @@index([pillar, aktif])
+}
+
+model Laporan {
+  id                  Int                @id @default(autoincrement())
+  kodeHash            String             @unique @db.Char(64)
+  jenis               JenisLaporan
+  pillar              DisciplinePillar
+  aturanId            Int?
+  severityUsulan      ViolationSeverity?
+  terlaporNim         String?            @db.VarChar(32)
+  terlaporKeterangan  String?            @db.VarChar(500)
+  lokasi              String             @db.VarChar(300)
+  tanggalKejadian     DateTime           @db.Date
+  deskripsi           String             @db.VarChar(1000)
+  buktiPath           String?            @db.VarChar(500)
+  tanggalLapor        DateTime           @default(now()) @db.Date
+  status              StatusLaporan      @default(DITERIMA)
+  catatanUntukPelapor String?            @db.VarChar(1000)
+  diverifikasiOlehId  Int?
+  tanggalVerifikasi   DateTime?
+  perubahanPoinId     Int?               @unique
+  aturan              AturanPelanggaran? @relation(fields: [aturanId], references: [id], onDelete: SetNull)
+  diverifikasiOleh    Kemahasiswaan?     @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
+  perubahanPoin       PointChange?       @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
+
+  @@index([status, id])
+  @@index([terlaporNim, status])
+}
+
+model Sanggahan {
+  id               Int             @id @default(autoincrement())
+  perubahanPoinId  Int
+  studentId        Int
+  alasan           String          @db.VarChar(2000)
+  status           StatusSanggahan @default(DIAJUKAN)
+  catatanPemeriksa String?         @db.VarChar(1000)
+  createdAt        DateTime        @default(now())
+  reviewedAt       DateTime?
+  perubahanPoin    PointChange     @relation(fields: [perubahanPoinId], references: [id], onDelete: Cascade)
+  student          Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([perubahanPoinId, status])
+}
+
+model Pembinaan {
+  id               Int             @id @default(autoincrement())
+  perubahanPoinId  Int
+  studentId        Int
+  jenis            JenisPembinaan
+  instruksi        String          @db.VarChar(2000)
+  status           StatusPembinaan @default(DIMINTA)
+  isiRefleksi      String?         @db.VarChar(5000)
+  catatanPemeriksa String?         @db.VarChar(1000)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  perubahanPoin    PointChange     @relation(fields: [perubahanPoinId], references: [id], onDelete: Cascade)
+  student          Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, status, createdAt])
+}
+
+model Pemberitahuan {
+  id        Int       @id @default(autoincrement())
+  studentId Int
+  judul     String    @db.VarChar(200)
+  isi       String    @db.VarChar(1000)
+  tautanTab String?   @db.VarChar(100)
+  dibaca    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  student   Mahasiswa @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, dibaca, createdAt])
+}
+
+model LogAudit {
+  id        Int      @id @default(autoincrement())
+  aktorId   Int
+  aksi      String   @db.VarChar(100)
+  entitas   String   @db.VarChar(100)
+  entitasId Int
+  createdAt DateTime @default(now())
+
+  @@index([aktorId, createdAt])
+  @@index([entitas, entitasId])
+}
+
 model Dosen {
-  id        Int      @id @default(autoincrement()) @map("ID")
-  nidn      BigInt   @unique @map("NIDN")
-  nip       BigInt   @unique @map("NIP")
-  nama      String   @map("Nama")
-  password  String   @db.VarChar(255) @map("Password")
-  timestamp DateTime @default(now())
+  id                 Int                @id @default(autoincrement()) @map("ID")
+  nidn               BigInt             @unique @map("NIDN")
+  nip                BigInt             @unique @map("NIP")
+  nama               String             @map("Nama")
+  password           String             @map("Password") @db.VarChar(255)
+  timestamp          DateTime           @default(now())
   mahasiswaBimbingan Mahasiswa[]
   advisorRequests    AdvisorRequest[]
-  counselingRecords CounselingRecord[]
+  counselingRecords  CounselingRecord[]
 
   @@map("Dosen")
 }
 
 model Kemahasiswaan {
-  id        Int      @id @default(autoincrement()) @map("ID")
-  nip       BigInt   @unique @map("NIP")
-  nama      String   @map("Nama")
-  password  String   @db.VarChar(255) @map("Password")
-  timestamp DateTime @default(now()) @map("Timestamp")
+  id                  Int       @id @default(autoincrement()) @map("ID")
+  nip                 BigInt    @unique @map("NIP")
+  nama                String    @map("Nama")
+  password            String    @map("Password") @db.VarChar(255)
+  timestamp           DateTime  @default(now()) @map("Timestamp")
+  laporanDiverifikasi Laporan[]
 
   @@map("Kemahasiswaan")
 }

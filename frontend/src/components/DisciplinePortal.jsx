@@ -2,6 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import LaporSatgas from './student/LaporSatgas';
+import TindakLanjut from './student/TindakLanjut';
+import SanggahanMahasiswa from './student/SanggahanMahasiswa';
+import AktivitasMahasiswa from './student/AktivitasMahasiswa';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -17,6 +21,10 @@ import {
   AlertCircle,
   FileText,
   Plus,
+  BookOpen,
+  ClipboardCheck,
+  Leaf,
+  Scale,
   ArrowLeft,
   ArrowRight,
   HelpCircle,
@@ -26,6 +34,31 @@ import {
   X,
 } from 'lucide-react';
 
+const disciplinePillars = [
+  { pillar: 'WAKTU', label: 'Disiplin Waktu', Icon: Clock },
+  { pillar: 'AKADEMIK', label: 'Disiplin Akademik', Icon: BookOpen },
+  { pillar: 'TATA_TERTIB', label: 'Disiplin Tata Tertib dan Etika', Icon: Scale },
+  { pillar: 'PROSEDUR_K3', label: 'Disiplin Prosedur dan Keselamatan (K3)', Icon: ClipboardCheck },
+  { pillar: 'LINGKUNGAN', label: 'Disiplin Lingkungan', Icon: Leaf },
+];
+
+const violationSeverities = [
+  { severity: 'RINGAN', label: 'Ringan', followUp: 'Peringatan dan koreksi langsung', badge: 'bg-amber-100 text-amber-800' },
+  { severity: 'SEDANG', label: 'Sedang', followUp: 'Pembinaan dan refleksi tertulis', badge: 'bg-orange-100 text-orange-800' },
+  { severity: 'BERAT', label: 'Berat', followUp: 'Penanganan formal sesuai peraturan kampus', badge: 'bg-red-100 text-red-800' },
+  { severity: 'SANGAT_BERAT', label: 'Sangat Berat', followUp: 'Penghentian aktivitas tidak aman dan penanganan segera', badge: 'bg-red-800 text-white' },
+];
+
+const pointChangeTypeLabels = {
+  LATE: 'Terlambat',
+  UNEXCUSED_ABSENCE: 'Tidak hadir tanpa keterangan',
+  DISCIPLINE_VIOLATION: 'Pelanggaran tata tertib',
+  COMPETITION: 'Mengikuti lomba',
+  NON_ACADEMIC_ACTIVITY: 'Kegiatan non-akademik',
+  REPORTED_VIOLATION: 'Pelanggaran terverifikasi',
+  POINT_RESTORATION: 'Pemulihan poin',
+};
+
 export default function App() {
   const router = useRouter();
   const [activePage, setActivePage] = useState('landing');
@@ -34,6 +67,7 @@ export default function App() {
 
   const [showSKPIModal, setShowSKPIModal] = useState(false);
   const [showSanggahModal, setShowSanggahModal] = useState(false);
+  const [selectedAppealChangeId, setSelectedAppealChangeId] = useState(null);
 
   const [loginError, setLoginError] = useState('');
   const [authenticatedUser, setAuthenticatedUser] = useState(null);
@@ -91,7 +125,9 @@ export default function App() {
   const navigationByRole = {
     mhs: [
       { id: 'dashboard', label: 'Aktivitas' },
-      { id: 'sanggah', label: 'Sanggah Presensi' },
+      { id: 'sanggah', label: 'Sanggah Pelanggaran' },
+      { id: 'lapor', label: 'Lapor Satgas' },
+      { id: 'tindak-lanjut', label: 'Tindak Lanjut' },
       { id: 'klaim', label: 'Klaim Kegiatan' },
       { id: 'konseling', label: 'Konseling' },
       { id: 'dosen-pa', label: 'Dosen PA' },
@@ -1098,7 +1134,7 @@ export default function App() {
               {activeTab === 'dashboard' && (
                 <>
                   <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
-                    Skor kedisiplinan dimulai dari 100 poin, dapat berkurang karena pelanggaran, dan bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi. Skor maksimal adalah 200 poin.
+                    Skor kedisiplinan dimulai dari 100 poin dan dipengaruhi oleh 5 pilar: Disiplin Waktu, Disiplin Akademik, Disiplin Tata Tertib dan Etika, Disiplin Prosedur dan Keselamatan (K3), serta Disiplin Lingkungan. Poin juga dapat bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi, dengan skor maksimal 200 poin.
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1201,6 +1237,122 @@ export default function App() {
                   </button>
                 </div>
                   </div>
+
+                  <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-bold text-slate-900">Profil Disiplin per Pilar</h3>
+                      <p className="mt-1 text-sm text-slate-500">Ringkasan pelanggaran dan poin yang terpotong pada setiap pilar.</p>
+                    </div>
+                    {isLoadingStudentPoints ? (
+                      <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Memuat profil disiplin...</p>
+                    ) : studentPointsError ? (
+                      <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{studentPointsError}</p>
+                    ) : !Array.isArray(studentPoints?.pillars) || studentPoints.pillars.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Data profil disiplin belum tersedia.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                        {studentPoints.pillars.map((pillar) => {
+                          const presentation = disciplinePillars.find((item) => item.pillar === pillar.pillar);
+                          const Icon = presentation?.Icon ?? ShieldCheck;
+                          const hasNoViolations = pillar.violationCount === 0;
+                          return (
+                            <article
+                              key={pillar.pillar}
+                              className={`rounded-2xl border p-4 shadow-sm ${
+                                hasNoViolations
+                                  ? 'border-emerald-200 bg-emerald-50/70'
+                                  : 'border-rose-200 bg-rose-50/70'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
+                                  hasNoViolations ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                }`}>
+                                  <Icon className="h-5 w-5" />
+                                </div>
+                                <p className="text-sm font-bold leading-snug text-slate-800">{pillar.label ?? presentation?.label ?? pillar.pillar}</p>
+                              </div>
+                              <dl className="mt-4 space-y-2 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <dt className="text-slate-600">Jumlah pelanggaran</dt>
+                                  <dd className="font-bold text-slate-900">{pillar.violationCount}</dd>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 border-t border-slate-200/70 pt-2">
+                                  <dt className="text-slate-600">Poin terpotong</dt>
+                                  <dd className="font-bold text-slate-900">{pillar.pointsDeducted}</dd>
+                                </div>
+                              </dl>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+
+                  <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+                    <div className="mb-4">
+                      <h3 className="text-lg font-bold text-slate-900">Tingkat Pelanggaran Anda</h3>
+                      <p className="mt-1 text-sm text-slate-500">Jumlah dan tindak lanjut sesuai tingkat pelanggaran.</p>
+                    </div>
+                    {isLoadingStudentPoints ? (
+                      <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Memuat tingkat pelanggaran...</p>
+                    ) : studentPointsError ? (
+                      <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{studentPointsError}</p>
+                    ) : !studentPoints?.severityCounts ? (
+                      <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Data tingkat pelanggaran belum tersedia.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {violationSeverities.map(({ severity, label, followUp, badge }) => (
+                          <div key={severity} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${badge}`}>{label}</span>
+                              <span className="text-sm font-semibold text-slate-800">{studentPoints.severityCounts[severity] ?? 0} pelanggaran</span>
+                            </div>
+                            <p className="text-xs text-slate-600">{followUp}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <details data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+                    <summary className="cursor-pointer list-none text-lg font-bold text-slate-900">
+                      Pahami 5 Pilar dan Tingkat Pelanggaran
+                    </summary>
+                    <div className="mt-4 space-y-5">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {[
+                          { label: 'Disiplin Waktu', description: 'Hadir tepat waktu dan memanfaatkan waktu efektif.' },
+                          { label: 'Disiplin Akademik', description: 'Bertanggung jawab dalam pembelajaran, tugas, ujian, dan praktikum.' },
+                          { label: 'Disiplin Tata Tertib dan Etika', description: 'Menjaga penampilan, komunikasi, dan perilaku sesuai aturan kampus.' },
+                          { label: 'Disiplin Prosedur dan Keselamatan (K3)', description: 'Mematuhi SOP, K3, serta penggunaan fasilitas dan alat.' },
+                          { label: 'Disiplin Lingkungan', description: 'Menjaga kebersihan, ketertiban, fasilitas, dan kelestarian lingkungan kampus.' },
+                        ].map(({ label, description }) => (
+                          <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <h4 className="text-sm font-bold text-slate-800">{label}</h4>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-600">{description}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
+                            <tr><th className="py-2 pr-4">Tingkat</th><th className="py-2">Tindak lanjut</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {violationSeverities.map(({ severity, label, followUp, badge }) => (
+                              <tr key={severity}>
+                                <td className="py-3 pr-4"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${badge}`}>{label}</span></td>
+                                <td className="py-3 text-xs text-slate-600">{followUp}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </details>
+
+                  <AktivitasMahasiswa onNavigate={(tab) => setActiveTab(tab)} />
                 </>
               )}
 
@@ -1326,14 +1478,37 @@ export default function App() {
                 </section>
               )}
 
-              {activeTab !== 'dosen-pa' && activeTab !== 'konseling' && (
+              {activeTab === 'lapor' && <LaporSatgas />}
+
+              {activeTab === 'tindak-lanjut' && (
+                <TindakLanjut
+                  onAppeal={(changeId) => {
+                    setSelectedAppealChangeId(changeId);
+                    setActiveTab('sanggah');
+                  }}
+                />
+              )}
+
+              {activeTab === 'sanggah' && authenticatedUser?.role === 'mhs' && (
+                <SanggahanMahasiswa
+                  changes={studentPoints?.changes ?? []}
+                  initialChangeId={selectedAppealChangeId}
+                  onInitialChangeHandled={() => setSelectedAppealChangeId(null)}
+                />
+              )}
+
+              {activeTab !== 'dosen-pa' &&
+                activeTab !== 'konseling' &&
+                activeTab !== 'lapor' &&
+                activeTab !== 'tindak-lanjut' &&
+                !(activeTab === 'sanggah' && authenticatedUser?.role === 'mhs') && (
                 <>
               <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">
                       {activeTab === 'dashboard' && 'Ringkasan Aktivitas & Poin'}
-                      {activeTab === 'sanggah' && 'Pengajuan Sanggah Presensi'}
+                      {activeTab === 'sanggah' && (authenticatedUser?.role === 'mhs' ? 'Pengajuan Sanggah Pelanggaran' : 'Pengajuan Sanggah Presensi')}
                       {activeTab === 'klaim' && 'Klaim Poin Kegiatan Non-Akademik'}
                       {activeTab === 'konseling' && 'Pengawasan & Bimbingan Konseling PA'}
                     </h3>
@@ -1353,12 +1528,12 @@ export default function App() {
                         <Plus className="w-4 h-4" /> Ajukan Klaim Kegiatan
                       </button>
                     )}
-                    {activeTab === 'sanggah' && (
+                    {activeTab === 'sanggah' && authenticatedUser?.role !== 'mhs' && (
                       <button
                         onClick={() => setShowSanggahModal(true)}
                         className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow transition-colors"
                       >
-                        <FileText className="w-4 h-4" /> Ajukan Sanggah
+                        <FileText className="w-4 h-4" /> {authenticatedUser?.role === 'mhs' ? 'Ajukan Sanggah Pelanggaran' : 'Ajukan Sanggah'}
                       </button>
                     )}
                   </div>
@@ -1371,6 +1546,8 @@ export default function App() {
                         <tr className="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
                           <th className="py-3 px-4">Waktu</th>
                           <th className="py-3 px-4">Jenis perubahan</th>
+                          <th className="py-3 px-4">Pilar</th>
+                          <th className="py-3 px-4">Tingkat</th>
                           <th className="py-3 px-4">Catatan</th>
                           <th className="py-3 px-4">Perubahan</th>
                           <th className="py-3 px-4">Total poin</th>
@@ -1387,14 +1564,14 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {activeTab === 'dashboard' && isLoadingStudentPoints && (
-                        <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">Memuat riwayat poin…</td></tr>
+                        <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500">Memuat riwayat poin…</td></tr>
                       )}
                       {activeTab === 'dashboard' && studentPointsError && (
-                        <tr><td colSpan={5} className="px-4 py-10 text-center text-red-700" role="alert">{studentPointsError}</td></tr>
+                        <tr><td colSpan={7} className="px-4 py-10 text-center text-red-700" role="alert">{studentPointsError}</td></tr>
                       )}
                       {activeTab === 'dashboard' && !isLoadingStudentPoints && !studentPointsError && studentPoints?.changes?.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-4 py-10 text-center">
+                          <td colSpan={7} className="px-4 py-10 text-center">
                             <p className="font-semibold text-slate-700">Belum ada perubahan poin</p>
                             <p className="mt-1 text-xs text-slate-500">Skor awal Anda adalah 100 poin.</p>
                           </td>
@@ -1404,15 +1581,24 @@ export default function App() {
                         <tr key={change.id}>
                           <td className="px-4 py-3 text-xs text-slate-600">{new Date(change.createdAt).toLocaleString('id-ID')}</td>
                           <td className="px-4 py-3 font-semibold text-slate-800">
-                            {{
-                              LATE: 'Terlambat',
-                              UNEXCUSED_ABSENCE: 'Tidak hadir tanpa keterangan',
-                              DISCIPLINE_VIOLATION: 'Pelanggaran tata tertib',
-                              COMPETITION: 'Mengikuti lomba',
-                              NON_ACADEMIC_ACTIVITY: 'Kegiatan non-akademik',
-                            }[change.type] ?? change.type}
+                            {pointChangeTypeLabels[change.type] ?? change.type}
                           </td>
-                          <td className="px-4 py-3 text-slate-600">{change.reason}</td>
+                          <td className="px-4 py-3 text-xs text-slate-600">
+                            {disciplinePillars.find((item) => item.pillar === change.pillar)?.label ?? '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            {change.severity ? (
+                              <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                                violationSeverities.find((item) => item.severity === change.severity)?.badge ?? 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {violationSeverities.find((item) => item.severity === change.severity)?.label ?? change.severity}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            <p>{change.reason}</p>
+                            {change.followUp && <p className="mt-1 text-xs text-slate-500">{change.followUp}</p>}
+                          </td>
                           <td className={`px-4 py-3 font-bold ${change.delta > 0 ? 'text-emerald-700' : change.delta < 0 ? 'text-red-700' : 'text-slate-500'}`}>
                             {change.delta > 0 ? '+' : ''}{change.delta}
                           </td>
@@ -1966,7 +2152,7 @@ export default function App() {
         </div>
       )}
 
-      {showSanggahModal && (
+      {showSanggahModal && authenticatedUser?.role !== 'mhs' && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
@@ -1982,8 +2168,8 @@ export default function App() {
             <form onSubmit={(e) => { e.preventDefault(); setShowSanggahModal(false); }} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1">Alasan Sanggahan</label>
-                <textarea 
-                  required 
+                <textarea
+                  required
                   rows={3}
                   placeholder="Jelaskan catatan presensi e-Campus yang ingin disanggah beserta kronologinya..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs"
@@ -1992,22 +2178,22 @@ export default function App() {
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1">Unggah Surat Izin / Bukti Pendukung</label>
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   className="w-full text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-red-800 hover:file:bg-red-100"
                 />
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setShowSanggahModal(false)}
                   className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl"
                 >
                   Batal
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="px-4 py-2 bg-red-800 text-white font-bold rounded-xl shadow hover:bg-red-900"
                 >
                   Kirim Pengajuan Sanggah

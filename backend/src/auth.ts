@@ -6,15 +6,20 @@ import { Router, type Request, type Response } from "express";
 import { Prisma, PrismaClient } from "@prisma/client";
 import {
   calculatePointChange,
+  disciplinePillarLabels,
+  getPointChangeMetadata,
   getScorePredicate,
   pointChangeRules,
+  violationSeverityFollowUps,
+  type DisciplinePillar,
+  type ViolationSeverity,
   type PointChangeAction,
 } from "./points";
 
 dotenv.config({ path: resolve(__dirname, "../.env") });
 
 const scryptAsync = promisify(scrypt);
-const database = new PrismaClient();
+export const database = new PrismaClient();
 const SESSION_COOKIE = "sidisiplin_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const SCRYPT_KEY_LENGTH = 64;
@@ -24,7 +29,7 @@ export const authDatabases = [
   { name: "dashboard_disiplin", client: database },
 ];
 
-type Role = "mhs" | "dosen" | "admin";
+export type Role = "mhs" | "dosen" | "admin";
 
 type UserProfile = {
   id: number;
@@ -50,7 +55,7 @@ type Account = {
   updatePassword: (password: string) => Promise<unknown>;
 };
 
-type Session = {
+export type Session = {
   profile: UserProfile;
   expiresAt: number;
 };
@@ -245,7 +250,7 @@ function clearSessionCookie(response: Response): void {
 
 export const authRouter = Router();
 
-function getSessionForRequest(
+export function getSessionForRequest(
   request: Request,
   response: Response,
 ): Session | null {
@@ -656,7 +661,7 @@ authRouter.get("/points", async (request, response) => {
   }
 
   try {
-    const [student, activityTotals] = await Promise.all([
+    const [student, activityTotals, pillarTotals, severityTotals] = await Promise.all([
       database.mahasiswa.findUnique({
         where: { id: session.profile.id },
         select: {
@@ -671,6 +676,8 @@ authRouter.get("/points", async (request, response) => {
               scoreAfter: true,
               reason: true,
               createdAt: true,
+              pillar: true,
+              severity: true,
             },
           },
         },
@@ -683,10 +690,41 @@ authRouter.get("/points", async (request, response) => {
         _sum: { delta: true },
         _count: { _all: true },
       }),
+      database.pointChange.groupBy({
+        by: ["pillar"],
+        where: { studentId: session.profile.id, delta: { lt: 0 } },
+        _sum: { delta: true },
+        _count: { _all: true },
+      }),
+      database.pointChange.groupBy({
+        by: ["severity"],
+        where: { studentId: session.profile.id, delta: { lt: 0 } },
+        _count: { _all: true },
+      }),
     ]);
     if (!student) {
       response.status(404).json({ message: "Data mahasiswa tidak ditemukan." });
       return;
+    }
+
+    const pillarTotalsByPillar = new Map(
+      pillarTotals
+        .filter(
+          (total): total is typeof total & { pillar: DisciplinePillar } =>
+            total.pillar !== null,
+        )
+        .map((total) => [total.pillar, total]),
+    );
+    const severityCounts: Record<ViolationSeverity, number> = {
+      RINGAN: 0,
+      SEDANG: 0,
+      BERAT: 0,
+      SANGAT_BERAT: 0,
+    };
+    for (const total of severityTotals) {
+      if (total.severity !== null) {
+        severityCounts[total.severity] = total._count._all;
+      }
     }
 
     response.json({
@@ -694,7 +732,25 @@ authRouter.get("/points", async (request, response) => {
       predicate: getScorePredicate(student.pointScore),
       activityPoints: activityTotals._sum.delta ?? 0,
       verifiedActivityCount: activityTotals._count._all,
-      changes: student.pointChanges,
+      changes: student.pointChanges.map((change) => ({
+        ...change,
+        followUp: change.severity
+          ? violationSeverityFollowUps[change.severity]
+          : null,
+      })),
+      pillars: (Object.entries(disciplinePillarLabels) as [
+        DisciplinePillar,
+        string,
+      ][]).map(([pillar, label]) => {
+        const total = pillarTotalsByPillar.get(pillar);
+        return {
+          pillar,
+          label,
+          violationCount: total?._count._all ?? 0,
+          pointsDeducted: Math.abs(total?._sum.delta ?? 0),
+        };
+      }),
+      severityCounts,
     });
   } catch (error) {
     console.error("Gagal memuat poin mahasiswa:", error);
@@ -734,6 +790,7 @@ authRouter.post("/points/adjust", async (request, response) => {
 
   const action = type as PointChangeAction;
   const rule = pointChangeRules[action];
+  const metadata = getPointChangeMetadata(rule.type);
   try {
     const result = await database.$transaction(
       async (transaction) => {
@@ -757,6 +814,8 @@ authRouter.post("/points/adjust", async (request, response) => {
           data: {
             studentId: student.id,
             type: rule.type,
+            pillar: metadata.pillar,
+            severity: metadata.severity,
             delta: appliedDelta,
             scoreAfter: score,
             reason: reason.trim(),

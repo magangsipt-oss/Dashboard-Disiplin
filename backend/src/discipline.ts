@@ -9,6 +9,7 @@ import {
   DisciplinePillar,
   JenisLaporan,
   JenisPembinaan,
+  PeranPenerima,
   Prisma,
   PrismaClient,
   StatusLaporan,
@@ -25,6 +26,12 @@ import {
 } from "./points";
 import { database, getSessionForRequest, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
+import {
+  buildReportNotificationTexts,
+  createReportNotifications,
+  isValidNimFormat,
+  resolveReportRoute,
+} from "./report-routing";
 
 const reportRouter = Router();
 const upload = multer({
@@ -87,6 +94,15 @@ function requireStudent(request: Request, response: Response): Session | null {
   const session = requireLogin(request, response);
   if (session && session.profile.role !== "mhs") {
     response.status(403).json({ message: "Fitur ini hanya tersedia untuk mahasiswa." });
+    return null;
+  }
+  return session;
+}
+
+function requireDosen(request: Request, response: Response): Session | null {
+  const session = requireLogin(request, response);
+  if (session && session.profile.role !== "dosen") {
+    response.status(403).json({ message: "Fitur ini hanya tersedia untuk dosen." });
     return null;
   }
   return session;
@@ -179,8 +195,14 @@ reportRouter.post(
       const severityUsulan = request.body.severityUsulan
         ? (request.body.severityUsulan as ViolationSeverity)
         : null;
+      const modeTerlapor = request.body.modeTerlapor;
+      const diketahui = modeTerlapor === "DIKETAHUI";
+      const terlaporNama =
+        diketahui && typeof request.body.terlaporNama === "string"
+          ? request.body.terlaporNama.trim().replace(/\s+/g, " ")
+          : "";
       const terlaporNim =
-        typeof request.body.terlaporNim === "string"
+        diketahui && typeof request.body.terlaporNim === "string"
           ? request.body.terlaporNim.trim()
           : "";
       const terlaporKeterangan =
@@ -202,10 +224,14 @@ reportRouter.post(
       if (
         !reportKinds.includes(jenis) ||
         !pillarValues.includes(pillar) ||
+        (modeTerlapor !== "DIKETAHUI" && modeTerlapor !== "TIDAK_DIKETAHUI") ||
         (request.body.aturanId && aturanId === null) ||
         (severityUsulan && !severityValues.includes(severityUsulan)) ||
-        (!terlaporNim && !terlaporKeterangan) ||
-        terlaporNim.length > 32 ||
+        (diketahui &&
+          (!terlaporNama ||
+            terlaporNama.length > 200 ||
+            !isValidNimFormat(terlaporNim))) ||
+        (!diketahui && terlaporKeterangan.length < 5) ||
         terlaporKeterangan.length > 500 ||
         !lokasi ||
         lokasi.length > 300 ||
@@ -216,6 +242,11 @@ reportRouter.post(
         !pernyataanBenar
       ) {
         response.status(400).json({ message: "Periksa kembali data laporan dan pernyataan kebenaran." });
+        return;
+      }
+
+      if (!request.file) {
+        response.status(400).json({ message: "Foto bukti wajib diunggah sebelum mengirim laporan." });
         return;
       }
 
@@ -230,25 +261,22 @@ reportRouter.post(
         }
       }
 
-      let buktiPath: string | null = null;
-      if (request.file) {
-        const isJpeg = request.file.mimetype === "image/jpeg";
-        const isPng = request.file.mimetype === "image/png";
-        if (!isJpeg && !isPng) {
-          response.status(400).json({ message: "Bukti hanya boleh berupa foto JPEG atau PNG." });
-          return;
-        }
-        const extension = isJpeg ? "jpg" : "png";
-        const fileName = `${randomBytes(18).toString("hex")}.${extension}`;
-        const normalizedImage = await sharp(request.file.buffer)
-          .rotate()
-          [isJpeg ? "jpeg" : "png"]()
-          .toBuffer();
-        await mkdir(evidenceDirectory, { recursive: true });
-        savedEvidencePath = resolve(evidenceDirectory, fileName);
-        await writeFile(savedEvidencePath, normalizedImage, { flag: "wx" });
-        buktiPath = `/uploads/evidence/${fileName}`;
+      const isJpeg = request.file.mimetype === "image/jpeg";
+      const isPng = request.file.mimetype === "image/png";
+      if (!isJpeg && !isPng) {
+        response.status(400).json({ message: "Bukti hanya boleh berupa foto JPEG atau PNG." });
+        return;
       }
+      const extension = isJpeg ? "jpg" : "png";
+      const fileName = `${randomBytes(18).toString("hex")}.${extension}`;
+      const normalizedImage = await sharp(request.file.buffer)
+        .rotate()
+        [isJpeg ? "jpeg" : "png"]()
+        .toBuffer();
+      await mkdir(evidenceDirectory, { recursive: true });
+      savedEvidencePath = resolve(evidenceDirectory, fileName);
+      await writeFile(savedEvidencePath, normalizedImage, { flag: "wx" });
+      const buktiPath = `/uploads/evidence/${fileName}`;
 
       const session = requireLogin(request, response);
       if (!session) {
@@ -256,25 +284,49 @@ reportRouter.post(
         return;
       }
       const kodePelacakan = createTrackingCode();
-      await database.laporan.create({
-        data: {
-          kodeHash: hashTrackingCode(kodePelacakan),
+      await database.$transaction(async (transaction) => {
+        const route = await resolveReportRoute(transaction, {
+          diketahui,
+          nama: terlaporNama,
+          nim: terlaporNim,
+        });
+        const laporan = await transaction.laporan.create({
+          data: {
+            kodeHash: hashTrackingCode(kodePelacakan),
+            jenis,
+            pillar,
+            aturanId,
+            severityUsulan,
+            terlaporNama: diketahui ? terlaporNama : null,
+            terlaporNim: diketahui ? terlaporNim : null,
+            terlaporKeterangan: terlaporKeterangan || null,
+            terlaporId: route.jalur === "TERIDENTIFIKASI" ? route.student.id : null,
+            jalur: route.jalur,
+            lokasi,
+            tanggalKejadian,
+            deskripsi,
+            buktiPath,
+            tanggalLapor: new Date(`${today}T00:00:00.000Z`),
+          },
+          select: { id: true },
+        });
+        const texts = buildReportNotificationTexts({
           jenis,
           pillar,
-          aturanId,
-          severityUsulan,
-          terlaporNim: terlaporNim || null,
-          terlaporKeterangan: terlaporKeterangan || null,
-          lokasi,
           tanggalKejadian,
-          deskripsi,
-          buktiPath,
-          tanggalLapor: new Date(`${today}T00:00:00.000Z`),
-        },
-        select: { id: true },
+          route,
+          terlaporNama: diketahui ? terlaporNama : null,
+          terlaporNim: diketahui ? terlaporNim : null,
+        });
+        await createReportNotifications(transaction, {
+          laporanId: laporan.id,
+          route,
+          texts,
+        });
       });
       response.status(201).json({ kodePelacakan });
-    } catch {
+    } catch (error) {
+      console.error("Gagal menyimpan laporan:", error);
       if (savedEvidencePath) {
         await unlink(savedEvidencePath).catch(() => undefined);
       }
@@ -548,6 +600,102 @@ reportRouter.patch("/mahasiswa/pemberitahuan/:id/dibaca", async (request, respon
   }
 });
 
+reportRouter.get("/dosen/pemberitahuan", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  try {
+    const pemberitahuan = await database.pemberitahuanStaf.findMany({
+      where: { peran: PeranPenerima.DOSEN, dosenId: session.profile.id },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: {
+        id: true,
+        judul: true,
+        isi: true,
+        tautanTab: true,
+        dibaca: true,
+        createdAt: true,
+        laporanId: true,
+      },
+    });
+    response.json({ pemberitahuan });
+  } catch (error) {
+    console.error("Gagal memuat pemberitahuan dosen:", error);
+    response.status(500).json({ message: "Pemberitahuan gagal dimuat." });
+  }
+});
+
+reportRouter.patch("/dosen/pemberitahuan/:id/dibaca", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  if (!id) {
+    response.status(400).json({ message: "ID pemberitahuan tidak valid." });
+    return;
+  }
+  try {
+    const result = await database.pemberitahuanStaf.updateMany({
+      where: { id, peran: PeranPenerima.DOSEN, dosenId: session.profile.id },
+      data: { dibaca: true },
+    });
+    if (result.count === 0) {
+      response.status(404).json({ message: "Pemberitahuan tidak ditemukan." });
+      return;
+    }
+    response.json({ message: "Pemberitahuan ditandai sudah dibaca." });
+  } catch (error) {
+    console.error("Gagal memperbarui status pemberitahuan dosen:", error);
+    response.status(500).json({ message: "Status pemberitahuan gagal diperbarui." });
+  }
+});
+
+reportRouter.get("/admin/pemberitahuan", async (request, response) => {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const pemberitahuan = await database.pemberitahuanStaf.findMany({
+      where: { peran: PeranPenerima.KEMAHASISWAAN },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        judul: true,
+        isi: true,
+        tautanTab: true,
+        dibaca: true,
+        createdAt: true,
+        laporanId: true,
+      },
+    });
+    response.json({ pemberitahuan });
+  } catch (error) {
+    console.error("Gagal memuat pemberitahuan kemahasiswaan:", error);
+    response.status(500).json({ message: "Pemberitahuan gagal dimuat." });
+  }
+});
+
+reportRouter.patch("/admin/pemberitahuan/:id/dibaca", async (request, response) => {
+  if (!requireAdmin(request, response)) return;
+  const id = parsePositiveInteger(request.params.id);
+  if (!id) {
+    response.status(400).json({ message: "ID pemberitahuan tidak valid." });
+    return;
+  }
+  try {
+    const result = await database.pemberitahuanStaf.updateMany({
+      where: { id, peran: PeranPenerima.KEMAHASISWAAN },
+      data: { dibaca: true },
+    });
+    if (result.count === 0) {
+      response.status(404).json({ message: "Pemberitahuan tidak ditemukan." });
+      return;
+    }
+    response.json({ message: "Pemberitahuan ditandai sudah dibaca." });
+  } catch (error) {
+    console.error("Gagal memperbarui status pemberitahuan kemahasiswaan:", error);
+    response.status(500).json({ message: "Status pemberitahuan gagal diperbarui." });
+  }
+});
+
 reportRouter.get("/admin/laporan", async (request, response) => {
   if (!requireAdmin(request, response)) return;
   const status = request.query.status;
@@ -576,7 +724,9 @@ reportRouter.get("/admin/laporan", async (request, response) => {
         pillar: true,
         aturanId: true,
         severityUsulan: true,
+        terlaporNama: true,
         terlaporNim: true,
+        jalur: true,
         terlaporKeterangan: true,
         lokasi: true,
         tanggalKejadian: true,
@@ -585,6 +735,7 @@ reportRouter.get("/admin/laporan", async (request, response) => {
         buktiPath: true,
         status: true,
         catatanUntukPelapor: true,
+        terlapor: { select: { id: true, nim: true, nama: true } },
         aturan: { select: { nama: true, severity: true, bobotPoin: true } },
       },
     });

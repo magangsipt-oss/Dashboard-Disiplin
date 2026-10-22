@@ -12,10 +12,12 @@ import {
 } from "./academic-import";
 import {
   calculatePointChange,
+  calculatePointChangeForDelta,
   disciplinePillarLabels,
   getPointChangeMetadata,
   getScorePredicate,
   pointChangeRules,
+  violationSeverityPointRanges,
   violationSeverityFollowUps,
   type DisciplinePillar,
   type ViolationSeverity,
@@ -678,6 +680,80 @@ authRouter.get("/advisor/students", async (request, response) => {
   }
 });
 
+authRouter.get("/admin/monitoring", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "admin") {
+    response.status(403).json({ message: "Hanya admin kemahasiswaan yang dapat melihat monitoring seluruh mahasiswa dan dosen." });
+    return;
+  }
+
+  try {
+    const [students, lecturers] = await Promise.all([
+      database.mahasiswa.findMany({
+        orderBy: { nama: "asc" },
+        select: {
+          id: true,
+          nim: true,
+          nama: true,
+          jurusan: true,
+          pointScore: true,
+          dosenPa: {
+            select: { id: true, nip: true, nama: true },
+          },
+          counselingRecords: {
+            orderBy: [{ counselingDate: "desc" }, { createdAt: "desc" }],
+            take: 5,
+            select: {
+              id: true,
+              type: true,
+              note: true,
+              counselingDate: true,
+              createdAt: true,
+              dosen: { select: { nama: true } },
+            },
+          },
+          pointChanges: {
+            where: { delta: { lt: 0 } },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              type: true,
+              pillar: true,
+              severity: true,
+              delta: true,
+              reason: true,
+              createdAt: true,
+            },
+          },
+        },
+      }),
+      database.dosen.findMany({
+        orderBy: { nama: "asc" },
+        select: {
+          id: true,
+          nip: true,
+          nama: true,
+          _count: {
+            select: {
+              mahasiswaBimbingan: true,
+              counselingRecords: true,
+            },
+          },
+        },
+      }),
+    ]);
+    response.json({ students, lecturers });
+  } catch (error) {
+    console.error("Gagal memuat monitoring kemahasiswaan:", error);
+    response.status(500).json({ message: "Data monitoring kemahasiswaan gagal dimuat." });
+  }
+});
+
 authRouter.get("/counseling", async (request, response) => {
   const session = getSessionForRequest(request, response);
   if (!session) {
@@ -930,7 +1006,13 @@ authRouter.post("/points/adjust", async (request, response) => {
     return;
   }
 
-  const { nim, type, reason } = request.body ?? {};
+  const { nim, type, reason, pillar, severity, deductionPoints } = request.body ?? {};
+  const isReportedViolation = type === "reported_violation";
+  const violationRange =
+    typeof severity === "string" &&
+    Object.prototype.hasOwnProperty.call(violationSeverityPointRanges, severity)
+      ? violationSeverityPointRanges[severity as ViolationSeverity]
+      : undefined;
   if (
     typeof nim !== "string" ||
     !/^\d+$/.test(nim) ||
@@ -938,20 +1020,38 @@ authRouter.post("/points/adjust", async (request, response) => {
     Number(nim) < 1 ||
     Number(nim) > 2_147_483_647 ||
     typeof type !== "string" ||
-    !Object.prototype.hasOwnProperty.call(pointChangeRules, type) ||
+    (!isReportedViolation &&
+      !Object.prototype.hasOwnProperty.call(pointChangeRules, type)) ||
     typeof reason !== "string" ||
     reason.trim().length === 0 ||
-    reason.trim().length > 500
+    reason.trim().length > 500 ||
+    (isReportedViolation &&
+      (typeof pillar !== "string" ||
+        !Object.prototype.hasOwnProperty.call(disciplinePillarLabels, pillar) ||
+        !violationRange ||
+        !Number.isSafeInteger(deductionPoints) ||
+        deductionPoints < violationRange.minimum ||
+        deductionPoints > violationRange.maximum))
   ) {
     response.status(400).json({
-      message: "NIM, jenis perubahan poin, dan catatan wajib diisi dengan benar.",
+      message:
+        "NIM, jenis perubahan poin, dan catatan wajib diisi dengan benar. Pengurangan pelanggaran harus mengikuti rentang tingkat yang dipilih.",
     });
     return;
   }
 
-  const action = type as PointChangeAction;
-  const rule = pointChangeRules[action];
-  const metadata = getPointChangeMetadata(rule.type);
+  const action = isReportedViolation ? null : (type as PointChangeAction);
+  const rule = action ? pointChangeRules[action] : null;
+  const changeType = rule?.type ?? "REPORTED_VIOLATION";
+  const metadata = isReportedViolation
+    ? getPointChangeMetadata("REPORTED_VIOLATION", {
+        pillar: pillar as DisciplinePillar,
+        severity: severity as ViolationSeverity,
+      })
+    : getPointChangeMetadata(changeType);
+  const requestedDelta = isReportedViolation
+    ? -(deductionPoints as number)
+    : rule!.delta;
   try {
     const result = await database.$transaction(
       async (transaction) => {
@@ -963,10 +1063,9 @@ authRouter.post("/points/adjust", async (request, response) => {
           return null;
         }
 
-        const { score, delta: appliedDelta } = calculatePointChange(
-          student.pointScore,
-          action,
-        );
+        const { score, delta: appliedDelta } = isReportedViolation
+          ? calculatePointChangeForDelta(student.pointScore, requestedDelta)
+          : calculatePointChange(student.pointScore, action!);
         await transaction.mahasiswa.update({
           where: { id: student.id },
           data: { pointScore: score },
@@ -974,7 +1073,7 @@ authRouter.post("/points/adjust", async (request, response) => {
         await transaction.pointChange.create({
           data: {
             studentId: student.id,
-            type: rule.type,
+            type: changeType,
             pillar: metadata.pillar,
             severity: metadata.severity,
             delta: appliedDelta,

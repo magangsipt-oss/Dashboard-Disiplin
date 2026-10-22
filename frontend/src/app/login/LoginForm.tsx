@@ -17,18 +17,18 @@ const roleDetails: Record<
   },
   dosen: {
     label: "Dosen PA",
-    identityLabel: "NIP atau NIDN",
-    identityPlaceholder: "Masukkan nomor identitas",
+    identityLabel: "Email Dosen",
+    identityPlaceholder: "Masukkan email Dosen",
   },
   admin: {
     label: "Admin Kemahasiswaan",
-    identityLabel: "NIP Kemahasiswaan",
-    identityPlaceholder: "Masukkan nomor identitas",
+    identityLabel: "Email Kemahasiswaan",
+    identityPlaceholder: "Masukkan email Kemahasiswaan",
   },
   akademik: {
     label: "Akademik",
-    identityLabel: "NIP Akademik",
-    identityPlaceholder: "Masukkan NIP Akademik",
+    identityLabel: "Email Akademik",
+    identityPlaceholder: "Masukkan email Akademik",
   },
 };
 
@@ -146,7 +146,7 @@ export default function LoginForm({ role }: { role: LoginRole }) {
             </label>
             <input
               id="identity"
-              type="text"
+              type={role === "mhs" ? "text" : "email"}
               required
               autoComplete="username"
               placeholder={details.identityPlaceholder}

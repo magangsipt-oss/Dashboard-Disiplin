@@ -29,7 +29,6 @@ export const database = new PrismaClient();
 const SESSION_COOKIE = "sidisiplin_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const SCRYPT_KEY_LENGTH = 64;
-const MAX_POSTGRES_BIGINT = 9_223_372_036_854_775_807n;
 const academicUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
@@ -118,13 +117,37 @@ async function verifyPassword(
   return { valid, needsUpgrade: valid };
 }
 
-function parseBigIntIdentity(value: string): bigint | null {
-  if (!/^\d+$/.test(value)) {
-    return null;
+type EmailLoginAccount = {
+  id: number;
+  email: string | null;
+  name: string;
+  password: string;
+  timestamp: Date;
+};
+
+async function findEmailLoginAccount(
+  table: "Dosen" | "Akademik" | "Kemahasiswaan",
+  identity: string,
+): Promise<EmailLoginAccount | null> {
+  const accounts = await database.$queryRaw<EmailLoginAccount[]>(
+    Prisma.sql`SELECT
+      "ID" AS "id",
+      "Email" AS "email",
+      "Nama" AS "name",
+      "Password" AS "password",
+      "Timestamp" AS "timestamp"
+    FROM public.${Prisma.raw(`"${table}"`)}
+    WHERE "Email" IS NOT NULL
+      AND btrim("Email") <> ''
+      AND lower(btrim("Email")) = lower(btrim(${identity}))
+    LIMIT 2`,
+  );
+
+  if (accounts.length > 1) {
+    throw new Error(`Email login tidak unik pada tabel "${table}".`);
   }
 
-  const identity = BigInt(value);
-  return identity > 0n && identity <= MAX_POSTGRES_BIGINT ? identity : null;
+  return accounts[0] ?? null;
 }
 
 async function findAccount(role: Role, identity: string): Promise<Account | null> {
@@ -160,91 +183,42 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
     };
   }
 
-  const numericIdentity = parseBigIntIdentity(identity);
-  if (numericIdentity === null) {
+  const table =
+    role === "dosen"
+      ? "Dosen"
+      : role === "admin"
+        ? "Kemahasiswaan"
+        : "Akademik";
+  const account = await findEmailLoginAccount(table, identity);
+  if (!account?.email) {
     return null;
   }
 
-  if (role === "dosen") {
-    const account = await database.dosen.findFirst({
-      where: {
-        OR: [{ nip: numericIdentity }, { nidn: numericIdentity }],
-      },
-    });
-    if (!account) {
-      return null;
-    }
-
-    const enteredNip = account.nip === numericIdentity;
-    return {
-      id: account.id,
-      name: account.nama,
-      password: account.password,
-      identity: String(enteredNip ? account.nip : account.nidn),
-      identityLabel: enteredNip ? "NIP" : "NIDN",
-      role,
-      roleLabel: "Dosen",
-      details: [
-        { label: "NIDN", value: String(account.nidn) },
-        { label: "NIP", value: String(account.nip) },
-      ],
-      createdAt: account.timestamp,
-      updatePassword: (password) =>
-        database.dosen.update({
-          where: { id: account.id },
-          data: { password },
-        }),
-    };
-  }
-
-  if (role === "akademik") {
-    const account = await database.akademik.findUnique({
-      where: { nip: numericIdentity },
-    });
-    if (!account) {
-      return null;
-    }
-
-    return {
-      id: account.id,
-      name: account.nama,
-      password: account.password,
-      identity: String(account.nip),
-      identityLabel: "NIP",
-      role,
-      roleLabel: "Akademik",
-      details: [{ label: "NIP", value: String(account.nip) }],
-      createdAt: account.timestamp,
-      updatePassword: (password) =>
-        database.akademik.update({
-          where: { id: account.id },
-          data: { password },
-        }),
-    };
-  }
-
-  const account = await database.kemahasiswaan.findUnique({
-    where: { nip: numericIdentity },
-  });
-  if (!account) {
-    return null;
-  }
-
+  const roleLabels: Record<"dosen" | "admin" | "akademik", string> = {
+    dosen: "Dosen",
+    admin: "Kemahasiswaan",
+    akademik: "Akademik",
+  };
   return {
     id: account.id,
-    name: account.nama,
+    name: account.name,
     password: account.password,
-    identity: String(account.nip),
-    identityLabel: "NIP",
+    identity: account.email,
+    identityLabel: "Email",
     role,
-    roleLabel: "Kemahasiswaan",
-    details: [{ label: "NIP", value: String(account.nip) }],
+    roleLabel: roleLabels[role],
+    details: [{ label: "Email", value: account.email }],
     createdAt: account.timestamp,
-    updatePassword: (password) =>
-      database.kemahasiswaan.update({
-        where: { id: account.id },
-        data: { password },
-      }),
+    updatePassword: async (password) => {
+      const updatedRows = await database.$executeRaw(
+        Prisma.sql`UPDATE public.${Prisma.raw(`"${table}"`)}
+        SET "Password" = ${password}
+        WHERE "ID" = ${account.id}`,
+      );
+      if (updatedRows !== 1) {
+        throw new Error(`Akun pada tabel "${table}" tidak lagi tersedia.`);
+      }
+    },
   };
 }
 

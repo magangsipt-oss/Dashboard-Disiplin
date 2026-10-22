@@ -14,8 +14,12 @@ type Snapshot = {
     id: number;
     nim: number;
     nama: string;
+    noHandphone: string | null;
+    email: string | null;
     password: string;
     jurusan: string;
+    angkatan: number | null;
+    namaSmta: string | null;
     pointScore: number;
     timestamp: string;
   }[];
@@ -39,6 +43,7 @@ type Snapshot = {
   }[];
   dosen: {
     id: number;
+    email: string | null;
     nidn: string;
     nip: string;
     nama: string;
@@ -47,7 +52,14 @@ type Snapshot = {
   }[];
   kemahasiswaan: {
     id: number;
-    nip: string;
+    email: string | null;
+    nama: string;
+    password: string;
+    timestamp: string;
+  }[];
+  akademik: {
+    id: number;
+    email: string | null;
     nama: string;
     password: string;
     timestamp: string;
@@ -134,8 +146,24 @@ function parseSnapshot(value: unknown): Snapshot {
       id: requireInteger(row.id, `${label}.id`),
       nim: requireInteger(row.nim, `${label}.nim`),
       nama: requireString(row.nama, `${label}.nama`),
+      noHandphone:
+        row.noHandphone === undefined || row.noHandphone === null
+          ? null
+          : requireString(row.noHandphone, `${label}.noHandphone`),
+      email:
+        row.email === undefined || row.email === null
+          ? null
+          : requireString(row.email, `${label}.email`),
       password: requireString(row.password, `${label}.password`),
       jurusan: requireString(row.jurusan, `${label}.jurusan`),
+      angkatan:
+        row.angkatan === undefined || row.angkatan === null
+          ? null
+          : requireInteger(row.angkatan, `${label}.angkatan`),
+      namaSmta:
+        row.namaSmta === undefined || row.namaSmta === null
+          ? null
+          : requireString(row.namaSmta, `${label}.namaSmta`),
       pointScore:
         row.pointScore === undefined
           ? 100
@@ -190,6 +218,10 @@ function parseSnapshot(value: unknown): Snapshot {
     const label = `dosen[${index}]`;
     return {
       id: requireInteger(row.id, `${label}.id`),
+      email:
+        row.email === undefined || row.email === null
+          ? null
+          : requireString(row.email, `${label}.email`),
       nidn: requireBigIntString(row.nidn, `${label}.nidn`),
       nip: requireBigIntString(row.nip, `${label}.nip`),
       nama: requireString(row.nama, `${label}.nama`),
@@ -202,12 +234,32 @@ function parseSnapshot(value: unknown): Snapshot {
     const label = `kemahasiswaan[${index}]`;
     return {
       id: requireInteger(row.id, `${label}.id`),
-      nip: requireBigIntString(row.nip, `${label}.nip`),
+      email:
+        row.email === undefined || row.email === null
+          ? null
+          : requireString(row.email, `${label}.email`),
       nama: requireString(row.nama, `${label}.nama`),
       password: requireString(row.password, `${label}.password`),
       timestamp: requireDateString(row.timestamp, `${label}.timestamp`),
     };
   });
+
+  const akademik =
+    data.akademik === undefined
+      ? []
+      : requireRows(data.akademik, "akademik").map((row, index) => {
+          const label = `akademik[${index}]`;
+          return {
+            id: requireInteger(row.id, `${label}.id`),
+            email:
+              row.email === undefined || row.email === null
+                ? null
+                : requireString(row.email, `${label}.email`),
+            nama: requireString(row.nama, `${label}.nama`),
+            password: requireString(row.password, `${label}.password`),
+            timestamp: requireDateString(row.timestamp, `${label}.timestamp`),
+          };
+        });
 
   return {
     formatVersion: 4,
@@ -217,16 +269,18 @@ function parseSnapshot(value: unknown): Snapshot {
     advisorRequests,
     dosen,
     kemahasiswaan,
+    akademik,
   };
 }
 
 async function exportData(): Promise<void> {
-  const [mahasiswa, pointChanges, advisorRequests, dosen, kemahasiswaan] = await Promise.all([
+  const [mahasiswa, pointChanges, advisorRequests, dosen, kemahasiswaan, akademik] = await Promise.all([
     prisma.mahasiswa.findMany(),
     prisma.pointChange.findMany(),
     prisma.advisorRequest.findMany(),
     prisma.dosen.findMany(),
     prisma.kemahasiswaan.findMany(),
+    prisma.akademik.findMany(),
   ]);
 
   const snapshot: Snapshot = {
@@ -253,7 +307,10 @@ async function exportData(): Promise<void> {
     })),
     kemahasiswaan: kemahasiswaan.map((row) => ({
       ...row,
-      nip: row.nip.toString(),
+      timestamp: row.timestamp.toISOString(),
+    })),
+    akademik: akademik.map((row) => ({
+      ...row,
       timestamp: row.timestamp.toISOString(),
     })),
   };
@@ -263,7 +320,7 @@ async function exportData(): Promise<void> {
     mode: 0o600,
   });
   console.log(
-    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${pointChanges.length} perubahan poin, ${advisorRequests.length} permohonan DPA, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan.`,
+    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${pointChanges.length} perubahan poin, ${advisorRequests.length} permohonan DPA, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan, ${akademik.length} akademik.`,
   );
   console.warn("File ini berisi data pribadi dan password. Jangan commit atau bagikan melalui kanal publik.");
 }
@@ -272,7 +329,7 @@ async function importData(): Promise<void> {
   const contents = await readFile(dataPath, "utf8");
   const snapshot = parseSnapshot(JSON.parse(contents) as unknown);
 
-  const [dosen, kemahasiswaan] = await Promise.all([
+  const [dosen, kemahasiswaan, akademik] = await Promise.all([
     prisma.dosen.createMany({
       data: snapshot.dosen.map((row) => ({
         ...row,
@@ -285,7 +342,13 @@ async function importData(): Promise<void> {
     prisma.kemahasiswaan.createMany({
       data: snapshot.kemahasiswaan.map((row) => ({
         ...row,
-        nip: BigInt(row.nip),
+        timestamp: new Date(row.timestamp),
+      })),
+      skipDuplicates: true,
+    }),
+    prisma.akademik.createMany({
+      data: snapshot.akademik.map((row) => ({
+        ...row,
         timestamp: new Date(row.timestamp),
       })),
       skipDuplicates: true,
@@ -319,10 +382,11 @@ async function importData(): Promise<void> {
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Permohonan_DPA"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Permohonan_DPA"), 1), EXISTS (SELECT 1 FROM public."Permohonan_DPA"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Dosen"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Dosen"), 1), EXISTS (SELECT 1 FROM public."Dosen"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Kemahasiswaan"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Kemahasiswaan"), 1), EXISTS (SELECT 1 FROM public."Kemahasiswaan"))`,
+    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Akademik"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Akademik"), 1), EXISTS (SELECT 1 FROM public."Akademik"))`,
   ]);
 
   console.log(
-    `Impor selesai. Baris baru: ${mahasiswa.count} mahasiswa, ${pointChanges.count} perubahan poin, ${advisorRequests.count} permohonan DPA, ${dosen.count} dosen, ${kemahasiswaan.count} kemahasiswaan. Baris duplikat dilewati.`,
+    `Impor selesai. Baris baru: ${mahasiswa.count} mahasiswa, ${pointChanges.count} perubahan poin, ${advisorRequests.count} permohonan DPA, ${dosen.count} dosen, ${kemahasiswaan.count} kemahasiswaan, ${akademik.count} akademik. Baris duplikat dilewati.`,
   );
 }
 

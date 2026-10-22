@@ -57,6 +57,14 @@ export const violationSeverityFollowUps: Record<ViolationSeverity, string> = {
     "Pembinaan edukatif ditetapkan Kemahasiswaan sesuai hasil verifikasi",
 };
 
+export const violationSeverityPointRanges: Partial<
+  Record<ViolationSeverity, { minimum: number; maximum: number }>
+> = {
+  RINGAN: { minimum: 5, maximum: 10 },
+  SEDANG: { minimum: 10, maximum: 20 },
+  BERAT: { minimum: 15, maximum: 30 },
+};
+
 export function getPointChangeMetadata(
   type: PointChangeType,
   selectedMetadata?: {

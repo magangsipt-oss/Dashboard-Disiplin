@@ -4,6 +4,7 @@ import {
   calculatePointChange,
   getPointChangeMetadata,
   getScorePredicate,
+  violationSeverityPointRanges,
   violationSeverityFollowUps,
 } from "../src/points";
 
@@ -78,4 +79,20 @@ test("all stored violation severities use educational follow-up guidance", () =>
     violationSeverityFollowUps.SANGAT_BERAT,
     violationSeverityFollowUps.BERAT,
   );
+});
+
+test("manual violation deductions use the configured severity ranges", () => {
+  assert.deepEqual(violationSeverityPointRanges.RINGAN, {
+    minimum: 5,
+    maximum: 10,
+  });
+  assert.deepEqual(violationSeverityPointRanges.SEDANG, {
+    minimum: 10,
+    maximum: 20,
+  });
+  assert.deepEqual(violationSeverityPointRanges.BERAT, {
+    minimum: 15,
+    maximum: 30,
+  });
+  assert.equal(violationSeverityPointRanges.SANGAT_BERAT, undefined);
 });

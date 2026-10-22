@@ -22,7 +22,6 @@ const severities = [
   { value: "RINGAN", label: "Ringan" },
   { value: "SEDANG", label: "Sedang" },
   { value: "BERAT", label: "Berat" },
-  { value: "SANGAT_BERAT", label: "Sangat Berat" },
 ];
 
 const initialForm = {

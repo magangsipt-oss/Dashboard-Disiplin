@@ -50,11 +50,11 @@ export const violationSeverityLabels: Record<ViolationSeverity, string> = {
 };
 
 export const violationSeverityFollowUps: Record<ViolationSeverity, string> = {
-  RINGAN: "Peringatan dan koreksi langsung",
-  SEDANG: "Pembinaan dan refleksi tertulis",
-  BERAT: "Penanganan formal sesuai peraturan kampus",
+  RINGAN: "Pembinaan edukatif proporsional sesuai pilar pelanggaran",
+  SEDANG: "Pembinaan edukatif, seperti refleksi tertulis, sesuai pilar",
+  BERAT: "Pembinaan edukatif ditetapkan Kemahasiswaan sesuai hasil verifikasi",
   SANGAT_BERAT:
-    "Penghentian aktivitas tidak aman dan penanganan segera",
+    "Pembinaan edukatif ditetapkan Kemahasiswaan sesuai hasil verifikasi",
 };
 
 export function getPointChangeMetadata(

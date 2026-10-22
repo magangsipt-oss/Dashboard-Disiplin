@@ -22,6 +22,7 @@ model Mahasiswa {
   timestamp         DateTime           @default(now()) @map("Timestamp")
   pointChanges      PointChange[]
   dosenPa           Dosen?             @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
+  laporanTerlapor   Laporan[]
   presensiAkademik  PresensiAkademik[]
   advisorRequest    AdvisorRequest?
   counselingRecords CounselingRecord[]
@@ -131,6 +132,17 @@ enum StatusLaporan {
   DITOLAK
 }
 
+enum JalurLaporan {
+  TERIDENTIFIKASI
+  TIDAK_TERDAFTAR
+  TIDAK_DIKETAHUI
+}
+
+enum PeranPenerima {
+  DOSEN
+  KEMAHASISWAAN
+}
+
 enum StatusSanggahan {
   DIAJUKAN
   DISETUJUI
@@ -169,8 +181,11 @@ model Laporan {
   pillar              DisciplinePillar
   aturanId            Int?
   severityUsulan      ViolationSeverity?
+  terlaporNama        String?            @db.VarChar(200)
   terlaporNim         String?            @db.VarChar(32)
   terlaporKeterangan  String?            @db.VarChar(500)
+  terlaporId          Int?
+  jalur               JalurLaporan       @default(TIDAK_DIKETAHUI)
   lokasi              String             @db.VarChar(300)
   tanggalKejadian     DateTime           @db.Date
   deskripsi           String             @db.VarChar(1000)
@@ -181,12 +196,15 @@ model Laporan {
   diverifikasiOlehId  Int?
   tanggalVerifikasi   DateTime?
   perubahanPoinId     Int?               @unique
+  terlapor            Mahasiswa?         @relation(fields: [terlaporId], references: [id], onDelete: SetNull)
   aturan              AturanPelanggaran? @relation(fields: [aturanId], references: [id], onDelete: SetNull)
   diverifikasiOleh    Akademik?           @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
   perubahanPoin       PointChange?       @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
+  pemberitahuanStaf   PemberitahuanStaf[]
 
   @@index([status, id])
   @@index([terlaporNim, status])
+  @@index([terlaporId, status])
 }
 
 model Sanggahan {
@@ -235,6 +253,22 @@ model Pemberitahuan {
   @@index([studentId, dibaca, createdAt])
 }
 
+model PemberitahuanStaf {
+  id        Int           @id @default(autoincrement())
+  peran     PeranPenerima
+  dosenId   Int?
+  laporanId Int?
+  judul     String        @db.VarChar(200)
+  isi       String        @db.VarChar(1000)
+  tautanTab String?       @db.VarChar(100)
+  dibaca    Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  dosen     Dosen?        @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+  laporan   Laporan?      @relation(fields: [laporanId], references: [id], onDelete: Cascade)
+
+  @@index([peran, dosenId, dibaca, createdAt])
+}
+
 model LogAudit {
   id        Int      @id @default(autoincrement())
   aktorId   Int
@@ -258,6 +292,7 @@ model Dosen {
   mahasiswaBimbingan Mahasiswa[]
   advisorRequests    AdvisorRequest[]
   counselingRecords  CounselingRecord[]
+  pemberitahuanStaf  PemberitahuanStaf[]
 
   @@map("Dosen")
 }

@@ -33,6 +33,14 @@ type Snapshot = {
     recordedByIdentity: string;
     createdAt: string;
   }[];
+  advisorRequests: {
+    id: number;
+    studentId: number;
+    dosenId: number;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    createdAt: string;
+    reviewedAt: string | null;
+  }[];
   dosen: {
     id: number;
     email: string | null;
@@ -107,6 +115,8 @@ function requirePointChangeType(
     "DISCIPLINE_VIOLATION",
     "COMPETITION",
     "NON_ACADEMIC_ACTIVITY",
+    "REPORTED_VIOLATION",
+    "POINT_RESTORATION",
   ] as const;
   if (
     typeof value !== "string" ||
@@ -182,6 +192,28 @@ function parseSnapshot(value: unknown): Snapshot {
         })
       : [];
 
+  const advisorRequests =
+    data.formatVersion >= 4
+      ? requireRows(data.advisorRequests, "advisorRequests").map((row, index) => {
+          const label = `advisorRequests[${index}]`;
+          const status = requireString(row.status, `${label}.status`);
+          if (status !== "PENDING" && status !== "APPROVED" && status !== "REJECTED") {
+            throw new Error(`${label}.status memiliki status permohonan yang tidak valid.`);
+          }
+          return {
+            id: requireInteger(row.id, `${label}.id`),
+            studentId: requireInteger(row.studentId, `${label}.studentId`),
+            dosenId: requireInteger(row.dosenId, `${label}.dosenId`),
+            status,
+            createdAt: requireDateString(row.createdAt, `${label}.createdAt`),
+            reviewedAt:
+              row.reviewedAt === null
+                ? null
+                : requireDateString(row.reviewedAt, `${label}.reviewedAt`),
+          };
+        })
+      : [];
+
   const dosen = requireRows(data.dosen, "dosen").map((row, index) => {
     const label = `dosen[${index}]`;
     return {
@@ -234,6 +266,7 @@ function parseSnapshot(value: unknown): Snapshot {
     exportedAt: requireDateString(data.exportedAt, "exportedAt"),
     mahasiswa,
     pointChanges,
+    advisorRequests,
     dosen,
     kemahasiswaan,
     akademik,
@@ -241,9 +274,10 @@ function parseSnapshot(value: unknown): Snapshot {
 }
 
 async function exportData(): Promise<void> {
-  const [mahasiswa, pointChanges, dosen, kemahasiswaan, akademik] = await Promise.all([
+  const [mahasiswa, pointChanges, advisorRequests, dosen, kemahasiswaan, akademik] = await Promise.all([
     prisma.mahasiswa.findMany(),
     prisma.pointChange.findMany(),
+    prisma.advisorRequest.findMany(),
     prisma.dosen.findMany(),
     prisma.kemahasiswaan.findMany(),
     prisma.akademik.findMany(),
@@ -259,6 +293,11 @@ async function exportData(): Promise<void> {
     pointChanges: pointChanges.map((row) => ({
       ...row,
       createdAt: row.createdAt.toISOString(),
+    })),
+    advisorRequests: advisorRequests.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      reviewedAt: row.reviewedAt?.toISOString() ?? null,
     })),
     dosen: dosen.map((row) => ({
       ...row,
@@ -281,7 +320,7 @@ async function exportData(): Promise<void> {
     mode: 0o600,
   });
   console.log(
-    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${pointChanges.length} perubahan poin, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan, ${akademik.length} akademik.`,
+    `Ekspor selesai dari dashboard_disiplin: ${mahasiswa.length} mahasiswa, ${pointChanges.length} perubahan poin, ${advisorRequests.length} permohonan DPA, ${dosen.length} dosen, ${kemahasiswaan.length} kemahasiswaan, ${akademik.length} akademik.`,
   );
   console.warn("File ini berisi data pribadi dan password. Jangan commit atau bagikan melalui kanal publik.");
 }
@@ -290,14 +329,7 @@ async function importData(): Promise<void> {
   const contents = await readFile(dataPath, "utf8");
   const snapshot = parseSnapshot(JSON.parse(contents) as unknown);
 
-  const [mahasiswa, dosen, kemahasiswaan, akademik] = await Promise.all([
-    prisma.mahasiswa.createMany({
-      data: snapshot.mahasiswa.map((row) => ({
-        ...row,
-        timestamp: new Date(row.timestamp),
-      })),
-      skipDuplicates: true,
-    }),
+  const [dosen, kemahasiswaan, akademik] = await Promise.all([
     prisma.dosen.createMany({
       data: snapshot.dosen.map((row) => ({
         ...row,
@@ -322,6 +354,13 @@ async function importData(): Promise<void> {
       skipDuplicates: true,
     }),
   ]);
+  const mahasiswa = await prisma.mahasiswa.createMany({
+    data: snapshot.mahasiswa.map((row) => ({
+      ...row,
+      timestamp: new Date(row.timestamp),
+    })),
+    skipDuplicates: true,
+  });
   const pointChanges = await prisma.pointChange.createMany({
     data: snapshot.pointChanges.map((row) => ({
       ...row,
@@ -329,16 +368,25 @@ async function importData(): Promise<void> {
     })),
     skipDuplicates: true,
   });
+  const advisorRequests = await prisma.advisorRequest.createMany({
+    data: snapshot.advisorRequests.map((row) => ({
+      ...row,
+      createdAt: new Date(row.createdAt),
+      reviewedAt: row.reviewedAt === null ? null : new Date(row.reviewedAt),
+    })),
+    skipDuplicates: true,
+  });
   await Promise.all([
-    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Mahasiswa"', 'id'), COALESCE((SELECT MAX(id) FROM public."Mahasiswa"), 1), EXISTS (SELECT 1 FROM public."Mahasiswa"))`,
+    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Mahasiswa"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Mahasiswa"), 1), EXISTS (SELECT 1 FROM public."Mahasiswa"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."PerubahanPoin"', 'id'), COALESCE((SELECT MAX(id) FROM public."PerubahanPoin"), 1), EXISTS (SELECT 1 FROM public."PerubahanPoin"))`,
-    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Dosen"', 'id'), COALESCE((SELECT MAX(id) FROM public."Dosen"), 1), EXISTS (SELECT 1 FROM public."Dosen"))`,
+    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Permohonan_DPA"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Permohonan_DPA"), 1), EXISTS (SELECT 1 FROM public."Permohonan_DPA"))`,
+    prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Dosen"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Dosen"), 1), EXISTS (SELECT 1 FROM public."Dosen"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Kemahasiswaan"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Kemahasiswaan"), 1), EXISTS (SELECT 1 FROM public."Kemahasiswaan"))`,
     prisma.$queryRaw`SELECT setval(pg_get_serial_sequence('"public"."Akademik"', 'ID'), COALESCE((SELECT MAX("ID") FROM public."Akademik"), 1), EXISTS (SELECT 1 FROM public."Akademik"))`,
   ]);
 
   console.log(
-    `Impor selesai. Baris baru: ${mahasiswa.count} mahasiswa, ${pointChanges.count} perubahan poin, ${dosen.count} dosen, ${kemahasiswaan.count} kemahasiswaan, ${akademik.count} akademik. Baris duplikat dilewati.`,
+    `Impor selesai. Baris baru: ${mahasiswa.count} mahasiswa, ${pointChanges.count} perubahan poin, ${advisorRequests.count} permohonan DPA, ${dosen.count} dosen, ${kemahasiswaan.count} kemahasiswaan, ${akademik.count} akademik. Baris duplikat dilewati.`,
   );
 }
 

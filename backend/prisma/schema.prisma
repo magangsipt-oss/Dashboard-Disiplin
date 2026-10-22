@@ -10,13 +10,17 @@ datasource db {
 model Mahasiswa {
   id                Int                @id @default(autoincrement()) @map("ID")
   nim               Int                @unique @map("NIM")
-  nama              String             @map("Nama")
+  nama              String             @map("Nama_Lengkap")
+  noHandphone       String?            @map("No_Handphone") @db.VarChar(30)
+  email             String?            @map("Email") @db.VarChar(255)
   password          String             @map("Password") @db.VarChar(255)
-  jurusan           String             @map("Jurusan")
+  jurusan           String             @map("PRODI")
+  angkatan          Int?               @map("Angkatan")
+  namaSmta          String?            @map("Nama_SMTA") @db.VarChar(255)
+  dosenPaId         Int?               @map("DPA_ID")
   pointScore        Int                @default(100) @map("Poin")
   timestamp         DateTime           @default(now()) @map("Timestamp")
   pointChanges      PointChange[]
-  dosenPaId         Int?               @map("DPA_ID")
   dosenPa           Dosen?             @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
   laporanTerlapor   Laporan[]
   presensiAkademik  PresensiAkademik[]
@@ -194,7 +198,7 @@ model Laporan {
   perubahanPoinId     Int?               @unique
   terlapor            Mahasiswa?         @relation(fields: [terlaporId], references: [id], onDelete: SetNull)
   aturan              AturanPelanggaran? @relation(fields: [aturanId], references: [id], onDelete: SetNull)
-  diverifikasiOleh    Kemahasiswaan?     @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
+  diverifikasiOleh    Akademik?           @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
   perubahanPoin       PointChange?       @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
   pemberitahuanStaf   PemberitahuanStaf[]
 
@@ -279,6 +283,7 @@ model LogAudit {
 
 model Dosen {
   id                 Int                @id @default(autoincrement()) @map("ID")
+  email              String?            @map("Email") @db.VarChar(255)
   nidn               BigInt             @unique @map("NIDN")
   nip                BigInt             @unique @map("NIP")
   nama               String             @map("Nama")
@@ -294,21 +299,21 @@ model Dosen {
 
 model Kemahasiswaan {
   id                  Int       @id @default(autoincrement()) @map("ID")
-  nip                 BigInt    @unique @map("NIP")
+  email               String?   @unique @map("Email") @db.VarChar(255)
   nama                String    @map("Nama")
   password            String    @map("Password") @db.VarChar(255)
   timestamp           DateTime  @default(now()) @map("Timestamp")
-  laporanDiverifikasi Laporan[]
 
   @@map("Kemahasiswaan")
 }
 
 model Akademik {
-  id        Int      @id @default(autoincrement()) @map("ID")
-  nip       BigInt   @unique @map("NIP")
-  nama      String   @map("Nama")
-  password  String   @map("Password") @db.VarChar(255)
-  timestamp DateTime @default(now()) @map("Timestamp")
+  id                  Int       @id @default(autoincrement()) @map("ID")
+  email               String?   @unique @map("Email") @db.VarChar(255)
+  nama                String    @map("Nama")
+  password            String    @map("Password") @db.VarChar(255)
+  timestamp           DateTime  @default(now()) @map("Timestamp")
+  laporanDiverifikasi Laporan[]
 
   @@map("Akademik")
 }

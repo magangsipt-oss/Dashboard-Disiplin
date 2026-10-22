@@ -117,4 +117,15 @@ mengimpor file ekspor data.
 
 Backend memuat konfigurasi dari `backend/.env`, termasuk saat perintah
 dijalankan dari folder lain. Halaman login dapat dibuka langsung melalui
-`/login?role=mhs`, `/login?role=dosen`, atau `/login?role=admin`.
+`/login?role=mhs`, `/login?role=dosen`, `/login?role=admin`, atau
+`/login?role=akademik`.
+
+Setelah login Akademik, menu **Upload Absensi** menerima CSV/XLSX dengan kolom
+`Mata_Kuliah`, `Kelas`, `NIM`, `Nama_Mahasiswa`, dan `Jumlah_Kehadiran`.
+Baris dengan kombinasi mata kuliah, kelas, dan NIM yang sudah ada akan dilewati.
+Menu **Pembagian Mahasiswa Bimbingan** menerima CSV/XLSX dengan kolom `NIM`
+dan `NIP`; setiap impor mengganti pembagian dosen PA sebelumnya, dan mahasiswa
+yang tidak tercantum akan menjadi tanpa dosen PA.
+
+Untuk menyiapkan tabel penyimpanan absensi pada database yang dikonfigurasi,
+jalankan `npm.cmd run prisma:push` dari folder `backend`.

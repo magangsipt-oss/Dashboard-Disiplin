@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, GraduationCap, ShieldCheck } from "lucide-react";
+import { ArrowLeft, BookOpen, GraduationCap, ShieldCheck } from "lucide-react";
 
-export type LoginRole = "mhs" | "dosen" | "admin";
+export type LoginRole = "mhs" | "dosen" | "admin" | "akademik";
 
 const roleDetails: Record<
   LoginRole,
@@ -25,6 +25,11 @@ const roleDetails: Record<
     identityLabel: "NIP Kemahasiswaan",
     identityPlaceholder: "Masukkan nomor identitas",
   },
+  akademik: {
+    label: "Akademik",
+    identityLabel: "NIP Akademik",
+    identityPlaceholder: "Masukkan NIP Akademik",
+  },
 };
 
 export default function LoginForm({ role }: { role: LoginRole }) {
@@ -34,7 +39,12 @@ export default function LoginForm({ role }: { role: LoginRole }) {
   const [error, setError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const details = roleDetails[role];
-  const RoleIcon = role === "dosen" ? GraduationCap : ShieldCheck;
+  const RoleIcon =
+    role === "dosen"
+      ? GraduationCap
+      : role === "akademik"
+        ? BookOpen
+        : ShieldCheck;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,7 +122,9 @@ export default function LoginForm({ role }: { role: LoginRole }) {
           ) : (
             <RoleIcon
               aria-hidden="true"
-              className="mx-auto mb-2.5 h-9 w-9 text-orange-700"
+              className={`mx-auto mb-2.5 h-9 w-9 ${
+                role === "akademik" ? "text-red-800" : "text-orange-700"
+              }`}
               strokeWidth={1.8}
             />
           )}

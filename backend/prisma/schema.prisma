@@ -18,6 +18,7 @@ model Mahasiswa {
   pointChanges      PointChange[]
   dosenPaId         Int?               @map("DPA_ID")
   dosenPa           Dosen?             @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
+  presensiAkademik  PresensiAkademik[]
   advisorRequest    AdvisorRequest?
   counselingRecords CounselingRecord[]
   sanggahans        Sanggahan[]
@@ -265,4 +266,29 @@ model Kemahasiswaan {
   laporanDiverifikasi Laporan[]
 
   @@map("Kemahasiswaan")
+}
+
+model Akademik {
+  id        Int      @id @default(autoincrement()) @map("ID")
+  nip       BigInt   @unique @map("NIP")
+  nama      String   @map("Nama")
+  password  String   @map("Password") @db.VarChar(255)
+  timestamp DateTime @default(now()) @map("Timestamp")
+
+  @@map("Akademik")
+}
+
+model PresensiAkademik {
+  id               Int       @id @default(autoincrement()) @map("ID")
+  mataKuliah       String    @map("Mata_Kuliah")
+  kelas            String    @map("Kelas")
+  nim              Int       @map("NIM")
+  namaMahasiswa    String    @map("Nama_Mahasiswa")
+  jumlahKehadiran  Int       @map("Jumlah_Kehadiran")
+  timestamp        DateTime  @default(now()) @map("Timestamp")
+  mahasiswa        Mahasiswa @relation(fields: [nim], references: [nim], onDelete: Cascade)
+
+  @@unique([mataKuliah, kelas, nim])
+  @@index([mataKuliah, kelas])
+  @@map("PresensiAkademik")
 }

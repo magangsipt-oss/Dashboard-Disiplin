@@ -5,10 +5,10 @@ import { Bell, CheckCircle2, ClipboardCheck, Clock3 } from "lucide-react";
 import { studentApi } from "./api";
 
 const stages = [
-  { label: "Standarisasi", description: "Memahami aturan dan standar disiplin kampus." },
-  { label: "Pembiasaan", description: "Membangun kebiasaan disiplin dalam kegiatan sehari-hari." },
-  { label: "Monitoring", description: "Memantau kedisiplinan melalui sumber data yang tersedia." },
-  { label: "Pembinaan", description: "Menjalani pembinaan bila ada tindak lanjut aktif." },
+  { label: "Laporan dan bukti", description: "Pelanggaran dilaporkan dengan bukti pendukung." },
+  { label: "Verifikasi dan konfirmasi", description: "Prodi memverifikasi laporan; DPA mengonfirmasi kepada mahasiswa." },
+  { label: "Pembinaan edukatif", description: "Jika pelanggaran terbukti, Kemahasiswaan menetapkan pembinaan." },
+  { label: "Penyelesaian dan monitoring", description: "Mahasiswa menyelesaikan tugas dan statusnya dipantau." },
 ];
 
 export default function AktivitasMahasiswa({ onNavigate }) {
@@ -40,9 +40,26 @@ export default function AktivitasMahasiswa({ onNavigate }) {
     };
   }, []);
 
-  const isInCoaching =
-    training.some((item) => item.status === "DIMINTA" || item.status === "DIKIRIM");
-  const currentStage = isInCoaching ? "Pembinaan" : "Pembiasaan";
+  const activeTraining = training.find((item) =>
+    ["DIMINTA", "DIKIRIM", "DITOLAK"].includes(item.status),
+  );
+  const currentTraining = activeTraining ?? training[0] ?? null;
+  const currentStage = !currentTraining
+    ? "Tidak ada tugas pembinaan aktif"
+    : currentTraining.status === "DIMINTA"
+      ? "Pembinaan edukatif"
+      : currentTraining.status === "DIKIRIM"
+        ? "Monitoring penyelesaian"
+        : currentTraining.status === "DITOLAK"
+          ? "Perlu perbaikan"
+          : "Pembinaan selesai";
+  const activeStageIndex = !currentTraining
+    ? -1
+    : currentTraining.status === "DIKIRIM"
+      ? 3
+      : currentTraining.status === "DISETUJUI"
+        ? stages.length
+        : 2;
 
   async function openNotification(notification) {
     if (!notification.dibaca) {
@@ -114,8 +131,8 @@ export default function AktivitasMahasiswa({ onNavigate }) {
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><ClipboardCheck className="h-5 w-5" /></div>
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Tahapan Pembinaan Saya</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Siklus budaya disiplin mahasiswa.</p>
+            <h3 className="text-lg font-bold text-slate-900">Alur Penanganan Pelanggaran</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Tahapan sesuai skema budaya disiplin kampus.</p>
           </div>
         </div>
         {isLoading ? (
@@ -129,8 +146,8 @@ export default function AktivitasMahasiswa({ onNavigate }) {
             </p>
             <ol className="mt-4 grid gap-2 sm:grid-cols-2">
               {stages.map((stage, index) => {
-                const active = stage.label === currentStage;
-                const complete = stages.findIndex((item) => item.label === currentStage) > index;
+                const active = activeStageIndex === index;
+                const complete = activeStageIndex > index;
                 return (
                   <li key={stage.label} className={`rounded-xl border p-3 ${active ? "border-red-200 bg-rose-50" : complete ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50"}`}>
                     <div className="flex items-center gap-2">
@@ -142,7 +159,9 @@ export default function AktivitasMahasiswa({ onNavigate }) {
                 );
               })}
             </ol>
-            <p className="mt-3 text-xs text-slate-500">Indikator monitoring seperti kehadiran dan kebersihan menunggu integrasi sumber data kampus.</p>
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">
+              Skema menetapkan tugas pembinaan selesai maksimal 14 hari. Jika ada tugas aktif, tenggatnya mengikuti instruksi pembinaan.
+            </p>
           </>
         )}
       </section>

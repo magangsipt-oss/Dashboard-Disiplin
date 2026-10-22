@@ -16,7 +16,7 @@ const severityLabels = {
   RINGAN: { label: "Ringan", badge: "bg-amber-100 text-amber-800" },
   SEDANG: { label: "Sedang", badge: "bg-orange-100 text-orange-800" },
   BERAT: { label: "Berat", badge: "bg-red-100 text-red-800" },
-  SANGAT_BERAT: { label: "Sangat Berat", badge: "bg-red-800 text-white" },
+  SANGAT_BERAT: { label: "Berat", badge: "bg-red-100 text-red-800" },
 };
 
 const statusLabels = {

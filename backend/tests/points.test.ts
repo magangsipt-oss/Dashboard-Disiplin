@@ -4,6 +4,7 @@ import {
   calculatePointChange,
   getPointChangeMetadata,
   getScorePredicate,
+  violationSeverityFollowUps,
 } from "../src/points";
 
 test("score predicates honor the configured threshold boundaries", () => {
@@ -67,4 +68,14 @@ test("point change metadata maps violations to the proposed pillars and levels",
     pillar: null,
     severity: null,
   });
+});
+
+test("all stored violation severities use educational follow-up guidance", () => {
+  assert.match(violationSeverityFollowUps.RINGAN, /Pembinaan edukatif/);
+  assert.match(violationSeverityFollowUps.SEDANG, /Pembinaan edukatif/);
+  assert.match(violationSeverityFollowUps.BERAT, /Kemahasiswaan/);
+  assert.equal(
+    violationSeverityFollowUps.SANGAT_BERAT,
+    violationSeverityFollowUps.BERAT,
+  );
 });

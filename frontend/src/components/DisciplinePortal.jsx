@@ -43,11 +43,20 @@ const disciplinePillars = [
 ];
 
 const violationSeverities = [
-  { severity: 'RINGAN', label: 'Ringan', followUp: 'Peringatan dan koreksi langsung', badge: 'bg-amber-100 text-amber-800' },
-  { severity: 'SEDANG', label: 'Sedang', followUp: 'Pembinaan dan refleksi tertulis', badge: 'bg-orange-100 text-orange-800' },
-  { severity: 'BERAT', label: 'Berat', followUp: 'Penanganan formal sesuai peraturan kampus', badge: 'bg-red-100 text-red-800' },
-  { severity: 'SANGAT_BERAT', label: 'Sangat Berat', followUp: 'Penghentian aktivitas tidak aman dan penanganan segera', badge: 'bg-red-800 text-white' },
+  { severity: 'RINGAN', label: 'Ringan', pointRange: '5–10', followUp: 'Pembinaan edukatif sesuai pilar pelanggaran', badge: 'bg-amber-100 text-amber-800' },
+  { severity: 'SEDANG', label: 'Sedang', pointRange: '10–20', followUp: 'Pembinaan edukatif, termasuk refleksi sesuai pilar', badge: 'bg-orange-100 text-orange-800' },
+  { severity: 'BERAT', label: 'Berat', pointRange: '15–30', followUp: 'Pembinaan edukatif ditetapkan Kemahasiswaan', badge: 'bg-red-100 text-red-800' },
 ];
+
+const severityPointDeductions = {
+  RINGAN: ['5', '10', '5', '10', '5'],
+  SEDANG: ['10', '15', '10', '20', '10'],
+  BERAT: ['15', '25', '15', '30', '15'],
+};
+
+const severityLegacyCount = {
+  BERAT: 'SANGAT_BERAT',
+};
 
 const pointChangeTypeLabels = {
   LATE: 'Terlambat',
@@ -131,20 +140,23 @@ export default function App() {
     dosen: [
       { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
       { id: 'konseling', label: 'Catatan & Konseling' },
+      { id: 'lapor', label: 'Lapor Satgas' },
     ],
     admin: [
       { id: 'dashboard', label: 'Ringkasan' },
+      { id: 'lapor', label: 'Lapor Satgas' },
       { id: 'sanggah', label: 'Sanggah Presensi' },
       { id: 'verifikasi', label: 'Verifikasi Klaim' },
       { id: 'kelulusan', label: 'SKPI & Kelulusan' },
       { id: 'aturan', label: 'Aturan Poin' },
       { id: 'redemption', label: 'Pemulihan Poin' },
-      { id: 'sinkronisasi', label: 'Sinkronisasi e-Campus' },
+      { id: 'sinkronisasi', label: 'Data Presensi' },
       { id: 'users', label: 'Manajemen User' },
       { id: 'maintenance', label: 'Pemeliharaan' },
     ],
     akademik: [
       { id: 'dashboard', label: 'Dashboard Akademik' },
+      { id: 'lapor', label: 'Lapor Satgas' },
       { id: 'upload-absensi', label: 'Upload Absensi' },
       { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan' },
     ],
@@ -554,7 +566,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <h1 className="font-extrabold text-slate-900 text-lg leading-none tracking-tight">Poltek Simas Berau</h1>
+                  <h1 className="font-extrabold text-slate-900 text-lg leading-none tracking-tight">SIGMA</h1>
                   <p className="text-xs text-slate-500 mt-0.5 font-medium">Politeknik Sinar Mas Berau Coal — Tanjung Redeb, Berau</p>
                 </div>
               </div>
@@ -627,7 +639,7 @@ export default function App() {
                 Portal Kedisiplinan & Integrasi SKPI Mahasiswa
               </h2>
               <p data-scroll-reveal data-reveal="text" data-reveal-delay="160" className="mt-2 text-slate-100 max-w-2xl text-sm sm:text-base leading-relaxed">
-                Selamat datang di portal pemantauan kedisiplinan Politeknik Sinar Mas Berau Coal. Sistem ini menyajikan rekam jejak presensi yang bersumber dari e-Campus serta poin kegiatan non-akademik.
+                Selamat datang di portal pemantauan kedisiplinan Politeknik Sinar Mas Berau Coal. Sistem ini menyajikan rekam jejak presensi yang diunggah tim akademik melalui file Excel/CSV serta poin kegiatan non-akademik.
               </p>
             </div>
           </div>
@@ -669,7 +681,7 @@ export default function App() {
                     </div>
                     <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Mahasiswa</h4>
                     <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Cek rekam jejak kedisiplinan dan presensi e-Campus, ajukan sanggah, serta klaim poin kegiatan non-akademik.
+                      Cek rekam jejak kedisiplinan dan presensi yang diunggah tim akademik, ajukan sanggah, serta klaim poin kegiatan non-akademik.
                     </p>
                   </div>
                   <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
@@ -750,13 +762,13 @@ export default function App() {
             <div className="max-w-5xl mx-auto">
               <div className="max-w-3xl">
                 <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-red-800">
-                  <HelpCircle className="h-4 w-4" /> Tentang SiDisiplin
+                  <HelpCircle className="h-4 w-4" /> Tentang SIGMA
                 </span>
                 <h2 data-scroll-reveal data-reveal="text" className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                  Apa itu Website SiDisiplin?
+                  Apa itu SIGMA?
                 </h2>
                 <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
-                  SiDisiplin adalah portal informasi kedisiplinan Politeknik Sinar Mas Berau Coal. Website ini dirancang untuk membantu mahasiswa, dosen pembimbing akademik, dan pihak kemahasiswaan mengakses informasi presensi, catatan kedisiplinan, kegiatan non-akademik, serta bimbingan dalam satu tempat.
+                  SIGMA adalah portal informasi kedisiplinan Politeknik Sinar Mas Berau Coal. Website ini dirancang untuk membantu mahasiswa, dosen pembimbing akademik, dan pihak kemahasiswaan mengakses informasi presensi, catatan kedisiplinan, kegiatan non-akademik, serta bimbingan dalam satu tempat.
                 </p>
               </div>
 
@@ -767,7 +779,7 @@ export default function App() {
                     <h3 data-scroll-reveal data-reveal="text" className="mt-1 text-lg font-extrabold sm:text-xl">Informasi kedisiplinan dalam satu alur</h3>
                   </div>
                   <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-red-100">
-                    Ringkasan use case SiDisiplin
+                    Ringkasan use case SIGMA
                   </span>
                 </div>
                 <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
@@ -775,8 +787,8 @@ export default function App() {
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-800">
                       <FileText className="h-5 w-5" />
                     </div>
-                    <p data-scroll-reveal data-reveal="text" className="mt-3 text-sm font-bold">Presensi e-Campus</p>
-                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-1 text-xs leading-relaxed text-red-100">Sumber catatan kehadiran perkuliahan</p>
+                    <p data-scroll-reveal data-reveal="text" className="mt-3 text-sm font-bold">Impor data presensi</p>
+                    <p data-scroll-reveal data-reveal-delay="80" className="mt-1 text-xs leading-relaxed text-red-100">Tim akademik mengunggah file Excel/CSV melalui Akses Akademik</p>
                   </div>
                   <ArrowRight className="mx-auto hidden h-5 w-5 text-amber-300 md:block" />
                   <div data-scroll-reveal data-reveal="left" data-reveal-delay="80" className="rounded-2xl border border-white/15 bg-white/10 p-4">
@@ -812,7 +824,7 @@ export default function App() {
                   </div>
                   <h3 className="font-bold text-slate-900">Pantau presensi</h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    Mahasiswa dapat melihat presensi yang disinkronkan dari e-Campus dan mengajukan sanggahan jika ada catatan yang perlu ditinjau.
+                    Mahasiswa dapat melihat presensi yang diunggah tim akademik melalui Akses Akademik dan mengajukan sanggahan jika ada catatan yang perlu ditinjau.
                   </p>
                 </div>
                 <div data-scroll-reveal data-reveal="zoom" data-reveal-delay="160" className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -867,7 +879,7 @@ export default function App() {
                   <div className="mt-5 space-y-3">
                     <div className="flex gap-3 rounded-xl bg-emerald-50/80 p-3">
                       <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-                      <p className="text-sm leading-relaxed text-slate-700"><strong>Presensi tepat waktu</strong><br />Kehadiran kuliah atau praktikum yang tercatat di e-Campus dan diproses sesuai aturan kampus.</p>
+                      <p className="text-sm leading-relaxed text-slate-700"><strong>Presensi tepat waktu</strong><br />Kehadiran kuliah atau praktikum dari file presensi Excel/CSV yang diunggah tim akademik dan diproses sesuai aturan kampus.</p>
                     </div>
                     <div className="flex gap-3 rounded-xl bg-emerald-50/80 p-3">
                       <Award className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
@@ -915,7 +927,7 @@ export default function App() {
                 </div>
                 <div className="flex-1">
                   <p className="font-bold text-slate-900">Alur pembaruan skor</p>
-                  <p className="mt-1 text-sm text-slate-600">Catatan presensi e-Campus dan poin kegiatan yang disetujui menjadi bahan perhitungan rekam jejak kedisiplinan.</p>
+                  <p className="mt-1 text-sm text-slate-600">Catatan presensi dari file Excel/CSV yang diunggah tim akademik dan poin kegiatan yang disetujui menjadi bahan perhitungan rekam jejak kedisiplinan.</p>
                 </div>
                 <div className="flex items-center gap-2 self-start rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 sm:self-auto">
                   <span>Catatan</span><ArrowRight className="h-4 w-4" /><span>Verifikasi</span><ArrowRight className="h-4 w-4" /><span>Skor</span>
@@ -978,7 +990,7 @@ export default function App() {
           </section>
 
           <footer className="bg-slate-950 text-slate-400 py-6 text-center text-xs border-t border-slate-800 relative z-20">
-            © 2026 Politeknik Sinar Mas Berau Coal — Sistem Informasi Kedisiplinan Mahasiswa (SiDisiplin)
+            © 2026 Politeknik Sinar Mas Berau Coal — SIGMA
           </footer>
         </div>
       )}
@@ -1008,7 +1020,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <h1 className="font-bold text-lg leading-tight tracking-tight">SiDisiplin PSB</h1>
+                    <h1 className="font-bold text-lg leading-tight tracking-tight">SIGMA</h1>
                     <p className="text-xs text-red-200">Politeknik Sinar Mas Berau Coal</p>
                   </div>
                 </div>
@@ -1050,7 +1062,13 @@ export default function App() {
               </div>
             </header>
 
-            {authenticatedUser?.role === 'mhs' && (
+            {activeTab === 'lapor' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
+                <LaporSatgas />
+              </main>
+            )}
+
+            {authenticatedUser?.role === 'mhs' && activeTab !== 'lapor' && (
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
               <div data-scroll-reveal className="bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-red-600/30">
                 <div className="space-y-2 z-10">
@@ -1140,7 +1158,7 @@ export default function App() {
                   </div>
                   <div className="mt-3 space-y-1">
                     <div className="flex justify-between text-xs text-slate-600">
-                      <span>Sumber data: e-Campus</span>
+                      <span>Sumber data: unggahan Excel/CSV tim akademik</span>
                     </div>
                   </div>
                 </div>
@@ -1247,13 +1265,17 @@ export default function App() {
                       <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Data tingkat pelanggaran belum tersedia.</p>
                     ) : (
                       <div className="space-y-3">
-                        {violationSeverities.map(({ severity, label, followUp, badge }) => (
+                        {violationSeverities.map(({ severity, label, pointRange, followUp, badge }) => (
                           <div key={severity} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
                               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${badge}`}>{label}</span>
-                              <span className="text-sm font-semibold text-slate-800">{studentPoints.severityCounts[severity] ?? 0} pelanggaran</span>
+                              <span className="text-sm font-semibold text-slate-800">
+                                {(studentPoints.severityCounts[severity] ?? 0) + (severityLegacyCount[severity] ? (studentPoints.severityCounts[severityLegacyCount[severity]] ?? 0) : 0)} pelanggaran
+                              </span>
                             </div>
-                            <p className="text-xs text-slate-600">{followUp}</p>
+                            <p className="text-xs text-slate-600">
+                              Potongan {pointRange} poin, tergantung pilar · {followUp}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -1279,29 +1301,50 @@ export default function App() {
                           </div>
                         ))}
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                          <thead className="border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
-                            <tr><th className="py-2 pr-4">Tingkat</th><th className="py-2">Tindak lanjut</th></tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {violationSeverities.map(({ severity, label, followUp, badge }) => (
-                              <tr key={severity}>
-                                <td className="py-3 pr-4"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${badge}`}>{label}</span></td>
-                                <td className="py-3 text-xs text-slate-600">{followUp}</td>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800">Pengurangan poin per pilar</h4>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Acuan skema; pengurangan aktual mengikuti bobot aturan yang digunakan saat verifikasi.
+                        </p>
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="w-full min-w-[760px] text-left text-xs">
+                            <thead className="border-b border-slate-200 font-bold text-slate-600">
+                              <tr>
+                                <th scope="col" className="py-2 pr-3">Tingkat</th>
+                                {disciplinePillars.map(({ pillar, label }) => (
+                                  <th scope="col" key={pillar} className="px-2 py-2 text-center">{label.replace('Disiplin ', '')}</th>
+                                ))}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {violationSeverities.map(({ severity, label, badge }) => (
+                                <tr key={severity}>
+                                  <th scope="row" className="py-3 pr-3 font-medium">
+                                    <span className={`inline-flex rounded-full px-3 py-1 font-bold ${badge}`}>{label}</span>
+                                  </th>
+                                  {severityPointDeductions[severity].map((points, index) => (
+                                    <td key={disciplinePillars[index].pillar} className="px-2 py-3 text-center text-slate-700">
+                                      −{points} poin
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                          Pelanggaran berulang dapat dikenai tambahan pengurangan 5–10 poin sesuai hasil pembinaan dan keputusan kampus.
+                        </p>
                       </div>
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+                        Pelanggaran yang terbukti ditindaklanjuti dengan pembinaan edukatif oleh Kemahasiswaan. Skema menetapkan penyelesaian maksimal 14 hari; ikuti tenggat pada tugas yang diberikan.
+                      </p>
                     </div>
                   </details>
 
                   <AktivitasMahasiswa onNavigate={(tab) => setActiveTab(tab)} />
                 </>
               )}
-
-              {activeTab === 'lapor' && <LaporSatgas />}
 
               {activeTab === 'tindak-lanjut' && (
                 <TindakLanjut
@@ -1337,7 +1380,7 @@ export default function App() {
                     <p className="text-xs text-slate-500 mt-0.5">
                       {activeTab === 'dashboard'
                         ? 'Riwayat perubahan skor dari pelanggaran dan kegiatan yang telah diverifikasi.'
-                        : 'Sumber presensi yang direncanakan: e-Campus. Sinkronisasi belum aktif.'}
+                        : 'Sumber presensi: file Excel/CSV yang akan diunggah tim akademik melalui Akses Akademik.'}
                     </p>
                   </div>
 
@@ -1432,7 +1475,7 @@ export default function App() {
                           <td colSpan={5} className="px-4 py-10 text-center">
                             <p className="font-semibold text-slate-700">Belum ada rekam jejak untuk ditampilkan</p>
                             <p className="mt-1 text-xs text-slate-500">
-                              Presensi akan dimuat dari e-Campus setelah integrasi API tersedia.
+                              Presensi akan tersedia setelah tim akademik mengunggah file Excel/CSV melalui Akses Akademik.
                             </p>
                           </td>
                         </tr>
@@ -1447,7 +1490,7 @@ export default function App() {
             </main>
             )}
 
-            {authenticatedUser?.role === 'akademik' && (
+            {authenticatedUser?.role === 'akademik' && activeTab !== 'lapor' && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
@@ -1589,7 +1632,7 @@ export default function App() {
               </main>
             )}
 
-            {authenticatedUser?.role === 'dosen' && (
+            {authenticatedUser?.role === 'dosen' && activeTab !== 'lapor' && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl md:flex-row md:items-center sm:p-8">
                   <div className="z-10 space-y-2">
@@ -1626,7 +1669,7 @@ export default function App() {
                 </section>
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-                  Data presensi e-Campus masih menunggu integrasi.
+                  Data presensi akan tersedia setelah tim akademik mengunggah file Excel/CSV melalui Akses Akademik.
                 </p>
 
                 <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -1878,12 +1921,12 @@ export default function App() {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && (
+            {authenticatedUser?.role === 'admin' && activeTab !== 'lapor' && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
                   <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
-                    Panel Verifikasi & Pengelolaan SiDisiplin
+                    Panel Verifikasi & Pengelolaan SIGMA
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
                     Kelola sanggahan presensi, verifikasi klaim kegiatan, tinjau kelayakan SKPI, serta pantau integrasi dan administrasi sistem.
@@ -1891,7 +1934,7 @@ export default function App() {
                 </section>
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-                  Perubahan poin dapat dicatat pada menu Aturan Poin. Verifikasi klaim, sinkronisasi e-Campus, pemulihan, dan antrean administrasi lainnya belum tersedia melalui API.
+                  Perubahan poin dapat dicatat pada menu Aturan Poin. Fitur impor presensi Excel/CSV oleh tim akademik melalui Akses Akademik, verifikasi klaim, dan pemulihan belum tersedia.
                 </p>
 
                 <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -1921,7 +1964,7 @@ export default function App() {
                     {activeTab === 'kelulusan' && 'Tinjau skor kedisiplinan dan portofolio kegiatan, lalu siapkan rekap status kelulusan dan SKPI.'}
                     {activeTab === 'aturan' && 'Skor awal 100; terlambat −2, tidak hadir tanpa keterangan −5, pelanggaran tata tertib −10, lomba terverifikasi +10, dan kegiatan non-akademik terverifikasi +5. Skor dibatasi 0–200.'}
                     {activeTab === 'redemption' && 'Tinjau bukti tugas pemulihan mahasiswa dan catat keputusan serta poin pemulihan.'}
-                    {activeTab === 'sinkronisasi' && 'Pantau sinkronisasi presensi e-Campus, hasil pembaruan, dan catatan kegagalan API.'}
+                    {activeTab === 'sinkronisasi' && 'Tim akademik akan mengunggah data presensi dalam format Excel/CSV melalui Akses Akademik.'}
                     {activeTab === 'users' && 'Kelola akun, peran, status akses, dan permintaan reset kata sandi pengguna.'}
                     {activeTab === 'maintenance' && 'Pantau kesehatan sistem, log aktivitas, dan proses pemeliharaan atau backup.'}
                     {activeTab === 'dashboard' && 'Pilih menu untuk membuka antrean kerja dan fungsi administrasi yang dibutuhkan.'}
@@ -2073,7 +2116,7 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-lg">Formulir Sanggah Presensi e-Campus</h3>
+              <h3 className="font-extrabold text-slate-900 text-lg">Formulir Sanggah Presensi</h3>
               <button 
                 onClick={() => setShowSanggahModal(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
@@ -2088,7 +2131,7 @@ export default function App() {
                 <textarea
                   required
                   rows={3}
-                  placeholder="Jelaskan catatan presensi e-Campus yang ingin disanggah beserta kronologinya..."
+                  placeholder="Jelaskan catatan presensi yang ingin disanggah beserta kronologinya..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs"
                 ></textarea>
               </div>

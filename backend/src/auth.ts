@@ -2,8 +2,14 @@ import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import dotenv from "dotenv";
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { Prisma, PrismaClient } from "@prisma/client";
+import multer from "multer";
+import {
+  AcademicImportValidationError,
+  parseAcademicAttendanceFile,
+  parseAdvisorAssignmentFile,
+} from "./academic-import";
 import {
   calculatePointChange,
   disciplinePillarLabels,
@@ -24,12 +30,23 @@ const SESSION_COOKIE = "sidisiplin_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const SCRYPT_KEY_LENGTH = 64;
 const MAX_POSTGRES_BIGINT = 9_223_372_036_854_775_807n;
+const academicUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_request, file, callback) => {
+    if (!/\.(csv|xlsx)$/i.test(file.originalname)) {
+      callback(new Error("Format file harus CSV atau Excel (.xlsx)."));
+      return;
+    }
+    callback(null, true);
+  },
+});
 
 export const authDatabases = [
   { name: "dashboard_disiplin", client: database },
 ];
 
-export type Role = "mhs" | "dosen" | "admin";
+export type Role = "mhs" | "dosen" | "admin" | "akademik";
 
 type UserProfile = {
   id: number;
@@ -180,6 +197,32 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
     };
   }
 
+  if (role === "akademik") {
+    const account = await database.akademik.findUnique({
+      where: { nip: numericIdentity },
+    });
+    if (!account) {
+      return null;
+    }
+
+    return {
+      id: account.id,
+      name: account.nama,
+      password: account.password,
+      identity: String(account.nip),
+      identityLabel: "NIP",
+      role,
+      roleLabel: "Akademik",
+      details: [{ label: "NIP", value: String(account.nip) }],
+      createdAt: account.timestamp,
+      updatePassword: (password) =>
+        database.akademik.update({
+          where: { id: account.id },
+          data: { password },
+        }),
+    };
+  }
+
   const account = await database.kemahasiswaan.findUnique({
     where: { nip: numericIdentity },
   });
@@ -266,10 +309,53 @@ export function getSessionForRequest(
   return session;
 }
 
+function academicUploadFile(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): void {
+  academicUpload.single("file")(request, response, (error: unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+    if (error instanceof multer.MulterError) {
+      response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
+        message:
+          error.code === "LIMIT_FILE_SIZE"
+            ? "Ukuran file maksimal 10 MB."
+            : "File upload tidak valid.",
+      });
+      return;
+    }
+    response.status(400).json({
+      message:
+        error instanceof Error ? error.message : "File upload tidak valid.",
+    });
+  });
+}
+
+function requireAcademicUploadSession(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): void {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "akademik") {
+    response.status(403).json({ message: "Fitur ini hanya tersedia untuk akun Akademik." });
+    return;
+  }
+  next();
+}
+
 authRouter.post("/login", async (request, response) => {
   const { role, identity, password } = request.body ?? {};
   if (
-    !["mhs", "dosen", "admin"].includes(role) ||
+    !["mhs", "dosen", "admin", "akademik"].includes(role) ||
     typeof identity !== "string" ||
     typeof password !== "string" ||
     identity.trim().length === 0 ||
@@ -326,6 +412,237 @@ authRouter.get("/me", (request, response) => {
   }
 
   response.json({ profile: session.profile });
+});
+
+authRouter.post(
+  "/academic/attendance/import",
+  requireAcademicUploadSession,
+  academicUploadFile,
+  async (request, response) => {
+    if (!request.file) {
+      response.status(400).json({ message: "Pilih file absensi CSV atau Excel (.xlsx)." });
+      return;
+    }
+
+    try {
+      const rows = parseAcademicAttendanceFile(
+        request.file.buffer,
+        request.file.originalname,
+      );
+      const nims = [...new Set(rows.map((row) => row.nim))];
+      const students = await database.mahasiswa.findMany({
+        where: { nim: { in: nims } },
+        select: { nim: true },
+      });
+      const knownNims = new Set(students.map((student) => student.nim));
+      const unknownNims = nims.filter((nim) => !knownNims.has(nim));
+      if (unknownNims.length > 0) {
+        const displayNims = unknownNims.slice(0, 20).join(", ");
+        const remaining =
+          unknownNims.length > 20
+            ? ` dan ${unknownNims.length - 20} NIM lainnya`
+            : "";
+        response.status(400).json({
+          message: `Mahasiswa dengan NIM berikut tidak ditemukan: ${displayNims}${remaining}. Tidak ada data yang diimpor.`,
+        });
+        return;
+      }
+
+      const imported = await database.$transaction(async (transaction) => {
+        let insertedCount = 0;
+        for (let index = 0; index < rows.length; index += 5_000) {
+          const chunk = rows.slice(index, index + 5_000);
+          const inserted = await transaction.$queryRaw<
+            Array<{ inserted_id: number }>
+          >`
+            INSERT INTO "PresensiAkademik"
+              ("Mata_Kuliah", "Kelas", "NIM", "Nama_Mahasiswa", "Jumlah_Kehadiran")
+            VALUES ${Prisma.join(
+              chunk.map((row) => Prisma.sql`(
+                ${row.mataKuliah},
+                ${row.kelas},
+                ${row.nim},
+                ${row.namaMahasiswa},
+                ${row.jumlahKehadiran}
+              )`),
+            )}
+            ON CONFLICT ("Mata_Kuliah", "Kelas", "NIM") DO NOTHING
+            RETURNING "ID" AS inserted_id
+          `;
+          insertedCount += inserted.length;
+        }
+        return insertedCount;
+      });
+      response.json({
+        imported,
+        skipped: rows.length - imported,
+        totalRows: rows.length,
+      });
+    } catch (error) {
+      if (error instanceof AcademicImportValidationError) {
+        response.status(400).json({ message: error.message });
+        return;
+      }
+      console.error("Gagal mengimpor absensi Akademik:", error);
+      response.status(500).json({ message: "Data absensi gagal diimpor." });
+    }
+  },
+);
+
+authRouter.post(
+  "/academic/advisor-assignments/import",
+  requireAcademicUploadSession,
+  academicUploadFile,
+  async (request, response) => {
+    if (!request.file) {
+      response.status(400).json({ message: "Pilih file pembagian CSV atau Excel (.xlsx)." });
+      return;
+    }
+
+    try {
+      const rows = parseAdvisorAssignmentFile(
+        request.file.buffer,
+        request.file.originalname,
+      );
+      const nims = rows.map((row) => row.nim);
+      const nips = [...new Set(rows.map((row) => BigInt(row.nip)))];
+      const [students, advisors, totalStudents] = await Promise.all([
+        database.mahasiswa.findMany({
+          where: { nim: { in: nims } },
+          select: { id: true, nim: true },
+        }),
+        database.dosen.findMany({
+          where: { nip: { in: nips } },
+          select: { id: true, nip: true },
+        }),
+        database.mahasiswa.count(),
+      ]);
+      const studentByNim = new Map(
+        students.map((student) => [student.nim, student]),
+      );
+      const advisorByNip = new Map(
+        advisors.map((advisor) => [String(advisor.nip), advisor]),
+      );
+      const missingNims = nims.filter((nim) => !studentByNim.has(nim));
+      const missingNips = nips
+        .map(String)
+        .filter((nip) => !advisorByNip.has(nip));
+      if (missingNims.length > 0 || missingNips.length > 0) {
+        const details = [
+          missingNims.length > 0
+            ? `NIM tidak ditemukan: ${missingNims.slice(0, 20).join(", ")}`
+            : "",
+          missingNips.length > 0
+            ? `NIP dosen tidak ditemukan: ${missingNips.slice(0, 20).join(", ")}`
+            : "",
+        ].filter(Boolean);
+        response.status(400).json({
+          message: `${details.join(". ")}. Tidak ada pembagian yang diubah.`,
+        });
+        return;
+      }
+
+      const resolvedAssignments = rows.map((row) => {
+        const student = studentByNim.get(row.nim);
+        const advisor = advisorByNip.get(row.nip);
+        if (!student || !advisor) {
+          throw new Error("Data mahasiswa atau dosen berubah selama proses impor.");
+        }
+        return { studentId: student.id, dosenId: advisor.id };
+      });
+
+      const now = new Date();
+      await database.$transaction(async (transaction) => {
+        await transaction.mahasiswa.updateMany({ data: { dosenPaId: null } });
+        await transaction.advisorRequest.updateMany({
+          where: { status: "APPROVED" },
+          data: { status: "REJECTED", reviewedAt: now },
+        });
+
+        const assignmentsByAdvisor = new Map<number, number[]>();
+        for (const assignment of resolvedAssignments) {
+          const assignedStudentIds =
+            assignmentsByAdvisor.get(assignment.dosenId) ?? [];
+          assignedStudentIds.push(assignment.studentId);
+          assignmentsByAdvisor.set(assignment.dosenId, assignedStudentIds);
+        }
+
+        const assignedStudentIds = resolvedAssignments.map(
+          (assignment) => assignment.studentId,
+        );
+        const existingRequests = await transaction.advisorRequest.findMany({
+          where: { studentId: { in: assignedStudentIds } },
+          select: { studentId: true },
+        });
+        const existingRequestIds = new Set(
+          existingRequests.map((request) => request.studentId),
+        );
+
+        for (const [advisorId, studentIds] of assignmentsByAdvisor) {
+          await transaction.mahasiswa.updateMany({
+            where: { id: { in: studentIds } },
+            data: { dosenPaId: advisorId },
+          });
+          await transaction.advisorRequest.updateMany({
+            where: { studentId: { in: studentIds } },
+            data: { dosenId: advisorId, status: "APPROVED", reviewedAt: now },
+          });
+        }
+
+        const newRequests = resolvedAssignments
+          .filter(
+            (assignment) => !existingRequestIds.has(assignment.studentId),
+          )
+          .map((assignment) => ({
+            studentId: assignment.studentId,
+            dosenId: assignment.dosenId,
+            status: "APPROVED" as const,
+            reviewedAt: now,
+          }));
+        if (newRequests.length > 0) {
+          await transaction.advisorRequest.createMany({ data: newRequests });
+        }
+      });
+
+      response.json({
+        assigned: rows.length,
+        unassigned: totalStudents - rows.length,
+        totalStudents,
+      });
+    } catch (error) {
+      if (error instanceof AcademicImportValidationError) {
+        response.status(400).json({ message: error.message });
+        return;
+      }
+      console.error("Gagal mengimpor pembagian mahasiswa bimbingan:", error);
+      response.status(500).json({
+        message: "Pembagian mahasiswa bimbingan gagal disimpan.",
+      });
+    }
+  },
+);
+
+authRouter.get("/advisors", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: "Sesi login tidak ditemukan atau sudah berakhir." });
+    return;
+  }
+  if (session.profile.role !== "mhs") {
+    response.status(403).json({ message: "Daftar dosen PA hanya tersedia untuk akun mahasiswa." });
+    return;
+  }
+
+  try {
+    const advisors = await database.dosen.findMany({
+      orderBy: { nama: "asc" },
+      select: { id: true, nama: true },
+    });
+    response.json({ advisors });
+  } catch (error) {
+    console.error("Gagal memuat daftar dosen PA:", error);
+    response.status(500).json({ message: "Daftar dosen PA gagal dimuat." });
+  }
 });
 
 authRouter.get("/advisor", async (request, response) => {

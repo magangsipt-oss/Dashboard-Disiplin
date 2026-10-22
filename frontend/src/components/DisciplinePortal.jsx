@@ -99,6 +99,14 @@ export default function App() {
   const [isSubmittingPointChange, setIsSubmittingPointChange] = useState(false);
   const [pointChangeStatus, setPointChangeStatus] = useState('');
   const [pointChangeError, setPointChangeError] = useState('');
+  const [academicAttendanceFile, setAcademicAttendanceFile] = useState(null);
+  const [academicAttendanceResult, setAcademicAttendanceResult] = useState(null);
+  const [academicAttendanceError, setAcademicAttendanceError] = useState('');
+  const [isImportingAcademicAttendance, setIsImportingAcademicAttendance] = useState(false);
+  const [advisorAssignmentFile, setAdvisorAssignmentFile] = useState(null);
+  const [advisorAssignmentResult, setAdvisorAssignmentResult] = useState(null);
+  const [advisorAssignmentError, setAdvisorAssignmentError] = useState('');
+  const [isImportingAdvisorAssignments, setIsImportingAdvisorAssignments] = useState(false);
 
   const officialLogoUrl = "/poltek-simas-berau.png";
   const bgCampusImage = "/portal-access-background.jpg";
@@ -134,6 +142,11 @@ export default function App() {
       { id: 'sinkronisasi', label: 'Sinkronisasi e-Campus' },
       { id: 'users', label: 'Manajemen User' },
       { id: 'maintenance', label: 'Pemeliharaan' },
+    ],
+    akademik: [
+      { id: 'dashboard', label: 'Dashboard Akademik' },
+      { id: 'upload-absensi', label: 'Upload Absensi' },
+      { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan' },
     ],
   };
   const dashboardNavigation =
@@ -371,6 +384,65 @@ export default function App() {
     router.push(`/login?role=${role}`);
   };
 
+  async function submitAcademicImport(event, file, endpoint, setLoading, setError, setResult) {
+    event.preventDefault();
+    setError('');
+    setResult(null);
+    if (!file) {
+      setError('Pilih file CSV atau Excel (.xlsx) terlebih dahulu.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'File gagal diproses.');
+      }
+      setResult(data);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'File gagal diproses.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleAcademicAttendanceImport(event) {
+    return submitAcademicImport(
+      event,
+      academicAttendanceFile,
+      '/api/auth/academic/attendance/import',
+      setIsImportingAcademicAttendance,
+      setAcademicAttendanceError,
+      setAcademicAttendanceResult,
+    );
+  }
+
+  function handleAdvisorAssignmentImport(event) {
+    event.preventDefault();
+    if (
+      !window.confirm(
+        'Pembagian ini akan mengganti semua penetapan dosen PA. Mahasiswa yang tidak ada di file akan menjadi tanpa dosen PA. Lanjutkan?',
+      )
+    ) {
+      return;
+    }
+    return submitAcademicImport(
+      event,
+      advisorAssignmentFile,
+      '/api/auth/academic/advisor-assignments/import',
+      setIsImportingAdvisorAssignments,
+      setAdvisorAssignmentError,
+      setAdvisorAssignmentResult,
+    );
+  }
+
   const handleLogout = async () => {
     try {
       const response = await fetch('/api/auth/logout', { method: 'POST' });
@@ -570,7 +642,7 @@ export default function App() {
                 <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-100 text-sm mt-2 font-medium drop-shadow-sm">Silakan pilih peran Anda untuk melanjutkan ke halaman login</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 xl:grid-cols-4">
                 <button
                   type="button"
                   data-scroll-reveal
@@ -646,6 +718,28 @@ export default function App() {
                   </div>
                   <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-900 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
                     Masuk Portal Admin
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  data-scroll-reveal
+                  data-reveal="right"
+                  data-reveal-delay="320"
+                  onClick={() => handleSelectRole('akademik')}
+                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
+                >
+                  <div>
+                    <div className="w-14 h-14 bg-red-50 text-red-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-800 group-hover:text-white transition-all shadow-sm">
+                      <BookOpen className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Akademik</h4>
+                    <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
+                      Masuk ke portal Akademik menggunakan NIP dan kata sandi akun Akademik.
+                    </p>
+                  </div>
+                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
+                    Masuk via NIP
                   </span>
                 </button>
               </div>
@@ -1351,6 +1445,148 @@ export default function App() {
                 </>
               )}
             </main>
+            )}
+
+            {authenticatedUser?.role === 'akademik' && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                <section className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                    Portal Akademik
+                  </p>
+                  <h2 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                    Selamat Datang, {authenticatedUser.name || 'Pengguna'}
+                  </h2>
+                  <p className="mt-2 text-sm text-red-100">
+                    Login Akademik berhasil. Akun Anda terhubung sebagai petugas Akademik.
+                  </p>
+                </section>
+
+                {activeTab === 'dashboard' && (
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
+                    <h3 className="text-lg font-bold text-slate-900">Profil Akun</h3>
+                    <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="font-semibold text-slate-500">Nama</dt>
+                        <dd className="mt-1 text-slate-900">{authenticatedUser.name}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold text-slate-500">NIP</dt>
+                        <dd className="mt-1 text-slate-900">{authenticatedUser.identity}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold text-slate-500">Peran</dt>
+                        <dd className="mt-1 text-slate-900">{authenticatedUser.roleLabel}</dd>
+                      </div>
+                    </dl>
+                  </section>
+                )}
+
+                {activeTab === 'upload-absensi' && (
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                    <div className="mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Upload Absensi</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                        Unggah file CSV atau Excel (.xlsx) dengan kolom No, Mata_Kuliah, Kelas, NIM, Nama_Mahasiswa, dan Jumlah_Kehadiran.
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Baris absensi yang sama untuk mata kuliah, kelas, dan NIM yang sudah tersimpan akan dilewati.
+                      </p>
+                    </div>
+                    <form onSubmit={handleAcademicAttendanceImport} className="space-y-4">
+                      <label htmlFor="academic-attendance-file" className="block text-sm font-semibold text-slate-700">
+                        File absensi
+                      </label>
+                      <input
+                        id="academic-attendance-file"
+                        type="file"
+                        accept=".csv,.xlsx"
+                        required
+                        onChange={(event) => {
+                          setAcademicAttendanceFile(event.target.files?.[0] ?? null);
+                          setAcademicAttendanceResult(null);
+                          setAcademicAttendanceError('');
+                        }}
+                        className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isImportingAcademicAttendance || !academicAttendanceFile}
+                        className="rounded-xl bg-red-800 px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isImportingAcademicAttendance ? 'Mengunggah absensi…' : 'Upload Absensi'}
+                      </button>
+                    </form>
+                    {academicAttendanceError && (
+                      <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        {academicAttendanceError}
+                      </p>
+                    )}
+                    {academicAttendanceResult && (
+                      <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        Berhasil menyimpan {academicAttendanceResult.imported} baris. {academicAttendanceResult.skipped} baris duplikat dilewati dari total {academicAttendanceResult.totalRows} baris.
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {activeTab === 'pembagian-bimbingan' && (
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                    <div className="mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                        Unggah file CSV atau Excel (.xlsx) dengan kolom NIM dan NIP. NIP harus merupakan NIP dosen yang terdaftar.
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Pada file Excel, simpan NIM dan NIP sebagai teks agar angka panjang tidak berubah.
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-amber-800">
+                        Pembagian ini mengganti semua penetapan dosen PA saat ini. Mahasiswa yang tidak tercantum dalam file akan menjadi belum memiliki dosen PA.
+                      </p>
+                      <a
+                        href={`data:text/csv;charset=utf-8,${encodeURIComponent('NIM,NIP\n123456,198701012010011001')}`}
+                        download="contoh-pembagian-dosen-pa.csv"
+                        className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
+                      >
+                        Unduh contoh format file
+                      </a>
+                    </div>
+                    <form onSubmit={handleAdvisorAssignmentImport} className="space-y-4">
+                      <label htmlFor="advisor-assignment-file" className="block text-sm font-semibold text-slate-700">
+                        File pembagian dosen PA
+                      </label>
+                      <input
+                        id="advisor-assignment-file"
+                        type="file"
+                        accept=".csv,.xlsx"
+                        required
+                        onChange={(event) => {
+                          setAdvisorAssignmentFile(event.target.files?.[0] ?? null);
+                          setAdvisorAssignmentResult(null);
+                          setAdvisorAssignmentError('');
+                        }}
+                        className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isImportingAdvisorAssignments || !advisorAssignmentFile}
+                        className="rounded-xl bg-red-800 px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isImportingAdvisorAssignments ? 'Menyimpan pembagian…' : 'Upload Pembagian'}
+                      </button>
+                    </form>
+                    {advisorAssignmentError && (
+                      <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        {advisorAssignmentError}
+                      </p>
+                    )}
+                    {advisorAssignmentResult && (
+                      <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        Pembagian berhasil diperbarui: {advisorAssignmentResult.assigned} mahasiswa dibagikan dan {advisorAssignmentResult.unassigned} mahasiswa tidak tercantum dari total {advisorAssignmentResult.totalStudents} mahasiswa.
+                      </p>
+                    )}
+                  </section>
+                )}
+              </main>
             )}
 
             {authenticatedUser?.role === 'dosen' && (

@@ -895,7 +895,7 @@ export default function App() {
                     </p>
                   </div>
                   <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-rose-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk via NIP/NIDN
+                    Masuk via Email
                   </span>
                 </button>
 
@@ -913,11 +913,11 @@ export default function App() {
                     </div>
                     <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-900 transition-colors">Akses Kemahasiswaan</h4>
                     <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Verifikasi klaim sertifikat & kegiatan non-akademik, validasi sanggahan presensi, serta kelola syarat kelulusan.
+                      Masuk menggunakan email untuk memverifikasi klaim sertifikat, kegiatan non-akademik, dan sanggahan presensi.
                     </p>
                   </div>
                   <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-900 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk Portal Admin
+                    Masuk via Email
                   </span>
                 </button>
 
@@ -935,11 +935,11 @@ export default function App() {
                     </div>
                     <h4 className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Akademik</h4>
                     <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Masuk ke portal Akademik menggunakan NIP dan kata sandi akun Akademik.
+                      Masuk ke portal Akademik menggunakan email dan kata sandi akun Akademik.
                     </p>
                   </div>
                   <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk via NIP
+                    Masuk via Email
                   </span>
                 </button>
               </div>
@@ -1806,7 +1806,7 @@ export default function App() {
                         <dd className="mt-1 text-slate-900">{authenticatedUser.name}</dd>
                       </div>
                       <div>
-                        <dt className="font-semibold text-slate-500">NIP</dt>
+                        <dt className="font-semibold text-slate-500">Email</dt>
                         <dd className="mt-1 text-slate-900">{authenticatedUser.identity}</dd>
                       </div>
                       <div>
@@ -1937,7 +1937,7 @@ export default function App() {
                     </h2>
                     <p className="text-sm text-red-100" data-testid="database-profile">
                       {authenticatedUser?.details
-                        ?.filter((detail) => detail.label === 'NIDN' || detail.label === 'NIP')
+                        ?.filter((detail) => detail.label === 'Email')
                         .map((detail) => `${detail.label}: ${detail.value}`)
                         .join(' • ')}
                     </p>

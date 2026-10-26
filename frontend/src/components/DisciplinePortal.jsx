@@ -510,7 +510,7 @@ export default function App() {
     event.preventDefault();
     if (
       !window.confirm(
-        'Pembagian ini akan mengganti semua penetapan dosen PA. Mahasiswa yang tidak ada di file akan menjadi tanpa dosen PA. Lanjutkan?',
+        'Data DPA untuk mahasiswa yang tercantum di dalam file akan diperbarui. Mahasiswa lain yang tidak ada di dalam file akan tetap mempertahankan DPA mereka. Lanjutkan?',
       )
     ) {
       return;
@@ -1622,20 +1622,20 @@ export default function App() {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xlsx) dengan kolom NIM dan NIP. NIP harus merupakan NIP dosen yang terdaftar.
+                        Unggah file CSV atau Excel (.xlsx) dengan kolom <strong>No., NIM, Nama Lengkap, Program Studi, Angkatan, DPA</strong> (atau minimal kolom <strong>NIM</strong> dan <strong>DPA</strong> / <strong>NIP</strong>). Nama DPA harus sesuai dengan nama dosen yang terdaftar.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        Pada file Excel, simpan NIM dan NIP sebagai teks agar angka panjang tidak berubah.
+                        Format file mendukung nama lengkap DPA dengan atau tanpa gelar akademik.
                       </p>
                       <p className="mt-1 text-sm font-semibold text-amber-800">
-                        Pembagian ini mengganti semua penetapan dosen PA saat ini. Mahasiswa yang tidak tercantum dalam file akan menjadi belum memiliki dosen PA.
+                        Pembagian ini otomatis tersinkronisasi ke Dashboard Mahasiswa, Mahasiswa Bimbingan Dosen PA, dan Monitoring Kemahasiswaan.
                       </p>
                       <a
-                        href={`data:text/csv;charset=utf-8,${encodeURIComponent('NIM,NIP\n123456,198701012010011001')}`}
+                        href={`data:text/csv;charset=utf-8,${encodeURIComponent("No.,NIM,Nama Lengkap,Program Studi,Angkatan,DPA\n1,24409901,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n2,24409902,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n3,24409903,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n4,24409928,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n5,24409956,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"")}`}
                         download="contoh-pembagian-dosen-pa.csv"
                         className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
                       >
-                        Unduh contoh format file
+                        Unduh contoh format file (CSV/Excel)
                       </a>
                     </div>
                     <form onSubmit={handleAdvisorAssignmentImport} className="space-y-4">
@@ -1669,7 +1669,7 @@ export default function App() {
                     )}
                     {advisorAssignmentResult && (
                       <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                        Pembagian berhasil diperbarui: {advisorAssignmentResult.assigned} mahasiswa dibagikan dan {advisorAssignmentResult.unassigned} mahasiswa tidak tercantum dari total {advisorAssignmentResult.totalStudents} mahasiswa.
+                        Pembagian DPA berhasil diperbarui untuk {advisorAssignmentResult.assigned} mahasiswa. Data mahasiswa lainnya tetap dipertahankan.
                       </p>
                     )}
                   </section>

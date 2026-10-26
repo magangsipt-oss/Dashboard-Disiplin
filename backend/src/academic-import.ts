@@ -16,7 +16,8 @@ export type AcademicAttendanceRow = {
 
 export type AdvisorAssignmentRow = {
   nim: number;
-  nip: string;
+  nip?: string;
+  dpa?: string;
 };
 
 function normalizeHeader(value: unknown): string {
@@ -34,7 +35,7 @@ function cellText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function readRows(buffer: Buffer, fileName: string, requiredHeaders: string[]) {
+function readSheetMatrix(buffer: Buffer, fileName: string): unknown[][] {
   const extension = fileName.toLowerCase().split(".").pop();
   if (extension !== "csv" && extension !== "xlsx") {
     throw new AcademicImportValidationError(
@@ -57,12 +58,16 @@ function readRows(buffer: Buffer, fileName: string, requiredHeaders: string[]) {
     throw new AcademicImportValidationError("File tidak memiliki lembar data.");
   }
 
-  const matrix: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
+  return XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     blankrows: false,
     defval: "",
     raw: false,
   });
+}
+
+function readRows(buffer: Buffer, fileName: string, requiredHeaders: string[]) {
+  const matrix = readSheetMatrix(buffer, fileName);
   const headerRow = matrix[0];
   if (!headerRow) {
     throw new AcademicImportValidationError("File tidak memiliki baris judul kolom.");
@@ -171,17 +176,72 @@ export function parseAdvisorAssignmentFile(
   buffer: Buffer,
   fileName: string,
 ): AdvisorAssignmentRow[] {
-  const { records, column } = readRows(buffer, fileName, ["nim", "nip"]);
+  const matrix = readSheetMatrix(buffer, fileName);
+  const headerRow = matrix[0];
+  if (!headerRow) {
+    throw new AcademicImportValidationError("File tidak memiliki baris judul kolom.");
+  }
+
+  const headers = headerRow.map(normalizeHeader);
+  const nimIndex = headers.indexOf("nim");
+  if (nimIndex === -1) {
+    throw new AcademicImportValidationError(
+      "Kolom wajib 'NIM' tidak ditemukan pada file pembagian.",
+    );
+  }
+
+  // Look for DPA column (e.g. 'dpa', 'dosen_pa', 'nama_dosen', 'dosen', 'dpa_nama')
+  const possibleDpaHeaders = ["dpa", "dosen_pa", "nama_dosen", "dosen", "dpa_nama"];
+  const dpaIndex = headers.findIndex((h) => possibleDpaHeaders.includes(h));
+
+  // Look for NIP / NUPTK column
+  const possibleNipHeaders = ["nip", "nuptk", "nidn"];
+  const nipIndex = headers.findIndex((h) => possibleNipHeaders.includes(h));
+
+  if (dpaIndex === -1 && nipIndex === -1) {
+    throw new AcademicImportValidationError(
+      "Kolom DPA atau NIP tidak ditemukan pada file pembagian. Cantumkan kolom 'DPA' (nama dosen) atau 'NIP'.",
+    );
+  }
+
+  const records = matrix
+    .slice(1)
+    .map((row, index) => ({ row, sourceRow: index + 2 }))
+    .filter(({ row }) => row.some((value) => cellText(value) !== ""));
+
+  if (records.length === 0) {
+    throw new AcademicImportValidationError("File tidak berisi baris data.");
+  }
+  if (records.length > MAX_IMPORT_ROWS) {
+    throw new AcademicImportValidationError(
+      `File maksimal berisi ${MAX_IMPORT_ROWS.toLocaleString("id-ID")} baris data.`,
+    );
+  }
+
   const seenNims = new Set<number>();
 
   return records.map(({ row, sourceRow }) => {
-    const nim = parseNim(row[column("nim")], sourceRow);
+    const nim = parseNim(row[nimIndex], sourceRow);
     if (seenNims.has(nim)) {
       throw new AcademicImportValidationError(
         `NIM ${nim} muncul lebih dari sekali pada file pembagian.`,
       );
     }
     seenNims.add(nim);
-    return { nim, nip: parseNip(row[column("nip")], sourceRow) };
+
+    const dpaText = dpaIndex !== -1 ? cellText(row[dpaIndex]) : "";
+    const nipText = nipIndex !== -1 ? cellText(row[nipIndex]) : "";
+
+    if (!dpaText && !nipText) {
+      throw new AcademicImportValidationError(
+        `DPA atau NIP wajib diisi pada baris ${sourceRow}.`,
+      );
+    }
+
+    return {
+      nim,
+      dpa: dpaText || undefined,
+      nip: nipText ? parseNip(nipText, sourceRow) : undefined,
+    };
   });
 }

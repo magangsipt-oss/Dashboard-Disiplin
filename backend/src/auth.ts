@@ -480,36 +480,81 @@ authRouter.post(
         request.file.buffer,
         request.file.originalname,
       );
+      function cleanLecturerName(name: string): string {
+        return String(name || "")
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/\b(ir|dr|dra|drs|prof)\.?\b/gi, " ")
+          .replace(/\b(s\.?t|m\.?t|s\.?tr|m\.?sc|m\.?si|csca|cplm|s\.?mn|m\.?m|m\.?eng|s\.?kom|m\.?kom|s\.?si|apt|s\.?st)\.?\b/gi, " ")
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim();
+      }
+
       const nims = rows.map((row) => row.nim);
-      const nips = [...new Set(rows.map((row) => BigInt(row.nip)))];
-      const [students, advisors, totalStudents] = await Promise.all([
+      const [students, allAdvisors, totalStudents] = await Promise.all([
         database.mahasiswa.findMany({
           where: { nim: { in: nims } },
           select: { id: true, nim: true },
         }),
         database.dosen.findMany({
-          where: { nip: { in: nips } },
-          select: { id: true, nip: true },
+          select: { id: true, nama: true, nip: true },
         }),
         database.mahasiswa.count(),
       ]);
+
       const studentByNim = new Map(
         students.map((student) => [student.nim, student]),
       );
+
       const advisorByNip = new Map(
-        advisors.map((advisor) => [String(advisor.nip), advisor]),
+        allAdvisors
+          .filter((advisor) => advisor.nip !== null && advisor.nip !== undefined)
+          .map((advisor) => [String(advisor.nip), advisor]),
       );
+
+      const advisorByName = allAdvisors.map((advisor) => ({
+        advisor,
+        clean: cleanLecturerName(advisor.nama),
+        rawLower: advisor.nama.toLowerCase().trim(),
+      }));
+
+      function resolveAdvisorForRow(row: typeof rows[number]) {
+        if (row.nip && advisorByNip.has(row.nip)) {
+          return advisorByNip.get(row.nip)!;
+        }
+        if (row.dpa) {
+          const rawLower = row.dpa.toLowerCase().trim();
+          const exact = advisorByName.find((a) => a.rawLower === rawLower);
+          if (exact) return exact.advisor;
+
+          const cleanDpa = cleanLecturerName(row.dpa);
+          if (cleanDpa) {
+            const match = advisorByName.find(
+              (a) =>
+                a.clean === cleanDpa ||
+                (cleanDpa.length >= 4 && a.clean.includes(cleanDpa)) ||
+                (a.clean.length >= 4 && cleanDpa.includes(a.clean)),
+            );
+            if (match) return match.advisor;
+          }
+        }
+        return null;
+      }
+
       const missingNims = nims.filter((nim) => !studentByNim.has(nim));
-      const missingNips = nips
-        .map(String)
-        .filter((nip) => !advisorByNip.has(nip));
-      if (missingNims.length > 0 || missingNips.length > 0) {
+      const unresolvableRows = rows.filter((row) => !resolveAdvisorForRow(row));
+
+      if (missingNims.length > 0 || unresolvableRows.length > 0) {
+        const missingDpas = [
+          ...new Set(unresolvableRows.map((r) => r.dpa || r.nip || String(r.nim))),
+        ];
         const details = [
           missingNims.length > 0
             ? `NIM tidak ditemukan: ${missingNims.slice(0, 20).join(", ")}`
             : "",
-          missingNips.length > 0
-            ? `NIP dosen tidak ditemukan: ${missingNips.slice(0, 20).join(", ")}`
+          missingDpas.length > 0
+            ? `Dosen PA tidak ditemukan: ${missingDpas.slice(0, 20).join(", ")}`
             : "",
         ].filter(Boolean);
         response.status(400).json({
@@ -520,7 +565,7 @@ authRouter.post(
 
       const resolvedAssignments = rows.map((row) => {
         const student = studentByNim.get(row.nim);
-        const advisor = advisorByNip.get(row.nip);
+        const advisor = resolveAdvisorForRow(row);
         if (!student || !advisor) {
           throw new Error("Data mahasiswa atau dosen berubah selama proses impor.");
         }
@@ -529,12 +574,6 @@ authRouter.post(
 
       const now = new Date();
       await database.$transaction(async (transaction) => {
-        await transaction.mahasiswa.updateMany({ data: { dosenPaId: null } });
-        await transaction.advisorRequest.updateMany({
-          where: { status: "APPROVED" },
-          data: { status: "REJECTED", reviewedAt: now },
-        });
-
         const assignmentsByAdvisor = new Map<number, number[]>();
         for (const assignment of resolvedAssignments) {
           const assignedStudentIds =

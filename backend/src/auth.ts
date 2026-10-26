@@ -1314,6 +1314,12 @@ authRouter.post("/points/adjust", async (request, response) => {
 
   const { nim, type, reason, pillar, severity, deductionPoints } = request.body ?? {};
   const isReportedViolation = type === "reported_violation";
+  if (isReportedViolation || type === "discipline_violation") {
+    response.status(409).json({
+      message: "Pengurangan poin pelanggaran hanya dapat dilakukan setelah Dosen PA mengonfirmasi laporan.",
+    });
+    return;
+  }
   const violationRange =
     typeof severity === "string" &&
     Object.prototype.hasOwnProperty.call(violationSeverityPointRanges, severity)

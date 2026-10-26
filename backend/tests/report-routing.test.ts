@@ -138,7 +138,7 @@ test("nama berbeda, NIM tidak ditemukan, dan NIM di luar int32 tidak terdaftar",
   assert.equal(tooLargeNimDb.queryCount(), 0);
 });
 
-test("laporan teridentifikasi dengan DPA membuat notifikasi mahasiswa, dosen, dan kemahasiswaan", async () => {
+test("laporan temuan teridentifikasi hanya memberi notifikasi mahasiswa dan DPA sebelum konfirmasi", async () => {
   const route: ReportRoute = { jalur: "TERIDENTIFIKASI", student: makeStudent() };
   const { tx, calls } = makeNotificationTransaction();
   await createReportNotifications(tx, {
@@ -146,11 +146,11 @@ test("laporan teridentifikasi dengan DPA membuat notifikasi mahasiswa, dosen, da
     route,
     texts: makeTexts(route),
   });
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 2);
   assert.equal(calls.filter((call) => call.model === "pemberitahuan").length, 1);
-  assert.equal(calls.filter((call) => call.model === "pemberitahuanStaf").length, 2);
+  assert.equal(calls.filter((call) => call.model === "pemberitahuanStaf").length, 1);
   assert.ok(calls.some((call) => call.data.peran === "DOSEN"));
-  assert.ok(calls.some((call) => call.data.peran === "KEMAHASISWAAN"));
+  assert.equal(calls.some((call) => call.data.peran === "KEMAHASISWAAN"), false);
   for (const call of calls.filter((item) => item.model === "pemberitahuan" || item.data.peran === "DOSEN")) {
     assert.doesNotMatch(String(call.data.isi), /lokasi|pelapor/i);
   }
@@ -162,7 +162,7 @@ test("laporan teridentifikasi tanpa DPA membuat dua notifikasi dan menjelaskan s
   const texts = makeTexts(route);
   await createReportNotifications(tx, { laporanId: 42, route, texts });
   assert.equal(calls.length, 2);
-  assert.match(texts.kemahasiswaan.isi, /Dosen PA belum ditetapkan/);
+  assert.match(texts.kemahasiswaan?.isi ?? "", /Dosen PA belum ditetapkan/);
   assert.equal(texts.dosen, null);
 });
 
@@ -176,7 +176,7 @@ test("laporan yang tidak terdaftar atau tidak diketahui hanya memberi notifikasi
     await createReportNotifications(tx, { laporanId: 43, route, texts });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].data.peran, "KEMAHASISWAAN");
-    assert.match(String(calls[0].data.isi), /Perlu ditelusuri/);
+    assert.match(texts.kemahasiswaan?.isi ?? "", /Perlu ditelusuri/);
   }
 });
 

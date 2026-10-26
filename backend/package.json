@@ -17,7 +17,8 @@
     "prisma:data:export": "npm run prisma:generate && tsx prisma/transfer-data.ts export",
     "prisma:data:import": "npm run prisma:generate && tsx prisma/transfer-data.ts import",
     "prisma:migrate:mahasiswa-profile": "tsx prisma/rename-mahasiswa-profile-columns.ts && npm run prisma:push -- --skip-generate && npm run prisma:generate",
-    "prisma:migrate:advisor-requests": "tsx prisma/rename-advisor-request-table.ts && tsx prisma/rename-advisor-request-columns.ts && tsx prisma/rename-mahasiswa-dpa-column.ts && tsx prisma/rename-staff-identity-columns.ts && npm run prisma:push -- --skip-generate && tsx prisma/remove-advisor-request-name-columns.ts && npm run prisma:generate"
+    "prisma:migrate:advisor-requests": "tsx prisma/rename-advisor-request-table.ts && tsx prisma/rename-advisor-request-columns.ts && tsx prisma/rename-mahasiswa-dpa-column.ts && tsx prisma/rename-staff-identity-columns.ts && npm run prisma:push -- --skip-generate && tsx prisma/remove-advisor-request-name-columns.ts && npm run prisma:generate",
+    "prisma:migrate:report-workflow": "tsx prisma/migrate-report-workflow.ts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

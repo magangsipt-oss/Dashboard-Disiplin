@@ -99,6 +99,28 @@ sampai tabel dan API untuk data tersebut dibuat. Catatan konseling disimpan
 oleh Dosen PA dan ditampilkan sebagai riwayat baca-saja pada dashboard
 mahasiswa.
 
+### Alur laporan anonim dan tindak lanjut
+
+Semua peran yang sudah login dapat mengirim laporan anonim. Identitas pelapor
+tidak disimpan. Jika nama dan NIM terlapor cocok dengan data mahasiswa, laporan
+diteruskan sebagai pemberitahuan di dashboard kepada mahasiswa dan Dosen PA.
+Dosen PA meninjau laporan; poin baru dikurangi setelah DPA mengonfirmasi
+pelanggaran. Kemahasiswaan kemudian menetapkan tugas edukatif atau coaching.
+Mahasiswa mengirim tautan bukti penyelesaian, dan Dosen PA menyetujuinya untuk
+memulihkan poin. Catatan pengurangan, pemulihan, dan laporan asal tetap menjadi
+riwayat.
+
+Jika nama/NIM tidak cocok atau terlapor belum diketahui, laporan hanya masuk
+ke antrean Kemahasiswaan. Setelah penelusuran, Kemahasiswaan dapat meneruskan
+laporan kepada mahasiswa yang teridentifikasi dan Dosen PA-nya untuk
+dikonfirmasi. Laporan yang belum terkonfirmasi tidak mengubah poin.
+
+Pemberitahuan alur ini saat ini ditampilkan di dashboard; pengiriman email
+eksternal belum dikonfigurasi. Terapkan perubahan skema alur ini dengan
+`npm.cmd run prisma:migrate:report-workflow` dari folder `backend`. Migrasi ini
+menambahkan kolom dan nilai status tanpa menghapus kolom lama yang masih
+menyimpan data.
+
 ## Prisma
 
 Jalankan dari folder `backend`:

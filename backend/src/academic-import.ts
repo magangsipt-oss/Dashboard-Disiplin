@@ -20,8 +20,26 @@ export type AcademicAttendanceRow = {
 export type AdvisorAssignmentRow = {
   nim: number;
   programStudi: string;
-  nip?: string;
+  nuptk?: string;
   dpa?: string;
+};
+
+export type NewStudentImportRow = {
+  nim: number;
+  nama: string;
+  jurusan: string;
+  password: string;
+  email?: string;
+  noHandphone?: string;
+  angkatan?: number;
+  namaSmta?: string;
+};
+
+export type NewLecturerImportRow = {
+  nuptk: bigint;
+  nama: string;
+  email: string;
+  password: string;
 };
 
 function normalizeHeader(value: unknown): string {
@@ -39,11 +57,62 @@ function cellText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function findColumn(headers: string[], aliases: string[]): number {
+  return headers.findIndex((header) => aliases.includes(header));
+}
+
+function parseImportPassword(value: unknown, sourceRow: number): string {
+  const password = cellText(value);
+  if (!password || password.length > 128) {
+    throw new AcademicImportValidationError(
+      `Kata Sandi pada baris ${sourceRow} wajib diisi dan maksimal 128 karakter.`,
+    );
+  }
+  return password;
+}
+
+function parseEmail(value: unknown, sourceRow: number): string {
+  const email = cellText(value);
+  if (
+    email.length > 255 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new AcademicImportValidationError(
+      `Email pada baris ${sourceRow} tidak valid.`,
+    );
+  }
+  return email;
+}
+
+function readImportRecords(buffer: Buffer, fileName: string) {
+  const matrix = readSheetMatrix(buffer, fileName);
+  const headerRow = matrix[0];
+  if (!headerRow) {
+    throw new AcademicImportValidationError("File tidak memiliki baris judul kolom.");
+  }
+
+  const headers = headerRow.map(normalizeHeader);
+  const records = matrix
+    .slice(1)
+    .map((row, index) => ({ row, sourceRow: index + 2 }))
+    .filter(({ row }) => row.some((value) => cellText(value) !== ""));
+  if (records.length === 0) {
+    throw new AcademicImportValidationError("File tidak berisi baris data.");
+  }
+  if (records.length > MAX_IMPORT_ROWS) {
+    throw new AcademicImportValidationError(
+      `File maksimal berisi ${MAX_IMPORT_ROWS.toLocaleString("id-ID")} baris data.`,
+    );
+  }
+
+  return { headers, records };
+}
+
 function readSheetMatrix(buffer: Buffer, fileName: string): unknown[][] {
   const extension = fileName.toLowerCase().split(".").pop();
-  if (extension !== "csv" && extension !== "xlsx") {
+  if (extension !== "csv" && extension !== "xls" && extension !== "xlsx") {
     throw new AcademicImportValidationError(
-      "Format file harus CSV atau Excel (.xlsx).",
+      "Format file harus CSV atau Excel (.xls, .xlsx).",
     );
   }
 
@@ -52,7 +121,7 @@ function readSheetMatrix(buffer: Buffer, fileName: string): unknown[][] {
     workbook = XLSX.read(buffer, { type: "buffer", raw: true });
   } catch {
     throw new AcademicImportValidationError(
-      "File tidak dapat dibaca. Pastikan file CSV atau Excel (.xlsx) valid.",
+      "File tidak dapat dibaca. Pastikan file CSV atau Excel (.xls, .xlsx) valid.",
     );
   }
 
@@ -120,20 +189,176 @@ function parseNim(value: unknown, sourceRow: number): number {
   return nim;
 }
 
-function parseNip(value: unknown, sourceRow: number): string {
+function parseNuptk(value: unknown, sourceRow: number): string {
   const text = cellText(value).replace(/\.0+$/, "");
   if (!/^[1-9]\d*$/.test(text)) {
     throw new AcademicImportValidationError(
-      `NIP pada baris ${sourceRow} harus berupa angka bulat positif.`,
+      `NUPTK pada baris ${sourceRow} harus berupa angka bulat positif.`,
     );
   }
-  const nip = BigInt(text);
-  if (nip > MAX_POSTGRES_BIGINT) {
+  const nuptk = BigInt(text);
+  if (nuptk > MAX_POSTGRES_BIGINT) {
     throw new AcademicImportValidationError(
-      `NIP pada baris ${sourceRow} melebihi batas angka yang didukung.`,
+      `NUPTK pada baris ${sourceRow} melebihi batas angka yang didukung.`,
     );
   }
   return text;
+}
+
+function parseImportBigInt(value: unknown, label: string, sourceRow: number): bigint {
+  const text = cellText(value).replace(/\.0+$/, "");
+  if (!/^[1-9]\d*$/.test(text)) {
+    throw new AcademicImportValidationError(
+      `${label} pada baris ${sourceRow} harus berupa angka bulat positif.`,
+    );
+  }
+  const parsed = BigInt(text);
+  if (parsed > MAX_POSTGRES_BIGINT) {
+    throw new AcademicImportValidationError(
+      `${label} pada baris ${sourceRow} melebihi batas angka yang didukung.`,
+    );
+  }
+  return parsed;
+}
+
+export function parseNewStudentImportFile(
+  buffer: Buffer,
+  fileName: string,
+): NewStudentImportRow[] {
+  const { headers, records } = readImportRecords(buffer, fileName);
+  const columns = {
+    nim: findColumn(headers, ["nim"]),
+    nama: findColumn(headers, ["nama_lengkap", "nama_mahasiswa", "nama"]),
+    jurusan: findColumn(headers, ["prodi", "program_studi", "jurusan"]),
+    password: findColumn(headers, ["kata_sandi", "password", "password_awal"]),
+    email: findColumn(headers, ["email"]),
+    noHandphone: findColumn(headers, ["no_handphone", "nomor_handphone", "no_hp", "telepon"]),
+    angkatan: findColumn(headers, ["angkatan", "tahun_masuk"]),
+    namaSmta: findColumn(headers, ["nama_smta", "asal_sekolah"]),
+  };
+  const required = [
+    ["NIM", columns.nim],
+    ["Nama Lengkap", columns.nama],
+    ["PRODI", columns.jurusan],
+    ["Kata Sandi", columns.password],
+  ] as const;
+  const missing = required.filter(([, column]) => column === -1);
+  if (missing.length > 0) {
+    throw new AcademicImportValidationError(
+      `Kolom wajib tidak ditemukan: ${missing.map(([label]) => label).join(", ")}.`,
+    );
+  }
+
+  const seenNims = new Set<number>();
+  return records.map(({ row, sourceRow }) => {
+    const nim = parseNim(row[columns.nim], sourceRow);
+    if (seenNims.has(nim)) {
+      throw new AcademicImportValidationError(
+        `NIM ${nim} muncul lebih dari sekali pada file mahasiswa.`,
+      );
+    }
+    seenNims.add(nim);
+
+    const nama = cellText(row[columns.nama]);
+    const jurusan = cellText(row[columns.jurusan]);
+    if (!nama || !jurusan) {
+      throw new AcademicImportValidationError(
+        `Nama Lengkap dan PRODI wajib diisi pada baris ${sourceRow}.`,
+      );
+    }
+
+    const emailText = columns.email === -1 ? "" : cellText(row[columns.email]);
+    const phone = columns.noHandphone === -1 ? "" : cellText(row[columns.noHandphone]);
+    const school = columns.namaSmta === -1 ? "" : cellText(row[columns.namaSmta]);
+    const angkatanText = columns.angkatan === -1 ? "" : cellText(row[columns.angkatan]);
+    let angkatan: number | undefined;
+    if (angkatanText) {
+      angkatan = Number(angkatanText.replace(/\.0+$/, ""));
+      if (!Number.isInteger(angkatan) || angkatan < 1900 || angkatan > 2100) {
+        throw new AcademicImportValidationError(
+          `Angkatan pada baris ${sourceRow} harus berupa tahun yang valid.`,
+        );
+      }
+    }
+    if (phone.length > 30) {
+      throw new AcademicImportValidationError(
+        `No Handphone pada baris ${sourceRow} maksimal 30 karakter.`,
+      );
+    }
+    if (school.length > 255) {
+      throw new AcademicImportValidationError(
+        `Nama SMTA pada baris ${sourceRow} maksimal 255 karakter.`,
+      );
+    }
+
+    return {
+      nim,
+      nama,
+      jurusan,
+      password: parseImportPassword(row[columns.password], sourceRow),
+      email: emailText ? parseEmail(emailText, sourceRow) : undefined,
+      noHandphone: phone || undefined,
+      angkatan,
+      namaSmta: school || undefined,
+    };
+  });
+}
+
+export function parseNewLecturerImportFile(
+  buffer: Buffer,
+  fileName: string,
+): NewLecturerImportRow[] {
+  const { headers, records } = readImportRecords(buffer, fileName);
+  const columns = {
+    nuptk: findColumn(headers, ["nuptk"]),
+    nama: findColumn(headers, ["nama_lengkap", "nama_dosen", "nama"]),
+    email: findColumn(headers, ["email"]),
+    password: findColumn(headers, ["kata_sandi", "password", "password_awal"]),
+  };
+  const required = [
+    ["NUPTK", columns.nuptk],
+    ["Nama", columns.nama],
+    ["Email", columns.email],
+    ["Kata Sandi", columns.password],
+  ] as const;
+  const missing = required.filter(([, column]) => column === -1);
+  if (missing.length > 0) {
+    throw new AcademicImportValidationError(
+      `Kolom wajib tidak ditemukan: ${missing.map(([label]) => label).join(", ")}.`,
+    );
+  }
+
+  const seenNuptks = new Set<string>();
+  const seenEmails = new Set<string>();
+  return records.map(({ row, sourceRow }) => {
+    const nuptk = parseImportBigInt(row[columns.nuptk], "NUPTK", sourceRow);
+    const email = parseEmail(row[columns.email], sourceRow);
+    const nama = cellText(row[columns.nama]);
+    if (!nama) {
+      throw new AcademicImportValidationError(
+        `Nama wajib diisi pada baris ${sourceRow}.`,
+      );
+    }
+
+    for (const [value, seen, label] of [
+      [nuptk.toString(), seenNuptks, "NUPTK"],
+      [email.toLowerCase(), seenEmails, "Email"],
+    ] as const) {
+      if (seen.has(value)) {
+        throw new AcademicImportValidationError(
+          `${label} ${value} muncul lebih dari sekali pada file dosen.`,
+        );
+      }
+      seen.add(value);
+    }
+
+    return {
+      nuptk,
+      nama,
+      email,
+      password: parseImportPassword(row[columns.password], sourceRow),
+    };
+  });
 }
 
 export function parseAcademicAttendanceFile(
@@ -292,13 +517,11 @@ export function parseAdvisorAssignmentFile(
   const possibleDpaHeaders = ["dpa", "dosen_pa", "nama_dosen", "dosen", "dpa_nama"];
   const dpaIndex = headers.findIndex((h) => possibleDpaHeaders.includes(h));
 
-  // Look for NIP / NUPTK column
-  const possibleNipHeaders = ["nip", "nuptk", "nidn"];
-  const nipIndex = headers.findIndex((h) => possibleNipHeaders.includes(h));
+  const nuptkIndex = headers.indexOf("nuptk");
 
-  if (dpaIndex === -1 && nipIndex === -1) {
+  if (dpaIndex === -1 && nuptkIndex === -1) {
     throw new AcademicImportValidationError(
-      "Kolom DPA atau NIP tidak ditemukan pada file pembagian. Cantumkan kolom 'DPA' (nama dosen) atau 'NIP'.",
+      "Kolom DPA atau NUPTK tidak ditemukan pada file pembagian. Cantumkan kolom 'DPA' (nama dosen) atau 'NUPTK'.",
     );
   }
 
@@ -335,18 +558,18 @@ export function parseAdvisorAssignmentFile(
     seenNims.add(nim);
 
     const dpaText = dpaIndex !== -1 ? cellText(row[dpaIndex]) : "";
-    const nipText = nipIndex !== -1 ? cellText(row[nipIndex]) : "";
+    const nuptkText = nuptkIndex !== -1 ? cellText(row[nuptkIndex]) : "";
 
-    if (!dpaText && !nipText) {
+    if (!dpaText && !nuptkText) {
       throw new AcademicImportValidationError(
-        `DPA atau NIP wajib diisi pada baris ${sourceRow}.`,
+        `DPA atau NUPTK wajib diisi pada baris ${sourceRow}.`,
       );
     }
 
     const record = {
       nim,
       programStudi,
-      nip: nipText ? parseNip(nipText, sourceRow) : undefined,
+      nuptk: nuptkText ? parseNuptk(nuptkText, sourceRow) : undefined,
     } as AdvisorAssignmentRow;
 
     if (dpaText) {

@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 const dataPath = resolve(process.cwd(), "prisma", "database-data.json");
 
 type Snapshot = {
-  formatVersion: 4;
+  formatVersion: 5;
   exportedAt: string;
   mahasiswa: {
     id: number;
@@ -44,8 +44,7 @@ type Snapshot = {
   dosen: {
     id: number;
     email: string | null;
-    nidn: string;
-    nip: string;
+    nuptk: string;
     nama: string;
     password: string;
     timestamp: string;
@@ -136,7 +135,12 @@ function requireRows(value: unknown, label: string): UnknownRecord[] {
 
 function parseSnapshot(value: unknown): Snapshot {
   const data = requireRecord(value, "File ekspor");
-  if (data.formatVersion !== 2 && data.formatVersion !== 3 && data.formatVersion !== 4) {
+  if (
+    data.formatVersion !== 2 &&
+    data.formatVersion !== 3 &&
+    data.formatVersion !== 4 &&
+    data.formatVersion !== 5
+  ) {
     throw new Error("Versi format file ekspor tidak didukung. Ekspor ulang data sumber.");
   }
 
@@ -222,8 +226,7 @@ function parseSnapshot(value: unknown): Snapshot {
         row.email === undefined || row.email === null
           ? null
           : requireString(row.email, `${label}.email`),
-      nidn: requireBigIntString(row.nidn, `${label}.nidn`),
-      nip: requireBigIntString(row.nip, `${label}.nip`),
+      nuptk: requireBigIntString(row.nuptk, `${label}.nuptk`),
       nama: requireString(row.nama, `${label}.nama`),
       password: requireString(row.password, `${label}.password`),
       timestamp: requireDateString(row.timestamp, `${label}.timestamp`),
@@ -262,7 +265,7 @@ function parseSnapshot(value: unknown): Snapshot {
         });
 
   return {
-    formatVersion: 4,
+    formatVersion: 5,
     exportedAt: requireDateString(data.exportedAt, "exportedAt"),
     mahasiswa,
     pointChanges,
@@ -284,7 +287,7 @@ async function exportData(): Promise<void> {
   ]);
 
   const snapshot: Snapshot = {
-    formatVersion: 4,
+    formatVersion: 5,
     exportedAt: new Date().toISOString(),
     mahasiswa: mahasiswa.map((row) => ({
       ...row,
@@ -301,8 +304,7 @@ async function exportData(): Promise<void> {
     })),
     dosen: dosen.map((row) => ({
       ...row,
-      nidn: row.nidn.toString(),
-      nip: row.nip.toString(),
+      nuptk: row.nuptk.toString(),
       timestamp: row.timestamp.toISOString(),
     })),
     kemahasiswaan: kemahasiswaan.map((row) => ({
@@ -333,8 +335,7 @@ async function importData(): Promise<void> {
     prisma.dosen.createMany({
       data: snapshot.dosen.map((row) => ({
         ...row,
-        nidn: BigInt(row.nidn),
-        nip: BigInt(row.nip),
+        nuptk: BigInt(row.nuptk),
         timestamp: new Date(row.timestamp),
       })),
       skipDuplicates: true,

@@ -290,11 +290,10 @@ model LogAudit {
 model Dosen {
   id                  Int                 @id @default(autoincrement()) @map("ID")
   email               String?             @map("Email") @db.VarChar(255)
-  nidn                BigInt              @unique @map("NIDN")
-  nip                 BigInt              @unique @map("NIP")
+  nuptk               BigInt              @unique @map("NUPTK")
   nama                String              @map("Nama")
   password            String              @map("Password") @db.VarChar(255)
-  timestamp           DateTime            @default(now())
+  timestamp           DateTime            @default(now()) @map("Timestamp")
   mahasiswaBimbingan  Mahasiswa[]
   advisorRequests     AdvisorRequest[]
   laporanDikonfirmasi Laporan[]           @relation("LaporanDosenKonfirmasi")

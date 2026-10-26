@@ -23,8 +23,8 @@ Aplikasi menggunakan satu database PostgreSQL bernama `dashboard_disiplin`.
 Tabel utama yang digunakan meliputi:
 
 - `Mahasiswa`: `id`, `NIM`, `Nama`, `Password`, `Jurusan`, `timestamp`.
-- `Dosen`: `id`, `NIDN`, `NIP`, `Nama`, `Password`, `timestamp`.
-- `Kemahasiswaan`: `id`, `NIP`, `Nama`, `Password`, `timestamp`.
+- `Dosen`: `id`, `NUPTK`, `Nama`, `Email`, `Password`, `timestamp`.
+- `Kemahasiswaan`: `id`, `Email`, `Nama`, `Password`, `timestamp`.
 - `CatatanKonseling`: catatan pembinaan atau panggilan konseling yang dibuat Dosen PA untuk mahasiswa bimbingannya.
 
 Atur `DATABASE_URL` pada `backend/.env` agar menunjuk ke database tersebut.
@@ -84,7 +84,7 @@ Backend berjalan di `http://localhost:5000`. Endpoint pemeriksaan:
 ### Login dan profil dashboard
 
 Frontend mengirim login ke backend. Pilih peran di halaman awal, lalu masuk
-menggunakan NIM mahasiswa, NIP/NIDN dosen, atau NIP kemahasiswaan dan password
+menggunakan NIM mahasiswa atau email dosen/kemahasiswaan dan password
 yang tersimpan di tabel terkait. Backend membuat sesi cookie HttpOnly dan
 dashboard menampilkan profil dari database. Sesi aktif disimpan di memori
 backend dan berakhir setelah 8 jam atau ketika backend dimulai ulang.
@@ -137,6 +137,11 @@ menyesuaikan database yang terkonfigurasi dengan `schema.prisma`.
 Gunakan `npm.cmd run prisma:setup` hanya saat perlu membuat database baru dan
 mengimpor file ekspor data.
 
+Untuk memastikan tabel `Dosen` menggunakan `NUPTK` sebagai satu-satunya nomor
+identitas, jalankan `npm.cmd run prisma:migrate:dosen-nuptk` dari folder
+`backend`. Migrasi mempertahankan nilai `NUPTK` yang ada, memeriksa nilai kosong
+dan duplikat, lalu menghapus kolom identitas lama jika masih ada.
+
 Backend memuat konfigurasi dari `backend/.env`, termasuk saat perintah
 dijalankan dari folder lain. Halaman login dapat dibuka langsung melalui
 `/login?role=mhs`, `/login?role=dosen`, `/login?role=admin`, atau
@@ -145,9 +150,12 @@ dijalankan dari folder lain. Halaman login dapat dibuka langsung melalui
 Setelah login Akademik, menu **Upload Absensi** menerima CSV/XLSX dengan kolom
 `Mata_Kuliah`, `Kelas`, `NIM`, `Nama_Mahasiswa`, dan `Jumlah_Kehadiran`.
 Baris dengan kombinasi mata kuliah, kelas, dan NIM yang sudah ada akan dilewati.
-Menu **Pembagian Mahasiswa Bimbingan** menerima CSV/XLSX dengan kolom `NIM`
-dan `NIP`; setiap impor mengganti pembagian dosen PA sebelumnya, dan mahasiswa
-yang tidak tercantum akan menjadi tanpa dosen PA.
+Menu **Upload Data Mahasiswa** menerima Excel dengan kolom wajib `NIM`,
+`Nama Lengkap`, `PRODI`, dan `Kata Sandi`. Menu **Upload Data Dosen** menerima
+`NUPTK`, `Nama`, `Email`, dan `Kata Sandi`; NUPTK dan email yang sudah terdaftar
+dilewati.
+Menu **Pembagian Mahasiswa Bimbingan** menerima CSV/Excel dengan kolom `NIM`,
+`Program Studi`, dan `DPA` atau `NUPTK`.
 
 Untuk menyiapkan tabel penyimpanan absensi pada database yang dikonfigurasi,
 jalankan `npm.cmd run prisma:push` dari folder `backend`.

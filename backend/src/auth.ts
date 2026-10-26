@@ -14,6 +14,8 @@ import {
 import {
   AcademicImportValidationError,
   parseAcademicAttendanceFile,
+  parseNewLecturerImportFile,
+  parseNewStudentImportFile,
   parseAdvisorAssignmentFile,
 } from "./academic-import";
 import {
@@ -42,8 +44,8 @@ const academicUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_request, file, callback) => {
-    if (!/\.(csv|xlsx)$/i.test(file.originalname)) {
-      callback(new Error("Format file harus CSV atau Excel (.xlsx)."));
+    if (!/\.(csv|xls|xlsx)$/i.test(file.originalname)) {
+      callback(new Error("Format file harus CSV atau Excel (.xls, .xlsx)."));
       return;
     }
     callback(null, true);
@@ -95,6 +97,22 @@ async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const derivedKey = await derivePassword(password, salt);
   return `scrypt$${salt.toString("base64url")}$${derivedKey.toString("base64url")}`;
+}
+
+async function hashImportedPasswords<T extends { password: string }>(
+  rows: T[],
+): Promise<Array<Omit<T, "password"> & { password: string }>> {
+  const hashedRows: Array<Omit<T, "password"> & { password: string }> = [];
+  for (let index = 0; index < rows.length; index += 32) {
+    const batch = await Promise.all(
+      rows.slice(index, index + 32).map(async ({ password, ...row }) => ({
+        ...row,
+        password: await hashPassword(password),
+      })),
+    );
+    hashedRows.push(...batch);
+  }
+  return hashedRows;
 }
 
 async function verifyPassword(
@@ -335,6 +353,129 @@ function requireAcademicUploadSession(
   next();
 }
 
+authRouter.post(
+  "/academic/students/import",
+  requireAcademicUploadSession,
+  academicUploadFile,
+  async (request, response) => {
+    if (!request.file) {
+      response.status(400).json({ message: "Pilih file data mahasiswa Excel (.xls atau .xlsx)." });
+      return;
+    }
+
+    try {
+      const rows = parseNewStudentImportFile(
+        request.file.buffer,
+        request.file.originalname,
+      );
+      const existingStudents = await database.mahasiswa.findMany({
+        where: { nim: { in: rows.map((row) => row.nim) } },
+        select: { nim: true },
+      });
+      const existingNims = new Set(existingStudents.map((student) => student.nim));
+      const newRows = rows.filter((row) => !existingNims.has(row.nim));
+      const hashedRows = await hashImportedPasswords(newRows);
+      const result = await database.$transaction((transaction) =>
+        transaction.mahasiswa.createMany({
+          data: hashedRows.map((row) => ({
+            nim: row.nim,
+            nama: row.nama,
+            jurusan: row.jurusan,
+            password: row.password,
+            email: row.email,
+            noHandphone: row.noHandphone,
+            angkatan: row.angkatan,
+            namaSmta: row.namaSmta,
+          })),
+          skipDuplicates: true,
+        }),
+      );
+
+      response.json({
+        imported: result.count,
+        skipped: rows.length - result.count,
+        totalRows: rows.length,
+      });
+    } catch (error) {
+      if (error instanceof AcademicImportValidationError) {
+        response.status(400).json({ message: error.message });
+        return;
+      }
+      console.error("Gagal mengimpor data mahasiswa baru:", error);
+      response.status(500).json({ message: "Data mahasiswa gagal diimpor." });
+    }
+  },
+);
+
+authRouter.post(
+  "/academic/lecturers/import",
+  requireAcademicUploadSession,
+  academicUploadFile,
+  async (request, response) => {
+    if (!request.file) {
+      response.status(400).json({ message: "Pilih file data dosen Excel (.xls atau .xlsx)." });
+      return;
+    }
+
+    try {
+      const rows = parseNewLecturerImportFile(
+        request.file.buffer,
+        request.file.originalname,
+      );
+      const [existingIdentities, matchingEmails] = await Promise.all([
+        database.dosen.findMany({
+          where: {
+            OR: [
+              { nuptk: { in: rows.map((row) => row.nuptk) } },
+            ],
+          },
+          select: { nuptk: true },
+        }),
+        database.dosen.findMany({
+          where: {
+            email: {
+              in: rows.map((row) => row.email),
+              mode: "insensitive",
+            },
+          },
+          select: { email: true },
+        }),
+      ]);
+      const existingNuptks = new Set(
+        existingIdentities.map((lecturer) => lecturer.nuptk.toString()),
+      );
+      const existingEmails = new Set(
+        matchingEmails.map((lecturer) => lecturer.email?.toLowerCase()),
+      );
+      const newRows = rows.filter(
+        (row) =>
+          !existingNuptks.has(row.nuptk.toString()) &&
+          !existingEmails.has(row.email.toLowerCase()),
+      );
+      const hashedRows = await hashImportedPasswords(newRows);
+      const result = await database.$transaction((transaction) =>
+        transaction.dosen.createMany({
+          data: hashedRows,
+          skipDuplicates: true,
+        }),
+      );
+
+      response.json({
+        imported: result.count,
+        skipped: rows.length - result.count,
+        totalRows: rows.length,
+      });
+    } catch (error) {
+      if (error instanceof AcademicImportValidationError) {
+        response.status(400).json({ message: error.message });
+        return;
+      }
+      console.error("Gagal mengimpor data dosen baru:", error);
+      response.status(500).json({ message: "Data dosen gagal diimpor." });
+    }
+  },
+);
+
 authRouter.post("/login", async (request, response) => {
   const { role, identity, password } = request.body ?? {};
   if (
@@ -403,7 +544,7 @@ authRouter.post(
   academicUploadFile,
   async (request, response) => {
     if (!request.file) {
-      response.status(400).json({ message: "Pilih file absensi CSV atau Excel (.xlsx)." });
+      response.status(400).json({ message: "Pilih file absensi CSV atau Excel (.xls, .xlsx)." });
       return;
     }
 
@@ -642,7 +783,7 @@ authRouter.post(
   academicUploadFile,
   async (request, response) => {
     if (!request.file) {
-      response.status(400).json({ message: "Pilih file pembagian CSV atau Excel (.xlsx)." });
+      response.status(400).json({ message: "Pilih file pembagian CSV atau Excel (.xls, .xlsx)." });
       return;
     }
 
@@ -678,7 +819,7 @@ authRouter.post(
           select: { id: true, nim: true, jurusan: true },
         }),
         database.dosen.findMany({
-          select: { id: true, nama: true, nip: true },
+          select: { id: true, nama: true, nuptk: true },
         }),
         database.mahasiswa.count(),
       ]);
@@ -687,10 +828,9 @@ authRouter.post(
         students.map((student) => [student.nim, student]),
       );
 
-      const advisorByNip = new Map(
+      const advisorByNuptk = new Map(
         allAdvisors
-          .filter((advisor) => advisor.nip !== null && advisor.nip !== undefined)
-          .map((advisor) => [String(advisor.nip), advisor]),
+          .map((advisor) => [String(advisor.nuptk), advisor]),
       );
 
       const advisorByName = allAdvisors.map((advisor) => ({
@@ -700,8 +840,8 @@ authRouter.post(
       }));
 
       function resolveAdvisorForRow(row: typeof rows[number]) {
-        if (row.nip && advisorByNip.has(row.nip)) {
-          return advisorByNip.get(row.nip)!;
+        if (row.nuptk && advisorByNuptk.has(row.nuptk)) {
+          return advisorByNuptk.get(row.nuptk)!;
         }
         if (row.dpa) {
           const rawLower = row.dpa.toLowerCase().trim();
@@ -739,7 +879,7 @@ authRouter.post(
         unresolvableRows.length > 0
       ) {
         const missingDpas = [
-          ...new Set(unresolvableRows.map((r) => r.dpa || r.nip || String(r.nim))),
+          ...new Set(unresolvableRows.map((r) => r.dpa || r.nuptk || String(r.nim))),
         ];
         const details = [
           missingNims.length > 0
@@ -1008,7 +1148,7 @@ authRouter.get("/admin/monitoring", async (request, response) => {
           jurusan: true,
           pointScore: true,
           dosenPa: {
-            select: { id: true, nip: true, nama: true },
+            select: { id: true, nuptk: true, nama: true },
           },
           counselingRecords: {
             orderBy: [{ counselingDate: "desc" }, { createdAt: "desc" }],
@@ -1042,7 +1182,7 @@ authRouter.get("/admin/monitoring", async (request, response) => {
         orderBy: { nama: "asc" },
         select: {
           id: true,
-          nip: true,
+          nuptk: true,
           nama: true,
           _count: {
             select: {
@@ -1053,7 +1193,18 @@ authRouter.get("/admin/monitoring", async (request, response) => {
         },
       }),
     ]);
-    response.json({ students, lecturers });
+    response.json({
+      students: students.map((student) => ({
+        ...student,
+        dosenPa: student.dosenPa
+          ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk.toString() }
+          : null,
+      })),
+      lecturers: lecturers.map((lecturer) => ({
+        ...lecturer,
+        nuptk: lecturer.nuptk.toString(),
+      })),
+    });
   } catch (error) {
     console.error("Gagal memuat monitoring kemahasiswaan:", error);
     response.status(500).json({ message: "Data monitoring kemahasiswaan gagal dimuat." });

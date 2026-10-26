@@ -116,6 +116,14 @@ export default function App() {
   const [academicAttendanceResult, setAcademicAttendanceResult] = useState(null);
   const [academicAttendanceError, setAcademicAttendanceError] = useState('');
   const [isImportingAcademicAttendance, setIsImportingAcademicAttendance] = useState(false);
+  const [newStudentFile, setNewStudentFile] = useState(null);
+  const [newStudentImportResult, setNewStudentImportResult] = useState(null);
+  const [newStudentImportError, setNewStudentImportError] = useState('');
+  const [isImportingNewStudents, setIsImportingNewStudents] = useState(false);
+  const [newLecturerFile, setNewLecturerFile] = useState(null);
+  const [newLecturerImportResult, setNewLecturerImportResult] = useState(null);
+  const [newLecturerImportError, setNewLecturerImportError] = useState('');
+  const [isImportingNewLecturers, setIsImportingNewLecturers] = useState(false);
   const [advisorAssignmentFile, setAdvisorAssignmentFile] = useState(null);
   const [advisorAssignmentResult, setAdvisorAssignmentResult] = useState(null);
   const [advisorAssignmentError, setAdvisorAssignmentError] = useState('');
@@ -164,6 +172,8 @@ export default function App() {
       { id: 'dashboard', label: 'Dashboard Akademik' },
       { id: 'lapor', label: 'Lapor Satgas' },
       { id: 'upload-absensi', label: 'Upload Absensi' },
+      { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
+      { id: 'upload-dosen', label: 'Upload Data Dosen' },
       { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan' },
     ],
   };
@@ -201,7 +211,7 @@ export default function App() {
       String(student.nim),
       student.jurusan,
       student.dosenPa?.nama,
-      student.dosenPa?.nip,
+      student.dosenPa?.nuptk,
     ].some((value) => String(value ?? '').toLowerCase().includes(search));
     const matchesFilter =
       adminCoachingFilter === 'ALL' ||
@@ -536,7 +546,7 @@ export default function App() {
     setError('');
     setResult(null);
     if (!file) {
-      setError('Pilih file CSV atau Excel (.xlsx) terlebih dahulu.');
+      setError('Pilih file CSV atau Excel (.xls, .xlsx) terlebih dahulu.');
       return;
     }
 
@@ -576,6 +586,28 @@ export default function App() {
       setIsImportingAcademicAttendance,
       setAcademicAttendanceError,
       setAcademicAttendanceResult,
+    );
+  }
+
+  function handleNewStudentImport(event) {
+    return submitAcademicImport(
+      event,
+      newStudentFile,
+      '/api/auth/academic/students/import',
+      setIsImportingNewStudents,
+      setNewStudentImportError,
+      setNewStudentImportResult,
+    );
+  }
+
+  function handleNewLecturerImport(event) {
+    return submitAcademicImport(
+      event,
+      newLecturerFile,
+      '/api/auth/academic/lecturers/import',
+      setIsImportingNewLecturers,
+      setNewLecturerImportError,
+      setNewLecturerImportResult,
     );
   }
 
@@ -1115,7 +1147,7 @@ export default function App() {
 
           <div className="relative z-10 min-h-screen flex flex-col">
             <header className="bg-[#450a0a]/95 backdrop-blur-sm text-white border-b border-red-950 sticky top-0 z-30 shadow-md">
-              <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap justify-between items-center gap-4">
+              <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col items-start gap-4">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 bg-white p-0.5 rounded-xl flex items-center justify-center shadow-lg">
                     <img 
@@ -1135,39 +1167,41 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-red-800/50 bg-[#581c1c]/90 p-1">
-                  {dashboardNavigation.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                        activeTab === item.id
-                          ? 'bg-red-700 text-white shadow-md'
-                          : 'text-slate-200 hover:text-white'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 rounded-lg border border-red-800/50 bg-[#581c1c]/90 px-3 py-1.5 text-xs text-red-200">
-                    <span className="font-semibold">Role :</span>
-                    <span className="font-bold">
-                      {authenticatedUser?.role === 'admin'
-                        ? 'Kemahasiswaan'
-                        : (authenticatedUser?.roleLabel ?? 'Belum login')}
-                    </span>
+                <div className="flex w-full flex-wrap items-stretch gap-3">
+                  <div className="flex w-fit max-w-full flex-wrap items-center justify-start gap-1 rounded-xl border border-red-800/50 bg-[#581c1c]/90 p-1">
+                    {dashboardNavigation.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                          activeTab === item.id
+                            ? 'bg-red-700 text-white shadow-md'
+                            : 'text-slate-200 hover:text-white'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
                   </div>
 
-                  <button 
-                    onClick={handleLogout}
-                    className="p-2 text-slate-200 hover:text-red-200 hover:bg-red-900/40 rounded-lg transition-colors"
-                    title="Logout"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-full items-center gap-1.5 rounded-lg border border-red-800/50 bg-[#581c1c]/90 px-3 text-xs text-red-200">
+                      <span className="font-semibold">Role :</span>
+                      <span className="font-bold">
+                        {authenticatedUser?.role === 'admin'
+                          ? 'Kemahasiswaan'
+                          : (authenticatedUser?.roleLabel ?? 'Belum login')}
+                      </span>
+                    </div>
+
+                    <button 
+                      onClick={handleLogout}
+                      className="p-2 text-slate-200 hover:text-red-200 hover:bg-red-900/40 rounded-lg transition-colors"
+                      title="Logout"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </header>
@@ -1647,7 +1681,7 @@ export default function App() {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Absensi</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xlsx) dengan kolom No, Mata_Kuliah, Kelas, NIM, Nama_Mahasiswa, dan Jumlah_Kehadiran.
+                        Unggah file CSV atau Excel (.xls, .xlsx) dengan kolom No, Mata_Kuliah, Kelas, NIM, Nama_Mahasiswa, dan Jumlah_Kehadiran.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Baris absensi yang sama untuk mata kuliah, kelas, dan NIM yang sudah tersimpan akan dilewati.
@@ -1661,7 +1695,7 @@ export default function App() {
                         <input
                           id="academic-attendance-file"
                           type="file"
-                          accept=".csv,.xlsx"
+                          accept=".csv,.xls,.xlsx"
                           required
                           onChange={(event) => {
                             setAcademicAttendanceFile(event.target.files?.[0] ?? null);
@@ -1824,12 +1858,131 @@ export default function App() {
                   </section>
                 )}
 
+                {activeTab === 'upload-mahasiswa' && (
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                    <div className="mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Upload Data Mahasiswa Baru</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                        Unggah file Excel (.xls atau .xlsx) dengan kolom wajib <strong>NIM, Nama Lengkap, PRODI, dan Kata Sandi</strong>. Email, No Handphone, Angkatan, dan Nama SMTA bersifat opsional.
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Baris dengan NIM yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
+                      </p>
+                      <a
+                        href={`data:text/csv;charset=utf-8,${encodeURIComponent('NIM,Nama Lengkap,PRODI,Angkatan,Email,No Handphone,Nama SMTA,Kata Sandi\n')}`}
+                        download="template-data-mahasiswa.csv"
+                        className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
+                      >
+                        Unduh template data mahasiswa
+                      </a>
+                    </div>
+                    <form onSubmit={handleNewStudentImport} className="space-y-4">
+                      <label htmlFor="new-student-file" className="block text-sm font-semibold text-slate-700">
+                        File data mahasiswa
+                      </label>
+                      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                        <input
+                          id="new-student-file"
+                          type="file"
+                          accept=".xls,.xlsx,.csv"
+                          required
+                          onChange={(event) => {
+                            setNewStudentFile(event.target.files?.[0] ?? null);
+                            setNewStudentImportResult(null);
+                            setNewStudentImportError('');
+                          }}
+                          className="block w-full flex-1 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isImportingNewStudents || !newStudentFile}
+                          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-red-800 px-6 py-2.5 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                        >
+                          <Upload className="h-4 w-4" />
+                          {isImportingNewStudents ? 'Mengimpor mahasiswa…' : 'Upload Mahasiswa'}
+                        </button>
+                      </div>
+                    </form>
+                    {newStudentImportError && (
+                      <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        {newStudentImportError}
+                      </p>
+                    )}
+                    {newStudentImportResult && (
+                      <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        Berhasil menambahkan {newStudentImportResult.imported} mahasiswa baru. {newStudentImportResult.skipped} baris dilewati karena NIM sudah terdaftar.
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {activeTab === 'upload-dosen' && (
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                    <div className="mb-6">
+                      <h3 className="text-xl font-bold text-slate-900">Upload Data Dosen Baru</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                        Unggah file Excel (.xls atau .xlsx) dengan kolom wajib <strong>NUPTK, Nama, Email, dan Kata Sandi</strong>. Email digunakan dosen untuk login.
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Baris dengan NUPTK atau Email yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Atur kolom NUPTK sebagai teks di Excel agar seluruh digit tetap terjaga.
+                      </p>
+                      <a
+                        href={`data:text/csv;charset=utf-8,${encodeURIComponent('NUPTK,Nama,Email,Kata Sandi\n')}`}
+                        download="template-data-dosen.csv"
+                        className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
+                      >
+                        Unduh template data dosen
+                      </a>
+                    </div>
+                    <form onSubmit={handleNewLecturerImport} className="space-y-4">
+                      <label htmlFor="new-lecturer-file" className="block text-sm font-semibold text-slate-700">
+                        File data dosen
+                      </label>
+                      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                        <input
+                          id="new-lecturer-file"
+                          type="file"
+                          accept=".xls,.xlsx,.csv"
+                          required
+                          onChange={(event) => {
+                            setNewLecturerFile(event.target.files?.[0] ?? null);
+                            setNewLecturerImportResult(null);
+                            setNewLecturerImportError('');
+                          }}
+                          className="block w-full flex-1 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isImportingNewLecturers || !newLecturerFile}
+                          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-red-800 px-6 py-2.5 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                        >
+                          <Upload className="h-4 w-4" />
+                          {isImportingNewLecturers ? 'Mengimpor dosen…' : 'Upload Dosen'}
+                        </button>
+                      </div>
+                    </form>
+                    {newLecturerImportError && (
+                      <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        {newLecturerImportError}
+                      </p>
+                    )}
+                    {newLecturerImportResult && (
+                      <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        Berhasil menambahkan {newLecturerImportResult.imported} dosen baru. {newLecturerImportResult.skipped} baris dilewati karena NUPTK atau Email sudah terdaftar.
+                      </p>
+                    )}
+                  </section>
+                )}
+
                 {activeTab === 'pembagian-bimbingan' && (
                   <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xlsx) dengan kolom <strong>NIM, Program Studi</strong>, dan <strong>DPA</strong> atau <strong>NIP</strong>. NIM dan Program Studi wajib sesuai dengan data mahasiswa; nama DPA harus sesuai dengan nama dosen yang terdaftar.
+                        Unggah file CSV atau Excel (.xls, .xlsx) dengan kolom <strong>NIM, Program Studi</strong>, dan <strong>DPA</strong> atau <strong>NUPTK</strong>. NIM dan Program Studi wajib sesuai dengan data mahasiswa; nama DPA harus sesuai dengan nama dosen yang terdaftar.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Format file mendukung nama lengkap DPA dengan atau tanpa gelar akademik.
@@ -1853,7 +2006,7 @@ export default function App() {
                         <input
                           id="advisor-assignment-file"
                           type="file"
-                          accept=".csv,.xlsx"
+                          accept=".csv,.xls,.xlsx"
                           required
                           onChange={(event) => {
                             setAdvisorAssignmentFile(event.target.files?.[0] ?? null);
@@ -2360,7 +2513,7 @@ export default function App() {
                                 type="search"
                                 value={adminMonitoringSearch}
                                 onChange={(event) => setAdminMonitoringSearch(event.target.value)}
-                                placeholder="Cari nama, NIM, prodi, atau NIP"
+                                placeholder="Cari nama, NIM, prodi, atau NUPTK"
                                 className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                               />
                             </label>
@@ -2413,7 +2566,7 @@ export default function App() {
                                       {student.dosenPa ? (
                                         <>
                                           <p className="font-semibold text-slate-800">{student.dosenPa.nama}</p>
-                                          <p className="mt-1 text-xs text-slate-500">NIP {String(student.dosenPa.nip)}</p>
+                                          <p className="mt-1 text-xs text-slate-500">NUPTK {String(student.dosenPa.nuptk)}</p>
                                         </>
                                       ) : <span className="text-slate-400">Belum ditetapkan</span>}
                                     </td>
@@ -2498,7 +2651,7 @@ export default function App() {
                         {adminMonitoring.lecturers.map((lecturer) => (
                           <article key={lecturer.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <p className="font-bold text-slate-900">{lecturer.nama}</p>
-                            <p className="mt-1 text-xs text-slate-500">NIP {String(lecturer.nip)}</p>
+                            <p className="mt-1 text-xs text-slate-500">NUPTK {String(lecturer.nuptk)}</p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
                               <span className="rounded-full bg-blue-100 px-2.5 py-1 text-blue-800">{lecturer._count.mahasiswaBimbingan} mahasiswa</span>
                               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">{lecturer._count.counselingRecords} catatan coaching</span>

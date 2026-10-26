@@ -52,6 +52,10 @@ async function exportDatabase() {
 
   const exportedAt = new Date().toISOString();
 
+  if (dosenRows.some((row) => row.NUPTK === null || row.NUPTK === undefined)) {
+    throw new Error('Semua data dosen harus memiliki NUPTK sebelum diekspor.');
+  }
+
   // Map to standard transfer-data snapshot format
   const mahasiswaSnapshot = mahasiswaRows.map((r) => ({
     id: r.ID,
@@ -70,9 +74,7 @@ async function exportDatabase() {
   const dosenSnapshot = dosenRows.map((r) => ({
     id: r.ID,
     email: r.Email || null,
-    nuptk: r.NUPTK ? String(r.NUPTK) : null,
-    nidn: r.NIDN ? String(r.NIDN) : r.NUPTK ? String(r.NUPTK) : "0",
-    nip: r.NIP ? String(r.NIP) : r.NUPTK ? String(r.NUPTK) : "0",
+    nuptk: String(r.NUPTK),
     nama: r.Nama,
     password: r.Password,
     timestamp: r.Timestamp ? new Date(r.Timestamp).toISOString() : exportedAt,
@@ -177,4 +179,3 @@ async function exportDatabase() {
 }
 
 exportDatabase().catch(console.error);
-

@@ -11,7 +11,6 @@ import {
   JenisPembinaan,
   PeranPenerima,
   Prisma,
-  PrismaClient,
   StatusLaporan,
   StatusPembinaan,
   StatusSanggahan,
@@ -20,7 +19,6 @@ import {
 import {
   calculatePointChangeForDelta,
   getPointChangeMetadata,
-  getScorePredicate,
   disciplinePillarLabels,
   violationSeverityLabels,
   violationSeverityFollowUps,
@@ -29,6 +27,7 @@ import {
 import { sendPointDeductionEmail } from "./mailer";
 import { database, getSessionForRequest, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
+import { appealSchema, parseBody, trainingEvidenceSchema } from "./validation";
 import {
   buildReportNotificationTexts,
   createReportNotifications,
@@ -157,6 +156,7 @@ function writeAudit(
   return transaction.logAudit.create({
     data: {
       aktorId: session.profile.id,
+      aktorPeran: session.profile.role,
       aksi: action,
       entitas: entity,
       entitasId: entityId,
@@ -469,18 +469,12 @@ reportRouter.get("/mahasiswa/sanggahan", async (request, response) => {
 reportRouter.post("/sanggahan", async (request, response) => {
   const session = requireStudent(request, response);
   if (!session) return;
-  const perubahanPoinId = Number(request.body?.perubahanPoinId);
-  const alasan =
-    typeof request.body?.alasan === "string" ? request.body.alasan.trim() : "";
-  if (
-    !Number.isSafeInteger(perubahanPoinId) ||
-    perubahanPoinId < 1 ||
-    alasan.length < 20 ||
-    alasan.length > 2000
-  ) {
+  const appeal = parseBody(appealSchema, request.body);
+  if (!appeal) {
     response.status(400).json({ message: "Pilih perubahan poin dan isi alasan sanggahan (20–2000 karakter)." });
     return;
   }
+  const { perubahanPoinId, alasan } = appeal;
   try {
     const result = await database.$transaction(
       async (transaction) => {
@@ -555,26 +549,12 @@ reportRouter.post("/pembinaan/:id/bukti", async (request, response) => {
   const session = requireStudent(request, response);
   if (!session) return;
   const id = parsePositiveInteger(request.params.id);
-  const buktiUrl =
-    typeof request.body?.buktiUrl === "string" ? request.body.buktiUrl.trim() : "";
-  let parsedUrl: URL | null = null;
-  try {
-    parsedUrl = new URL(buktiUrl);
-  } catch {
-    parsedUrl = null;
-  }
-  const catatan =
-    typeof request.body?.catatan === "string" ? request.body.catatan.trim() : "";
-  if (
-    !id ||
-    !parsedUrl ||
-    !["https:", "http:"].includes(parsedUrl.protocol) ||
-    buktiUrl.length > 2000 ||
-    catatan.length > 5000
-  ) {
+  const evidence = parseBody(trainingEvidenceSchema, request.body);
+  if (!id || !evidence) {
     response.status(400).json({ message: "Masukkan tautan bukti HTTP/HTTPS yang valid dan catatan maksimal 5000 karakter." });
     return;
   }
+  const { buktiUrl, catatan } = evidence;
   try {
     const submitted = await database.$transaction(async (transaction) => {
       const training = await transaction.pembinaan.findFirst({
@@ -646,11 +626,34 @@ reportRouter.post("/pembinaan/:id/refleksi", async (request, response) => {
     return;
   }
   try {
-    const result = await database.pembinaan.updateMany({
-      where: { id, studentId: session.profile.id, status: StatusPembinaan.DIMINTA },
-      data: { isiRefleksi, status: StatusPembinaan.DIKIRIM },
+    const submitted = await database.$transaction(async (transaction) => {
+      const training = await transaction.pembinaan.findFirst({
+        where: { id, studentId: session.profile.id, status: StatusPembinaan.DIMINTA },
+        include: {
+          student: { select: { dosenPaId: true } },
+          perubahanPoin: { select: { laporan: { select: { id: true } } } },
+        },
+      });
+      if (!training) return false;
+      const updated = await transaction.pembinaan.updateMany({
+        where: { id, studentId: session.profile.id, status: StatusPembinaan.DIMINTA },
+        data: { isiRefleksi, status: StatusPembinaan.DIKIRIM },
+      });
+      if (updated.count === 0) return false;
+      const dosenPaId = training.student.dosenPaId;
+      await transaction.pemberitahuanStaf.create({
+        data: {
+          peran: dosenPaId ? PeranPenerima.DOSEN : PeranPenerima.KEMAHASISWAAN,
+          dosenId: dosenPaId,
+          laporanId: training.perubahanPoin.laporan?.id,
+          judul: "Refleksi mahasiswa menunggu pemeriksaan",
+          isi: "Mahasiswa telah mengirim refleksi tertulis. Tinjau dan setujui atau minta perbaikan.",
+          tautanTab: dosenPaId ? "laporan-dpa" : "laporan",
+        },
+      });
+      return true;
     });
-    if (result.count === 0) {
+    if (!submitted) {
       response.status(404).json({ message: "Tugas pembinaan tidak ditemukan atau tidak dapat dikirim." });
       return;
     }
@@ -953,6 +956,20 @@ reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) =>
           kind: "decided" as const,
           status: StatusLaporan.DIVERIFIKASI,
           delta: pointChange.delta,
+          emailNotification: report.terlapor.email
+            ? {
+                toEmail: report.terlapor.email,
+                studentName: report.terlapor.nama,
+                studentNim: report.terlapor.nim,
+                prodi: report.terlapor.jurusan,
+                pillarName: disciplinePillarLabels[rule.pillar] || rule.pillar,
+                severityName: violationSeverityLabels[rule.severity] || rule.severity,
+                delta: pointChange.delta,
+                scoreAfter: pointChange.score,
+                reason: `Pelanggaran dikonfirmasi Dosen PA: ${rule.nama}`,
+                category: "Pelanggaran Disiplin",
+              }
+            : null,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -965,7 +982,15 @@ reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) =>
       response.status(400).json({ message: "Aturan tidak aktif atau tidak sesuai dengan pilar laporan." });
       return;
     }
-    response.json(result);
+    const { emailNotification, ...decision } = "emailNotification" in result
+      ? result
+      : { ...result, emailNotification: null };
+    if (emailNotification) {
+      sendPointDeductionEmail(emailNotification).catch((err) => {
+        console.error(`[Mailer] Error saat mengirim email ke ${emailNotification.toEmail}:`, err);
+      });
+    }
+    response.json(decision);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
       response.status(409).json({ message: "Laporan sedang diproses. Muat ulang antrean dan coba lagi." });
@@ -1133,49 +1158,42 @@ reportRouter.get("/admin/laporan", async (request, response) => {
   if (!requireAdmin(request, response)) return;
   const status = request.query.status;
   const pillar = request.query.pillar;
+  const cursor =
+    request.query.cursor === undefined ? null : parsePositiveInteger(request.query.cursor);
+  const limit =
+    request.query.limit === undefined ? 50 : parsePositiveInteger(request.query.limit);
   if (
     (status !== undefined &&
       (typeof status !== "string" ||
         !Object.values(StatusLaporan).includes(status as StatusLaporan))) ||
     (pillar !== undefined &&
       (typeof pillar !== "string" ||
-        !pillarValues.includes(pillar as DisciplinePillar)))
+        !pillarValues.includes(pillar as DisciplinePillar))) ||
+    (request.query.cursor !== undefined && cursor === null) ||
+    limit === null ||
+    limit > 100
   ) {
     response.status(400).json({ message: "Filter laporan tidak valid." });
     return;
   }
+  const where: Prisma.LaporanWhereInput = {
+    ...(status ? { status: status as StatusLaporan } : {}),
+    ...(pillar ? { pillar: pillar as DisciplinePillar } : {}),
+  };
   try {
-    const laporan = await database.laporan.findMany({
-      where: {
-        OR: [
-          {
-            status: StatusLaporan.DITERIMA,
-            jalur: "TERIDENTIFIKASI",
-            jenis: JenisLaporan.TEMUAN,
-          },
-          {
-            status: StatusLaporan.DITERIMA,
-            jalur: { not: "TERIDENTIFIKASI" },
-          },
-          {
-            status: StatusLaporan.DITERIMA,
-            jenis: JenisLaporan.APRESIASI,
-          },
-          {
-            status: {
-              in: [
-                StatusLaporan.DIVERIFIKASI,
-                StatusLaporan.DITINDAKLANJUTI,
-                StatusLaporan.SELESAI,
-                StatusLaporan.DITOLAK,
-              ],
-            },
-          },
-        ],
-        ...(status ? { status: status as StatusLaporan } : {}),
-        ...(pillar ? { pillar: pillar as DisciplinePillar } : {}),
-      },
-      orderBy: { id: "asc" },
+    const [pendingCount, laporan] = await Promise.all([
+      database.laporan.count({
+        where: {
+          ...(pillar ? { pillar: pillar as DisciplinePillar } : {}),
+          status: { in: [StatusLaporan.DITERIMA, StatusLaporan.DIVERIFIKASI] },
+        },
+      }),
+      database.laporan.findMany({
+      where,
+      // Enum Postgres terurut sesuai deklarasi: laporan yang menunggu tampil dulu.
+      orderBy: [{ status: "asc" }, { id: "asc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
         jenis: true,
@@ -1216,8 +1234,15 @@ reportRouter.get("/admin/laporan", async (request, response) => {
           },
         },
       },
+      }),
+    ]);
+    const hasMore = laporan.length > limit;
+    const page = hasMore ? laporan.slice(0, limit) : laporan;
+    response.json({
+      laporan: page,
+      pendingCount,
+      nextCursor: hasMore ? page[page.length - 1].id : null,
     });
-    response.json({ laporan });
   } catch (error) {
     console.error("Gagal memuat antrean laporan:", error);
     response.status(500).json({ message: "Antrean laporan gagal dimuat." });
@@ -1764,4 +1789,43 @@ reportRouter.patch("/admin/pembinaan/:id", async (request, response) => {
   }
 });
 
-export { reportRouter };
+// Bukti foto hanya untuk admin dan Dosen PA mahasiswa terlapor.
+const evidenceRouter = Router();
+evidenceRouter.get("/:fileName", async (request, response) => {
+  const session = requireLogin(request, response);
+  if (!session) return;
+  const fileName = String(request.params.fileName);
+  if (!/^[a-f0-9]{36}\.(jpg|png)$/.test(fileName)) {
+    response.status(404).json({ message: "Bukti tidak ditemukan." });
+    return;
+  }
+  const { role, id } = session.profile;
+  if (role !== "admin" && role !== "dosen") {
+    response.status(403).json({ message: "Anda tidak berhak melihat bukti ini." });
+    return;
+  }
+  try {
+    const report = await database.laporan.findFirst({
+      where: {
+        buktiPath: `/uploads/evidence/${fileName}`,
+        ...(role === "dosen" ? { terlapor: { dosenPaId: id } } : {}),
+      },
+      select: { id: true },
+    });
+    if (!report) {
+      response.status(404).json({ message: "Bukti tidak ditemukan." });
+      return;
+    }
+    response.setHeader("Cache-Control", "private, no-store");
+    response.sendFile(resolve(evidenceDirectory, fileName), (error) => {
+      if (error && !response.headersSent) {
+        response.status(404).json({ message: "Bukti tidak ditemukan." });
+      }
+    });
+  } catch (error) {
+    console.error("Gagal memuat bukti laporan:", error);
+    response.status(500).json({ message: "Bukti gagal dimuat." });
+  }
+});
+
+export { reportRouter, evidenceRouter };

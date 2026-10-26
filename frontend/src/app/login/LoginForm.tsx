@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ArrowLeft, BookOpen, GraduationCap, ShieldCheck } from "lucide-react";
@@ -193,13 +194,13 @@ export default function LoginForm({ role }: { role: LoginRole }) {
           </button>
         </form>
 
-        <a
+        <Link
           href="/"
           className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Kembali ke Menu Utama
-        </a>
+        </Link>
       </section>
     </main>
   );

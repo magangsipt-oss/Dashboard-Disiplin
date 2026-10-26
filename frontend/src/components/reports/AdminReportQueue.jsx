@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Clock3, FileText, Search, ShieldCheck } from "lucide-react";
-import { jsonRequest, studentApi } from "../student/api";
+import { jsonRequest, studentApi, safeHref } from "@/lib/api";
 
 const statusLabels = {
   DITERIMA: "Menunggu peninjauan",
@@ -120,7 +120,7 @@ function AdminReportCard({ report, onChanged }) {
 
       {report.buktiPath && (
         <a
-          href={report.buktiPath}
+          href={safeHref(report.buktiPath)}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-sm font-semibold text-red-800 hover:underline"
@@ -271,7 +271,7 @@ function AdminReportCard({ report, onChanged }) {
           <p className="font-bold text-slate-900">Tindak lanjut: {training.instruksi}</p>
           <p className="mt-1 text-slate-600">Status bukti: {training.status}</p>
           {training.buktiUrl && (
-            <a href={training.buktiUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-semibold text-red-800 hover:underline">
+            <a href={safeHref(training.buktiUrl)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-semibold text-red-800 hover:underline">
               Lihat bukti penyelesaian
             </a>
           )}
@@ -289,7 +289,10 @@ function AdminReportCard({ report, onChanged }) {
 
 export default function AdminReportQueue() {
   const [reports, setReports] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
   async function loadReports(showLoading = true) {
@@ -298,6 +301,8 @@ export default function AdminReportQueue() {
     try {
       const result = await studentApi("/api/admin/laporan");
       setReports(result.laporan ?? []);
+      setPendingCount(result.pendingCount ?? 0);
+      setNextCursor(result.nextCursor ?? null);
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -305,13 +310,37 @@ export default function AdminReportQueue() {
     }
   }
 
-  useEffect(() => {
-    loadReports();
-  }, []);
+  async function loadMoreReports() {
+    if (!nextCursor) return;
+    setIsLoadingMore(true);
+    setError("");
+    try {
+      const result = await studentApi(`/api/admin/laporan?cursor=${nextCursor}`);
+      setReports((current) => [...current, ...(result.laporan ?? [])]);
+      setPendingCount(result.pendingCount ?? 0);
+      setNextCursor(result.nextCursor ?? null);
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
-  const pendingCount = reports.filter(
-    (report) => report.status === "DITERIMA" || report.status === "DIVERIFIKASI",
-  ).length;
+  useEffect(() => {
+    let active = true;
+    studentApi("/api/admin/laporan")
+      .then((result) => {
+        if (!active) return;
+        setReports(result.laporan ?? []);
+        setPendingCount(result.pendingCount ?? 0);
+        setNextCursor(result.nextCursor ?? null);
+      })
+      .catch((loadError) => active && setError(loadError.message))
+      .finally(() => active && setIsLoading(false));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-6 py-8">
@@ -339,6 +368,16 @@ export default function AdminReportQueue() {
           {reports.map((report) => (
             <AdminReportCard key={report.id} report={report} onChanged={() => loadReports(false)} />
           ))}
+          {nextCursor && (
+            <button
+              type="button"
+              onClick={loadMoreReports}
+              disabled={isLoadingMore}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {isLoadingMore ? "Memuat..." : "Muat laporan lainnya"}
+            </button>
+          )}
         </div>
       )}
       <button

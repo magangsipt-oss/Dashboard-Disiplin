@@ -46,6 +46,19 @@ function getScoreCategory(score: number): { label: string; color: string; badgeB
   };
 }
 
+const htmlEscapes: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+// Data dari file upload/DB tidak boleh masuk HTML email apa adanya.
+export function escapeHtml(value: unknown): string {
+  return String(value).replace(/[&<>"']/g, (char) => htmlEscapes[char]);
+}
+
 let transporterInstance: Transporter | null = null;
 
 function getTransporter(): Transporter | null {
@@ -107,7 +120,7 @@ export async function sendPointDeductionEmail(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${escapeHtml(subject)}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 24px 12px;">
@@ -130,7 +143,7 @@ export async function sendPointDeductionEmail(
           <tr>
             <td style="padding: 28px 24px;">
               <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #334155;">
-                Yth. Sdr/i <strong>${studentName}</strong>,
+                Yth. Sdr/i <strong>${escapeHtml(studentName)}</strong>,
               </p>
               <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.6; color: #475569;">
                 Kami informasikan bahwa terdapat pencatatan pengurangan poin budaya disiplin pada akun Anda berdasarkan data yang telah diverifikasi oleh bagian akademik / tim kedisiplinan kampus.
@@ -158,23 +171,23 @@ export async function sendPointDeductionEmail(
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size: 13px; line-height: 1.8;">
                   <tr>
                     <td width="35%" style="color: #64748b; font-weight: 600;">NIM</td>
-                    <td style="color: #0f172a; font-weight: 700;">: ${studentNim}</td>
+                    <td style="color: #0f172a; font-weight: 700;">: ${escapeHtml(studentNim)}</td>
                   </tr>
                   <tr>
                     <td style="color: #64748b; font-weight: 600;">Program Studi</td>
-                    <td style="color: #0f172a;">: ${prodi}</td>
+                    <td style="color: #0f172a;">: ${escapeHtml(prodi)}</td>
                   </tr>
                   <tr>
                     <td style="color: #64748b; font-weight: 600;">Pilar Disiplin</td>
-                    <td style="color: #0f172a; font-weight: 700;">: ${pillarName}</td>
+                    <td style="color: #0f172a; font-weight: 700;">: ${escapeHtml(pillarName)}</td>
                   </tr>
                   <tr>
                     <td style="color: #64748b; font-weight: 600;">Tingkat</td>
-                    <td style="color: #0f172a;">: <span style="background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px;">${severityName}</span></td>
+                    <td style="color: #0f172a;">: <span style="background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px;">${escapeHtml(severityName)}</span></td>
                   </tr>
                   <tr>
                     <td style="color: #64748b; font-weight: 600; vertical-align: top;">Keterangan</td>
-                    <td style="color: #0f172a; font-weight: 600;">: ${reason}</td>
+                    <td style="color: #0f172a; font-weight: 600;">: ${escapeHtml(reason)}</td>
                   </tr>
                   <tr>
                     <td style="color: #64748b; font-weight: 600;">Status Predikat</td>

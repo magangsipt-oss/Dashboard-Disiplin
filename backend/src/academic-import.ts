@@ -139,40 +139,6 @@ function readSheetMatrix(buffer: Buffer, fileName: string): unknown[][] {
   });
 }
 
-function readRows(buffer: Buffer, fileName: string, requiredHeaders: string[]) {
-  const matrix = readSheetMatrix(buffer, fileName);
-  const headerRow = matrix[0];
-  if (!headerRow) {
-    throw new AcademicImportValidationError("File tidak memiliki baris judul kolom.");
-  }
-
-  const headers = headerRow.map(normalizeHeader);
-  const missingHeaders = requiredHeaders.filter(
-    (header) => !headers.includes(header),
-  );
-  if (missingHeaders.length > 0) {
-    throw new AcademicImportValidationError(
-      `Kolom wajib tidak ditemukan: ${missingHeaders.join(", ")}.`,
-    );
-  }
-
-  const records = matrix
-    .slice(1)
-    .map((row, index) => ({ row, sourceRow: index + 2 }))
-    .filter(({ row }) => row.some((value) => cellText(value) !== ""));
-  if (records.length === 0) {
-    throw new AcademicImportValidationError("File tidak berisi baris data.");
-  }
-  if (records.length > MAX_IMPORT_ROWS) {
-    throw new AcademicImportValidationError(
-      `File maksimal berisi ${MAX_IMPORT_ROWS.toLocaleString("id-ID")} baris data.`,
-    );
-  }
-
-  const column = (header: string) => headers.indexOf(header);
-  return { records, column };
-}
-
 function parseNim(value: unknown, sourceRow: number): number {
   const text = cellText(value).replace(/\.0+$/, "");
   if (!/^[1-9]\d*$/.test(text)) {

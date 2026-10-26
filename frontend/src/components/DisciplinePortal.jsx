@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LaporSatgas from './student/LaporSatgas';
 import TindakLanjut from './student/TindakLanjut';
@@ -8,6 +8,7 @@ import SanggahanMahasiswa from './student/SanggahanMahasiswa';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
+import FilePreviewModal from './modals/FilePreviewModal';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -22,12 +23,10 @@ import {
   Calendar,
   AlertCircle,
   FileText,
-  Plus,
   BookOpen,
   ClipboardCheck,
   Leaf,
   Scale,
-  ArrowLeft,
   ArrowRight,
   HelpCircle,
   MapPin,
@@ -75,14 +74,82 @@ const pointChangeTypeLabels = {
   POINT_RESTORATION: 'Pemulihan poin',
 };
 
-export default function App() {
+// Konstanta statis: dibuat sekali, bukan tiap render.
+const officialLogoUrl = "/poltek-simas-berau.png";
+const portalAccessBackground = "/portal-access-background.jpg";
+const campusAddress =
+  "Politeknik Sinar Mas Berau Coal, Jl. Raja Alam II, Kel. Rinding, Teluk Bayur, Kabupaten Berau, Kalimantan Timur 77315";
+const campusMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(campusAddress)}`;
+const campusMapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(campusAddress)}&output=embed`;
+const heroImages = [
+  '/campus-team.png',
+  '/header-student-team.png',
+  '/header-vocational-training.png',
+];
+const navigationByRole = {
+  mhs: [
+    { id: 'dashboard', label: 'Aktivitas' },
+    { id: 'sanggah', label: 'Sanggah Pelanggaran' },
+    { id: 'lapor', label: 'Lapor Satgas' },
+    { id: 'tindak-lanjut', label: 'Tindak Lanjut' },
+    { id: 'klaim', label: 'Klaim Kegiatan' },
+  ],
+  dosen: [
+    { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
+    { id: 'laporan-dpa', label: 'Konfirmasi Laporan' },
+    { id: 'konseling', label: 'Catatan & Konseling' },
+    { id: 'lapor', label: 'Lapor Satgas' },
+  ],
+  admin: [
+    { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
+    { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
+    { id: 'monitoring', label: 'Monitoring Mahasiswa & Dosen PA' },
+    { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
+  ],
+  akademik: [
+    { id: 'lapor', label: 'Lapor Satgas' },
+    { id: 'upload-absensi', label: 'Upload Absensi' },
+    { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
+    { id: 'upload-dosen', label: 'Upload Data Dosen' },
+    { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan' },
+  ],
+};
+
+const getLatestViolation = (student) => student.pointChanges?.[0];
+const hasViolation = (student) => Boolean(getLatestViolation(student));
+const hasCoachingForLatestViolation = (student) => {
+  const latestViolation = getLatestViolation(student);
+  const latestCoaching = student.counselingRecords?.[0];
+  if (!latestViolation?.createdAt || !latestCoaching?.createdAt) {
+    return false;
+  }
+  return new Date(latestCoaching.createdAt) >= new Date(latestViolation.createdAt);
+};
+
+// Polling yang berhenti saat tab browser tersembunyi, lalu langsung
+// menyegarkan data ketika tab kembali terlihat.
+const POLL_INTERVAL_MS = 15000;
+function startPolling(refresh) {
+  const timer = window.setInterval(() => {
+    if (!document.hidden) refresh();
+  }, POLL_INTERVAL_MS);
+  const handleVisibility = () => {
+    if (!document.hidden) refresh();
+  };
+  document.addEventListener('visibilitychange', handleVisibility);
+  return () => {
+    window.clearInterval(timer);
+    document.removeEventListener('visibilitychange', handleVisibility);
+  };
+}
+
+export default function App({ hasSessionCookie = false }) {
   const router = useRouter();
-  const [activePage, setActivePage] = useState('landing');
+  // Jika cookie sesi ada, tahan render sampai sesi diperiksa agar landing tidak berkedip.
+  const [activePage, setActivePage] = useState(hasSessionCookie ? 'checking' : 'landing');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeHeroImage, setActiveHeroImage] = useState(0);
 
-  const [showSKPIModal, setShowSKPIModal] = useState(false);
-  const [showSanggahModal, setShowSanggahModal] = useState(false);
   const [selectedAppealChangeId, setSelectedAppealChangeId] = useState(null);
 
   const [loginError, setLoginError] = useState('');
@@ -111,6 +178,7 @@ export default function App() {
   const [isLoadingAdminMonitoring, setIsLoadingAdminMonitoring] = useState(false);
   const [adminMonitoringError, setAdminMonitoringError] = useState('');
   const [adminMonitoringSearch, setAdminMonitoringSearch] = useState('');
+  const [adminMonitoringPage, setAdminMonitoringPage] = useState(1);
   const [adminCoachingFilter, setAdminCoachingFilter] = useState('ALL');
   const [academicAttendanceFile, setAcademicAttendanceFile] = useState(null);
   const [academicAttendanceResult, setAcademicAttendanceResult] = useState(null);
@@ -136,46 +204,6 @@ export default function App() {
   const [previewError, setPreviewError] = useState('');
   const [previewSearchTerm, setPreviewSearchTerm] = useState('');
 
-  const officialLogoUrl = "/poltek-simas-berau.png";
-  const bgCampusImage = "/portal-access-background.jpg";
-  const portalAccessBackground = "/portal-access-background.jpg";
-  const campusAddress =
-    "Politeknik Sinar Mas Berau Coal, Jl. Raja Alam II, Kel. Rinding, Teluk Bayur, Kabupaten Berau, Kalimantan Timur 77315";
-  const campusMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(campusAddress)}`;
-  const campusMapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(campusAddress)}&output=embed`;
-  const heroImages = [
-    '/campus-team.png',
-    '/header-student-team.png',
-    '/header-vocational-training.png',
-  ];
-  const navigationByRole = {
-    mhs: [
-      { id: 'dashboard', label: 'Aktivitas' },
-      { id: 'sanggah', label: 'Sanggah Pelanggaran' },
-      { id: 'lapor', label: 'Lapor Satgas' },
-      { id: 'tindak-lanjut', label: 'Tindak Lanjut' },
-      { id: 'klaim', label: 'Klaim Kegiatan' },
-    ],
-    dosen: [
-      { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
-      { id: 'laporan-dpa', label: 'Konfirmasi Laporan' },
-      { id: 'konseling', label: 'Catatan & Konseling' },
-      { id: 'lapor', label: 'Lapor Satgas' },
-    ],
-    admin: [
-      { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
-      { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
-      { id: 'monitoring', label: 'Monitoring Mahasiswa & Dosen PA' },
-      { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
-    ],
-    akademik: [
-      { id: 'lapor', label: 'Lapor Satgas' },
-      { id: 'upload-absensi', label: 'Upload Absensi' },
-      { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
-      { id: 'upload-dosen', label: 'Upload Data Dosen' },
-      { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan' },
-    ],
-  };
   const dashboardNavigation =
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
   const filteredAdvisorStudents = advisorStudents.filter((student) => {
@@ -193,18 +221,10 @@ export default function App() {
   const selectedCounselingStudent = counselingStudents.find(
     (student) => String(student.id) === selectedCounselingStudentId,
   );
-  const getLatestViolation = (student) => student.pointChanges?.[0];
-  const hasViolation = (student) => Boolean(getLatestViolation(student));
-  const hasCoachingForLatestViolation = (student) => {
-    const latestViolation = getLatestViolation(student);
-    const latestCoaching = student.counselingRecords?.[0];
-    if (!latestViolation?.createdAt || !latestCoaching?.createdAt) {
-      return false;
-    }
-    return new Date(latestCoaching.createdAt) >= new Date(latestViolation.createdAt);
-  };
-  const filteredAdminMonitoringStudents = adminMonitoring.students.filter((student) => {
-    const search = adminMonitoringSearch.trim().toLowerCase();
+  const deferredMonitoringSearch = useDeferredValue(adminMonitoringSearch);
+  const filteredAdminMonitoringStudents = useMemo(() => {
+    const search = deferredMonitoringSearch.trim().toLowerCase();
+    return adminMonitoring.students.filter((student) => {
     const matchesSearch = !search || [
       student.nama,
       String(student.nim),
@@ -218,7 +238,15 @@ export default function App() {
       (adminCoachingFilter === 'NEEDS_COACHING' && student.dosenPa && hasViolation(student) && !hasCoachingForLatestViolation(student)) ||
       (adminCoachingFilter === 'NO_ADVISOR' && !student.dosenPa);
     return matchesSearch && matchesFilter;
-  });
+    });
+  }, [adminMonitoring.students, deferredMonitoringSearch, adminCoachingFilter]);
+  const MONITORING_PAGE_SIZE = 50;
+  const monitoringPageCount = Math.max(1, Math.ceil(filteredAdminMonitoringStudents.length / MONITORING_PAGE_SIZE));
+  const currentMonitoringPage = Math.min(adminMonitoringPage, monitoringPageCount);
+  const pagedAdminMonitoringStudents = filteredAdminMonitoringStudents.slice(
+    (currentMonitoringPage - 1) * MONITORING_PAGE_SIZE,
+    currentMonitoringPage * MONITORING_PAGE_SIZE,
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -293,11 +321,14 @@ export default function App() {
                 }
               });
           }
+        } else if (isMounted) {
+          setActivePage((current) => (current === 'checking' ? 'landing' : current));
         }
       })
       .catch((error) => {
         if (isMounted) {
           console.error('Tidak dapat memeriksa sesi login:', error);
+          setActivePage((current) => (current === 'checking' ? 'landing' : current));
         }
       });
 
@@ -373,10 +404,10 @@ export default function App() {
     };
 
     loadAdvisorStudents(true);
-    const refreshTimer = window.setInterval(() => loadAdvisorStudents(false), 15000);
+    const stopPolling = startPolling(() => loadAdvisorStudents(false));
     return () => {
       isMounted = false;
-      window.clearInterval(refreshTimer);
+      stopPolling();
     };
   }, [authenticatedUser?.role, activePage]);
 
@@ -418,10 +449,10 @@ export default function App() {
     };
 
     loadCounseling(true);
-    const refreshTimer = window.setInterval(() => loadCounseling(false), 15000);
+    const stopPolling = startPolling(() => loadCounseling(false));
     return () => {
       isMounted = false;
-      window.clearInterval(refreshTimer);
+      stopPolling();
     };
   }, [authenticatedUser?.role, activePage, activeTab]);
 
@@ -466,10 +497,10 @@ export default function App() {
     };
 
     loadAdminMonitoring(true);
-    const refreshTimer = window.setInterval(() => loadAdminMonitoring(false), 15000);
+    const stopPolling = startPolling(() => loadAdminMonitoring(false));
     return () => {
       isMounted = false;
-      window.clearInterval(refreshTimer);
+      stopPolling();
     };
   }, [authenticatedUser?.role, activePage, activeTab]);
 
@@ -538,7 +569,7 @@ export default function App() {
     }, 6500);
 
     return () => window.clearInterval(heroTimer);
-  }, [activePage, heroImages.length]);
+  }, [activePage]);
 
   const handleSelectRole = (role) => {
     router.push(`/login?role=${role}`);
@@ -691,14 +722,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen font-sans text-slate-800 bg-slate-100">
-      
-      {}
+      {activePage === 'checking' && (
+        <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+          <p className="text-sm font-semibold text-slate-500">Memeriksa sesi login...</p>
+        </div>
+      )}
       {activePage === 'landing' && (
         <div className="min-h-screen flex flex-col">
           <header className="bg-white border-b border-slate-200 px-6 py-3.5 relative z-20 shadow-sm">
             <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="h-12 w-auto flex items-center justify-center p-1 bg-white rounded-xl shadow-sm border border-slate-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- logo kecil dengan fallback onError */}
                   <img 
                     src={officialLogoUrl} 
                     alt="Logo Poltek Simas Berau" 
@@ -1140,11 +1175,10 @@ export default function App() {
         </div>
       )}
 
-      {}
       {activePage === 'dashboard' && (
         <div 
           className="min-h-screen bg-cover bg-center bg-fixed relative"
-          style={{ backgroundImage: `url(${bgCampusImage})` }}
+          style={{ backgroundImage: `url(${portalAccessBackground})` }}
         >
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
 
@@ -1153,6 +1187,7 @@ export default function App() {
               <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col items-start gap-4">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 bg-white p-0.5 rounded-xl flex items-center justify-center shadow-lg">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- logo kecil dengan fallback onError */}
                     <img 
                       src={officialLogoUrl} 
                       alt="Logo Poltek Simas Berau" 
@@ -1541,20 +1576,9 @@ export default function App() {
 
                   <div className="flex gap-2">
                     {activeTab === 'klaim' && (
-                      <button 
-                        onClick={() => setShowSKPIModal(true)}
-                        className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow transition-colors"
-                      >
-                        <Plus className="w-4 h-4" /> Ajukan Klaim Kegiatan
-                      </button>
-                    )}
-                    {activeTab === 'sanggah' && authenticatedUser?.role !== 'mhs' && (
-                      <button
-                        onClick={() => setShowSanggahModal(true)}
-                        className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow transition-colors"
-                      >
-                        <FileText className="w-4 h-4" /> {authenticatedUser?.role === 'mhs' ? 'Ajukan Sanggah Pelanggaran' : 'Ajukan Sanggah'}
-                      </button>
+                      <span className="rounded-xl border border-dashed border-slate-300 px-4 py-2 text-xs font-semibold text-slate-500">
+                        Pengajuan klaim kegiatan segera tersedia
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1988,7 +2012,7 @@ export default function App() {
                         Pembagian ini otomatis tersinkronisasi ke Dashboard Mahasiswa, Mahasiswa Bimbingan Dosen PA, dan Monitoring Kemahasiswaan.
                       </p>
                       <a
-                        href={`data:text/csv;charset=utf-8,${encodeURIComponent("No.,NIM,Nama Lengkap,Program Studi,Angkatan,DPA\n1,24409901,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n2,24409902,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n3,24409903,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n4,24409928,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"\n5,24409956,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,\"Nama Dosen PA, S.T., M.T.\"")}`}
+                        href="/contoh-pembagian-dosen-pa.csv"
                         download="contoh-pembagian-dosen-pa.csv"
                         className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
                       >
@@ -2503,7 +2527,10 @@ export default function App() {
                               <input
                                 type="search"
                                 value={adminMonitoringSearch}
-                                onChange={(event) => setAdminMonitoringSearch(event.target.value)}
+                                onChange={(event) => {
+                                  setAdminMonitoringSearch(event.target.value);
+                                  setAdminMonitoringPage(1);
+                                }}
                                 placeholder="Cari nama, NIM, prodi, atau NUPTK"
                                 className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                               />
@@ -2512,7 +2539,10 @@ export default function App() {
                               <span className="sr-only">Filter status coaching</span>
                               <select
                                 value={adminCoachingFilter}
-                                onChange={(event) => setAdminCoachingFilter(event.target.value)}
+                                onChange={(event) => {
+                                  setAdminCoachingFilter(event.target.value);
+                                  setAdminMonitoringPage(1);
+                                }}
                                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                               >
                                 <option value="ALL">Semua status coaching</option>
@@ -2542,7 +2572,7 @@ export default function App() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {filteredAdminMonitoringStudents.map((student) => {
+                              {pagedAdminMonitoringStudents.map((student) => {
                                 const latestCoaching = student.counselingRecords?.[0];
                                 const latestViolation = getLatestViolation(student);
                                 const coachedAfterViolation = hasCoachingForLatestViolation(student);
@@ -2607,16 +2637,10 @@ export default function App() {
                                     <td className="px-5 py-4">
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          setPointChangeForm((current) => ({
-                                            ...current,
-                                            nim: String(student.nim),
-                                          }));
-                                          setActiveTab('pengurangan-poin');
-                                        }}
+                                        onClick={() => setActiveTab('laporan-kemahasiswaan')}
                                         className="whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-800 transition hover:bg-red-50"
                                       >
-                                        Tetapkan pengurangan
+                                        Buka antrean laporan
                                       </button>
                                     </td>
                                   </tr>
@@ -2631,6 +2655,31 @@ export default function App() {
                               )}
                             </tbody>
                           </table>
+                          {monitoringPageCount > 1 && (
+                            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm">
+                              <span className="text-slate-500">
+                                Halaman {currentMonitoringPage} dari {monitoringPageCount} · {filteredAdminMonitoringStudents.length} mahasiswa
+                              </span>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminMonitoringPage(currentMonitoringPage - 1)}
+                                  disabled={currentMonitoringPage <= 1}
+                                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                  Sebelumnya
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminMonitoringPage(currentMonitoringPage + 1)}
+                                  disabled={currentMonitoringPage >= monitoringPageCount}
+                                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                  Berikutnya
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </section>
@@ -2678,284 +2727,16 @@ export default function App() {
         </div>
       )}
 
-      {}
 
-      {}
-      {showSKPIModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-lg">Klaim Poin SKPI & Sertifikasi</h3>
-              <button 
-                onClick={() => setShowSKPIModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); setShowSKPIModal(false); }} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Nama Sertifikasi / Lomba</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="misal: Sertifikat K3 Umum BNSP / Juara 1 Lomba Mesin"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Kategori Kegiatan</label>
-                <select className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs bg-white">
-                  <option value="sertifikasi">Sertifikasi Keahlian Industri / BNSP</option>
-                  <option value="lomba">Kompetisi & Lomba Vokasi</option>
-                  <option value="organisasi">Kepengurusan Organisasi Kemahasiswaan</option>
-                  <option value="seminar">Seminar / Workshop Nasional</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Unggah Bukti Sertifikat (PDF/JPG)</label>
-                <input 
-                  type="file" 
-                  required 
-                  className="w-full text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-red-800 hover:file:bg-red-100"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => setShowSKPIModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl"
-                >
-                  Batal
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 bg-red-800 text-white font-bold rounded-xl shadow hover:bg-red-900"
-                >
-                  Kirim Klaim SKPI
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showSanggahModal && authenticatedUser?.role !== 'mhs' && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-              <h3 className="font-extrabold text-slate-900 text-lg">Formulir Sanggah Presensi</h3>
-              <button 
-                onClick={() => setShowSanggahModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); setShowSanggahModal(false); }} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Alasan Sanggahan</label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Jelaskan catatan presensi yang ingin disanggah beserta kronologinya..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-800 text-xs"
-                ></textarea>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Unggah Surat Izin / Bukti Pendukung</label>
-                <input
-                  type="file"
-                  className="w-full text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-red-50 file:text-red-800 hover:file:bg-red-100"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSanggahModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-red-800 text-white font-bold rounded-xl shadow hover:bg-red-900"
-                >
-                  Kirim Pengajuan Sanggah
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Preview File Excel / CSV */}
       {previewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-red-800 p-2.5 text-white shadow-sm">
-                  <FileText className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-extrabold text-slate-900">
-                      {previewData?.record?.fileName || 'Preview File Excel / CSV'}
-                    </h3>
-                    {previewData?.record && (
-                      <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-bold uppercase text-slate-800">
-                        {previewData.record.category === 'advisors' ? 'Pembagian DPA' : 'Absensi'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {previewData?.record
-                      ? `Diunggah ${new Date(previewData.record.uploadedAt).toLocaleString('id-ID', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })} oleh ${previewData.record.uploadedBy} • ${(previewData.record.fileSize / 1024).toFixed(1)} KB`
-                      : 'Memuat detail file...'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {previewData?.record && (
-                  <a
-                    href={`/api/auth/academic/files/${previewData.record.id}/download`}
-                    download={previewData.record.fileName}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
-                  >
-                    <Download className="h-4 w-4" />
-                    Unduh File
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setPreviewModalOpen(false)}
-                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex flex-1 flex-col overflow-hidden p-6">
-              {isLoadingPreview ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-slate-500">
-                  <Clock className="h-8 w-8 animate-spin text-red-800" />
-                  <p className="text-sm font-semibold">Membaca dan memproses isi file Excel/CSV...</p>
-                </div>
-              ) : previewError ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-800">
-                  <AlertCircle className="mx-auto h-8 w-8 text-red-600 mb-2" />
-                  <p className="font-bold">Gagal membuka preview file</p>
-                  <p className="mt-1 text-xs">{previewError}</p>
-                </div>
-              ) : !previewData || previewData.rows.length === 0 ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-12 text-center text-sm text-slate-500">
-                  File ini tidak memiliki baris data.
-                </div>
-              ) : (
-                <>
-                  {/* Search filter in preview */}
-                  <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="relative w-full sm:w-80">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Cari dalam file (NIM, Nama, DPA, dll)..."
-                        value={previewSearchTerm}
-                        onChange={(e) => setPreviewSearchTerm(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-4 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-red-800 focus:outline-none"
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Total <strong>{previewData.totalRows} baris</strong> data
-                      {previewSearchTerm && (
-                        <span>
-                          {' '}• Menampilkan{' '}
-                          <strong>
-                            {
-                              previewData.rows.filter((r) =>
-                                Object.values(r).some((v) =>
-                                  String(v).toLowerCase().includes(previewSearchTerm.toLowerCase()),
-                                ),
-                              ).length
-                            }
-                          </strong>{' '}
-                          baris cocok
-                        </span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Preview Table Container */}
-                  <div className="flex-1 overflow-auto rounded-2xl border border-slate-200 shadow-inner max-h-[55vh]">
-                    <table className="w-full text-left text-xs">
-                      <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold uppercase tracking-wider text-slate-700 shadow-sm">
-                        <tr>
-                          <th className="px-3 py-2.5 text-center w-12 bg-slate-200/80">#</th>
-                          {previewData.headers.map((h, i) => (
-                            <th key={i} className="px-4 py-2.5 whitespace-nowrap">
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white font-mono text-[11px]">
-                        {previewData.rows
-                          .filter((r) => {
-                            if (!previewSearchTerm) return true;
-                            const term = previewSearchTerm.toLowerCase();
-                            return Object.values(r).some((v) =>
-                              String(v).toLowerCase().includes(term),
-                            );
-                          })
-                          .map((row, rowIdx) => (
-                            <tr key={rowIdx} className="hover:bg-slate-50 transition">
-                              <td className="px-3 py-2 text-center text-slate-400 bg-slate-50/50 font-sans text-xs">
-                                {row._rowIndex || rowIdx + 1}
-                              </td>
-                              {previewData.headers.map((h, colIdx) => (
-                                <td key={colIdx} className="px-4 py-2 text-slate-800 whitespace-nowrap">
-                                  {row[h] || '-'}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-3.5">
-              <p className="text-xs text-slate-500">
-                Data preview dibaca langsung dari file Excel/CSV yang tersimpan di server.
-              </p>
-              <button
-                type="button"
-                onClick={() => setPreviewModalOpen(false)}
-                className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
-              >
-                Tutup Preview
-              </button>
-            </div>
-          </div>
-        </div>
+        <FilePreviewModal
+          data={previewData}
+          isLoading={isLoadingPreview}
+          error={previewError}
+          searchTerm={previewSearchTerm}
+          onSearchChange={setPreviewSearchTerm}
+          onClose={() => setPreviewModalOpen(false)}
+        />
       )}
 
     </div>

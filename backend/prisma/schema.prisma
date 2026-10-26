@@ -30,6 +30,7 @@ model Mahasiswa {
   pembinaans        Pembinaan[]
   pemberitahuan     Pemberitahuan[]
 
+  @@index([dosenPaId])
   @@map("Mahasiswa")
 }
 
@@ -117,6 +118,7 @@ model PointChange {
 
   @@index([studentId, createdAt])
   @@index([studentId, pillar])
+  @@index([studentId, type])
   @@map("PerubahanPoin")
 }
 
@@ -276,15 +278,25 @@ model PemberitahuanStaf {
 }
 
 model LogAudit {
-  id        Int      @id @default(autoincrement())
-  aktorId   Int
-  aksi      String   @db.VarChar(100)
-  entitas   String   @db.VarChar(100)
-  entitasId Int
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  aktorId    Int
+  aktorPeran String?  @db.VarChar(20)
+  aksi       String   @db.VarChar(100)
+  entitas    String   @db.VarChar(100)
+  entitasId  Int
+  createdAt  DateTime @default(now())
 
   @@index([aktorId, createdAt])
   @@index([entitas, entitasId])
+}
+
+model Sesi {
+  tokenHash String   @id @db.Char(64)
+  profile   Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Dosen {
@@ -337,4 +349,18 @@ model PresensiAkademik {
   @@unique([mataKuliah, kelas, nim])
   @@index([mataKuliah, kelas])
   @@map("PresensiAkademik")
+}
+
+model UnggahanAkademik {
+  id             String   @id @db.VarChar(64)
+  category       String   @db.VarChar(20)
+  fileName       String   @db.VarChar(255)
+  storedFileName String   @db.VarChar(320)
+  fileSize       Int
+  uploadedAt     DateTime @default(now())
+  uploadedBy     String   @db.VarChar(255)
+  rowCount       Int
+  summary        String   @db.VarChar(500)
+
+  @@index([category, uploadedAt])
 }

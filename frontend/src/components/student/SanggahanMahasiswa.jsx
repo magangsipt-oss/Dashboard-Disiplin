@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
-import { jsonRequest, studentApi } from "./api";
+import { jsonRequest, studentApi } from "@/lib/api";
 
 const appealStatus = {
   DIAJUKAN: "Diajukan",
@@ -49,15 +49,28 @@ export default function SanggahanMahasiswa({
   }
 
   useEffect(() => {
-    loadAppeals();
+    let active = true;
+    studentApi("/api/mahasiswa/sanggahan")
+      .then((data) => active && setAppeals(data.sanggahan ?? []))
+      .catch((loadError) => active && setError(loadError.message))
+      .finally(() => active && setIsLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
+  // Buka modal saat induk meminta sanggahan untuk perubahan poin tertentu.
+  const [handledChangeId, setHandledChangeId] = useState(null);
+  if (initialChangeId && initialChangeId !== handledChangeId) {
+    setHandledChangeId(initialChangeId);
+    setChangeId(String(initialChangeId));
+    setIsModalOpen(true);
+  } else if (!initialChangeId && handledChangeId !== null) {
+    setHandledChangeId(null);
+  }
+
   useEffect(() => {
-    if (initialChangeId) {
-      setChangeId(String(initialChangeId));
-      setIsModalOpen(true);
-      onInitialChangeHandled();
-    }
+    if (initialChangeId) onInitialChangeHandled();
   }, [initialChangeId, onInitialChangeHandled]);
 
   async function submitAppeal(event) {

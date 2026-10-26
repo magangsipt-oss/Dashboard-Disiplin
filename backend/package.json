@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsx --test tests/points.test.ts tests/discipline.test.ts tests/report-routing.test.ts tests/academic-import.test.ts",
+    "test": "tsx --test tests/points.test.ts tests/discipline.test.ts tests/report-routing.test.ts tests/academic-import.test.ts tests/security.test.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
@@ -19,7 +19,11 @@
     "prisma:migrate:mahasiswa-profile": "tsx prisma/rename-mahasiswa-profile-columns.ts && npm run prisma:push -- --skip-generate && npm run prisma:generate",
     "prisma:migrate:advisor-requests": "tsx prisma/rename-advisor-request-table.ts && tsx prisma/rename-advisor-request-columns.ts && tsx prisma/rename-mahasiswa-dpa-column.ts && tsx prisma/rename-staff-identity-columns.ts && npm run prisma:push -- --skip-generate && tsx prisma/remove-advisor-request-name-columns.ts && npm run prisma:generate",
     "prisma:migrate:dosen-nuptk": "tsx prisma/migrate-dosen-nuptk.ts && npm run prisma:push -- --skip-generate && npm run prisma:generate",
-    "prisma:migrate:report-workflow": "tsx prisma/migrate-report-workflow.ts"
+    "prisma:migrate:report-workflow": "tsx prisma/migrate-report-workflow.ts",
+    "prisma:hash-passwords": "tsx prisma/hash-legacy-passwords.ts",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:baseline": "prisma migrate resolve --applied 0_init"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",
@@ -31,7 +35,8 @@
     "nodemailer": "^10.2.1",
     "pg": "^8.16.3",
     "sharp": "^0.35.5",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

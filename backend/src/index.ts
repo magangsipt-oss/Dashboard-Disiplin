@@ -1,18 +1,41 @@
 import cors from "cors";
 import express from "express";
-import { authDatabases, authRouter } from "./auth";
-import { resolve } from "node:path";
+import { authDatabases, authRouter, loadSession } from "./auth";
 import multer from "multer";
-import { reportRouter } from "./discipline";
+import { evidenceRouter, reportRouter } from "./discipline";
+import { academicRouter } from "./routes/academic";
 
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
 
-app.use(cors());
-app.use(express.json());
+// Frontend memanggil API lewat proxy Next.js di mesin yang sama, jadi
+// hanya proxy loopback yang dipercaya untuk X-Forwarded-For.
+app.set("trust proxy", process.env.TRUST_PROXY ?? "loopback");
+app.disable("x-powered-by");
+
+app.use((_request, response, next) => {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  response.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; frame-ancestors 'none'");
+  next();
+});
+
+// CORS mati secara default (akses lewat proxy same-origin). Isi CORS_ORIGIN
+// dengan daftar origin dipisah koma bila frontend dihosting terpisah.
+const allowedOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : false, credentials: true }));
+app.use(express.json({ limit: "100kb" }));
+app.use(loadSession);
 app.use("/api/auth", authRouter);
+app.use("/api/auth", academicRouter);
 app.use("/api", reportRouter);
-app.use("/uploads", express.static(resolve(process.cwd(), "uploads")));
+// Folder uploads tidak lagi publik; bukti dilayani lewat route ber-otorisasi.
+app.use("/uploads/evidence", evidenceRouter);
 
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   if (error instanceof multer.MulterError) {

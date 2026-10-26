@@ -19,3 +19,7 @@ backend/prisma/database-data.json
 **/npm-debug.log*
 **/yarn-debug.log*
 **/yarn-error.log*
+
+# Upload pengguna (data pribadi) dan cache npm lokal
+backend/uploads/
+**/.npm-cache/

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ClipboardCheck, FileText, MessageSquareText } from "lucide-react";
-import { jsonRequest, studentApi } from "./api";
+import { jsonRequest, studentApi, safeHref } from "@/lib/api";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -19,16 +19,25 @@ const severityLabels = {
   SANGAT_BERAT: { label: "Berat", badge: "bg-red-100 text-red-800" },
 };
 
-const statusLabels = {
-  DIMINTA: "Diminta",
-  DIKIRIM: "Dikirim",
-  DISETUJUI: "Disetujui",
-  DITOLAK: "Perlu perbaikan",
+const reportStatusLabels = {
   DITERIMA: "Menunggu konfirmasi Dosen PA",
   DIVERIFIKASI: "Dikonfirmasi Dosen PA",
   DITINDAKLANJUTI: "Tindak lanjut berjalan",
   SELESAI: "Selesai · poin dipulihkan",
   DITOLAK: "Tidak dikonfirmasi Dosen PA",
+};
+
+const appealStatusLabels = {
+  DIAJUKAN: "Diajukan",
+  DISETUJUI: "Disetujui",
+  DITOLAK: "Ditolak",
+};
+
+const trainingStatusLabels = {
+  DIMINTA: "Diminta",
+  DIKIRIM: "Dikirim",
+  DISETUJUI: "Disetujui",
+  DITOLAK: "Perlu perbaikan",
 };
 
 export default function TindakLanjut({ onAppeal }) {
@@ -46,16 +55,23 @@ export default function TindakLanjut({ onAppeal }) {
   const [evidenceNote, setEvidenceNote] = useState("");
   const [isSubmittingEvidence, setIsSubmittingEvidence] = useState(false);
 
+  function fetchFollowUps() {
+    return Promise.all([
+      studentApi("/api/mahasiswa/tindak-lanjut"),
+      studentApi("/api/mahasiswa/pembinaan"),
+    ]);
+  }
+
+  function applyFollowUps([reportData, trainingData]) {
+    setReports(reportData.tindakLanjut ?? []);
+    setTraining(trainingData.pembinaan ?? []);
+  }
+
   async function loadFollowUps() {
     setIsLoading(true);
     setError("");
     try {
-      const [reportData, trainingData] = await Promise.all([
-        studentApi("/api/mahasiswa/tindak-lanjut"),
-        studentApi("/api/mahasiswa/pembinaan"),
-      ]);
-      setReports(reportData.tindakLanjut ?? []);
-      setTraining(trainingData.pembinaan ?? []);
+      applyFollowUps(await fetchFollowUps());
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -64,7 +80,14 @@ export default function TindakLanjut({ onAppeal }) {
   }
 
   useEffect(() => {
-    loadFollowUps();
+    let active = true;
+    fetchFollowUps()
+      .then((data) => active && applyFollowUps(data))
+      .catch((loadError) => active && setError(loadError.message))
+      .finally(() => active && setIsLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function submitReflection(event) {
@@ -143,7 +166,7 @@ export default function TindakLanjut({ onAppeal }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold text-slate-900">{pillarLabels[report.pillar] ?? report.pillar}</h3>
                         {severity && <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${severity.badge}`}>{severity.label}</span>}
-                        <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-900">{statusLabels[report.status] ?? report.status}</span>
+                        <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-900">{reportStatusLabels[report.status] ?? report.status}</span>
                       </div>
                       <p className="mt-1 text-sm text-slate-600">{report.reason}</p>
                       <p className="mt-1 text-xs text-slate-500">Tanggal kejadian: {new Date(`${report.tanggalKejadian}T00:00:00`).toLocaleDateString("id-ID")}</p>
@@ -152,8 +175,8 @@ export default function TindakLanjut({ onAppeal }) {
                       {report.status === "DITOLAK" && <p className="mt-2 text-sm text-slate-600">Poin tidak berubah karena laporan tidak dikonfirmasi Dosen PA.</p>}
                       {report.status === "SELESAI" && <p className="mt-2 text-sm font-semibold text-emerald-800">Bukti tindak lanjut disetujui Dosen PA; poin telah dipulihkan. Riwayat pelanggaran tetap tersimpan.</p>}
                       {report.followUp && <p className="mt-2 text-xs text-slate-600">{report.followUp}</p>}
-                      {report.sanggahan && <p className="mt-2 text-xs text-slate-600">Status sanggahan: {statusLabels[report.sanggahan.status] ?? report.sanggahan.status}{report.sanggahan.catatanPemeriksa ? ` · ${report.sanggahan.catatanPemeriksa}` : ""}</p>}
-                      {report.pembinaan && <p className="mt-1 text-xs text-slate-600">Status pembinaan: {statusLabels[report.pembinaan.status] ?? report.pembinaan.status}</p>}
+                      {report.sanggahan && <p className="mt-2 text-xs text-slate-600">Status sanggahan: {appealStatusLabels[report.sanggahan.status] ?? report.sanggahan.status}{report.sanggahan.catatanPemeriksa ? ` · ${report.sanggahan.catatanPemeriksa}` : ""}</p>}
+                      {report.pembinaan && <p className="mt-1 text-xs text-slate-600">Status pembinaan: {trainingStatusLabels[report.pembinaan.status] ?? report.pembinaan.status}</p>}
                     </div>
                     {report.perubahanPoinId && (
                       <button
@@ -190,12 +213,12 @@ export default function TindakLanjut({ onAppeal }) {
               <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-bold text-slate-900">{task.jenis === "REFLEKSI_TERTULIS" ? "Refleksi tertulis" : "Konseling"}</h3>
-                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{statusLabels[task.status] ?? task.status}</span>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{trainingStatusLabels[task.status] ?? task.status}</span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{task.instruksi}</p>
                 {task.catatanPemeriksa && <p className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Catatan pemeriksa: {task.catatanPemeriksa}</p>}
                 {task.isiRefleksi && <p className="mt-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">Catatan/bukti terkirim: {task.isiRefleksi}</p>}
-                {task.buktiUrl && <a href={task.buktiUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block break-all text-xs font-semibold text-red-800 hover:underline">Tautan bukti yang dikirim</a>}
+                {task.buktiUrl && <a href={safeHref(task.buktiUrl)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block break-all text-xs font-semibold text-red-800 hover:underline">Tautan bukti yang dikirim</a>}
                 {(task.status === "DIMINTA" || task.status === "DITOLAK") && task.jenis === "REFLEKSI_TERTULIS" && (
                   <button type="button" onClick={() => { setSelectedTraining(task); setSubmitError(""); }} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-2 text-xs font-bold text-white hover:bg-red-900">
                     <MessageSquareText className="h-4 w-4" /> Kirim Refleksi Tertulis

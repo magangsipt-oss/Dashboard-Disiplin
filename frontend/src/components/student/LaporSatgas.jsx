@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   CheckCircle2,
   ClipboardCopy,
@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
-import { studentApi } from "./api";
+import { studentApi } from "@/lib/api";
 
 const pillars = [
   { value: "WAKTU", label: "Disiplin Waktu" },
@@ -41,21 +41,15 @@ const initialForm = {
 export default function LaporSatgas() {
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [trackingCode, setTrackingCode] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
 
-  useEffect(() => {
-    if (!photo) {
-      setPhotoPreview("");
-      return undefined;
-    }
-    const url = URL.createObjectURL(photo);
-    setPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
+  const photoPreview = useMemo(() => (photo ? URL.createObjectURL(photo) : ""), [photo]);
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
 
   function updateField(event) {
     const { name, value, checked, type } = event.target;
@@ -289,6 +283,7 @@ export default function LaporSatgas() {
             {photoPreview && (
               <div className="mt-3 flex items-start gap-3">
                 {/* Preview is local only; the server strips image metadata before storage. */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- URL blob lokal, tidak bisa dioptimasi next/image */}
                 <img src={photoPreview} alt="Pratinjau foto bukti" className="h-24 w-24 rounded-xl border border-slate-200 object-cover" />
                 <button type="button" onClick={() => setPhoto(null)} className="text-xs font-bold text-red-800 hover:underline">Hapus foto</button>
               </div>

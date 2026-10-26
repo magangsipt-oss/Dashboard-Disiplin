@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Clock3, FileCheck2, FileText, ShieldCheck } from "lucide-react";
-import { jsonRequest, studentApi } from "../student/api";
+import { jsonRequest, studentApi, safeHref } from "@/lib/api";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -27,18 +27,25 @@ export default function DosenReportWorkflow() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  function fetchQueue() {
+    return Promise.all([
+      studentApi("/api/dosen/laporan"),
+      studentApi("/api/dosen/pembinaan"),
+      studentApi("/api/aturan"),
+    ]);
+  }
+
+  function applyQueue([reportData, evidenceData, ruleData]) {
+    setReports(reportData.laporan ?? []);
+    setEvidence(evidenceData.pembinaan ?? []);
+    setRules(ruleData.aturan ?? []);
+  }
+
   async function loadQueue(showLoading = true) {
     if (showLoading) setIsLoading(true);
     setError("");
     try {
-      const [reportData, evidenceData, ruleData] = await Promise.all([
-        studentApi("/api/dosen/laporan"),
-        studentApi("/api/dosen/pembinaan"),
-        studentApi("/api/aturan"),
-      ]);
-      setReports(reportData.laporan ?? []);
-      setEvidence(evidenceData.pembinaan ?? []);
-      setRules(ruleData.aturan ?? []);
+      applyQueue(await fetchQueue());
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -47,7 +54,14 @@ export default function DosenReportWorkflow() {
   }
 
   useEffect(() => {
-    loadQueue();
+    let active = true;
+    fetchQueue()
+      .then((data) => active && applyQueue(data))
+      .catch((loadError) => active && setError(loadError.message))
+      .finally(() => active && setIsLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function decideReport(report, decision) {
@@ -164,7 +178,7 @@ export default function DosenReportWorkflow() {
               <p className="text-sm leading-relaxed text-slate-700">{report.deskripsi}</p>
               <p className="text-xs text-slate-500">Lokasi: {report.lokasi} · Tanggal kejadian: {formatDate(report.tanggalKejadian)}</p>
               {report.buktiPath && (
-                <a href={report.buktiPath} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-red-800 hover:underline">
+                <a href={safeHref(report.buktiPath)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-red-800 hover:underline">
                   <FileText className="h-4 w-4" /> Lihat bukti laporan
                 </a>
               )}
@@ -237,7 +251,7 @@ export default function DosenReportWorkflow() {
               </p>
               <h4 className="mt-1 font-bold text-slate-900">{task.instruksi}</h4>
             </div>
-            <a href={task.buktiUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 break-all text-sm font-semibold text-red-800 hover:underline">
+            <a href={safeHref(task.buktiUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 break-all text-sm font-semibold text-red-800 hover:underline">
               <FileText className="h-4 w-4 shrink-0" /> {task.buktiUrl}
             </a>
             {task.isiRefleksi && <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{task.isiRefleksi}</p>}

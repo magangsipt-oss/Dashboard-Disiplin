@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Bell, CheckCircle2, ClipboardCheck, Clock3 } from "lucide-react";
-import { studentApi } from "./api";
+import { studentApi } from "@/lib/api";
 
 const stages = [
   { label: "Laporan dan bukti", description: "Pelanggaran dilaporkan dengan bukti pendukung." },

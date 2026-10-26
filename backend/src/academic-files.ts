@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import * as XLSX from "xlsx";
+import type { UnggahanAkademik } from "@prisma/client";
+import { database } from "./db";
 
 export type AcademicFileCategory = "attendance" | "advisors";
 
@@ -18,54 +20,52 @@ export type AcademicUploadRecord = {
 };
 
 const academicUploadsDirectory = resolve(process.cwd(), "uploads", "academic");
-const historyFilePath = resolve(academicUploadsDirectory, "history.json");
+const legacyHistoryFilePath = resolve(academicUploadsDirectory, "history.json");
 
 async function ensureDirectory(): Promise<void> {
   await mkdir(academicUploadsDirectory, { recursive: true });
 }
 
-async function loadHistory(): Promise<AcademicUploadRecord[]> {
-  await ensureDirectory();
-  try {
-    const content = await readFile(historyFilePath, "utf8");
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed)) {
-      return parsed as AcademicUploadRecord[];
-    }
-    return [];
-  } catch {
-    // If history file doesn't exist yet, try to auto-seed with data-pembagian-dpa.csv if available
-    const initialRecords: AcademicUploadRecord[] = [];
-    try {
-      const seedCsvPath = resolve(process.cwd(), "prisma", "data-pembagian-dpa.csv");
-      const seedBuffer = await readFile(seedCsvPath);
-      const seedId = "init-pembagian-dpa";
-      const storedFileName = `${seedId}-data-pembagian-dpa.csv`;
-      const targetPath = resolve(academicUploadsDirectory, storedFileName);
-      await writeFile(targetPath, seedBuffer);
-      const fileStats = await stat(targetPath);
-      initialRecords.push({
-        id: seedId,
-        category: "advisors",
-        fileName: "data-pembagian-dpa.csv",
-        storedFileName,
-        fileSize: fileStats.size,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: "Akademik Poltek Simas Berau",
-        rowCount: 67,
-        summary: "67 mahasiswa dibagikan",
-      });
-      await writeFile(historyFilePath, JSON.stringify(initialRecords, null, 2), "utf8");
-    } catch {
-      // ignore seed failure if file not found
-    }
-    return initialRecords;
-  }
+function toRecord(row: UnggahanAkademik): AcademicUploadRecord {
+  return {
+    id: row.id,
+    category: row.category as AcademicFileCategory,
+    fileName: row.fileName,
+    storedFileName: row.storedFileName,
+    fileSize: row.fileSize,
+    uploadedAt: row.uploadedAt.toISOString(),
+    uploadedBy: row.uploadedBy,
+    rowCount: row.rowCount,
+    summary: row.summary,
+  };
 }
 
-async function saveHistory(records: AcademicUploadRecord[]): Promise<void> {
-  await ensureDirectory();
-  await writeFile(historyFilePath, JSON.stringify(records, null, 2), "utf8");
+// Pindahkan riwayat lama dari history.json ke DB satu kali.
+let legacyImport: Promise<void> | null = null;
+function importLegacyHistory(): Promise<void> {
+  legacyImport ??= (async () => {
+    let records: AcademicUploadRecord[];
+    try {
+      const parsed = JSON.parse(await readFile(legacyHistoryFilePath, "utf8"));
+      records = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return;
+    }
+    if (records.length > 0) {
+      await database.unggahanAkademik.createMany({
+        data: records.map((record) => ({
+          ...record,
+          uploadedAt: new Date(record.uploadedAt),
+        })),
+        skipDuplicates: true,
+      });
+    }
+    await rename(legacyHistoryFilePath, `${legacyHistoryFilePath}.migrated`);
+  })().catch((error) => {
+    legacyImport = null;
+    throw error;
+  });
+  return legacyImport;
 }
 
 export async function saveAcademicUpload(params: {
@@ -78,46 +78,44 @@ export async function saveAcademicUpload(params: {
 }): Promise<AcademicUploadRecord> {
   await ensureDirectory();
   const id = `${Date.now()}-${randomBytes(4).toString("hex")}`;
-  const safeOriginalName = params.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeOriginalName = params.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
   const storedFileName = `${id}-${safeOriginalName}`;
   const targetPath = resolve(academicUploadsDirectory, storedFileName);
 
   await writeFile(targetPath, params.buffer);
 
-  const newRecord: AcademicUploadRecord = {
-    id,
-    category: params.category,
-    fileName: params.fileName,
-    storedFileName,
-    fileSize: params.buffer.length,
-    uploadedAt: new Date().toISOString(),
-    uploadedBy: params.uploadedBy,
-    rowCount: params.rowCount,
-    summary: params.summary,
-  };
-
-  const records = await loadHistory();
-  records.unshift(newRecord);
-  await saveHistory(records);
-
-  return newRecord;
+  const row = await database.unggahanAkademik.create({
+    data: {
+      id,
+      category: params.category,
+      fileName: params.fileName.slice(0, 255),
+      storedFileName,
+      fileSize: params.buffer.length,
+      uploadedBy: params.uploadedBy.slice(0, 255),
+      rowCount: params.rowCount,
+      summary: params.summary.slice(0, 500),
+    },
+  });
+  return toRecord(row);
 }
 
 export async function listAcademicUploads(
   category?: AcademicFileCategory,
 ): Promise<AcademicUploadRecord[]> {
-  const records = await loadHistory();
-  if (category) {
-    return records.filter((r) => r.category === category);
-  }
-  return records;
+  await importLegacyHistory();
+  const rows = await database.unggahanAkademik.findMany({
+    where: category ? { category } : {},
+    orderBy: { uploadedAt: "desc" },
+  });
+  return rows.map(toRecord);
 }
 
 export async function getAcademicUploadRecord(
   id: string,
 ): Promise<AcademicUploadRecord | null> {
-  const records = await loadHistory();
-  return records.find((r) => r.id === id) ?? null;
+  await importLegacyHistory();
+  const row = await database.unggahanAkademik.findUnique({ where: { id } });
+  return row ? toRecord(row) : null;
 }
 
 export function isValidAttendancePreviewRow(

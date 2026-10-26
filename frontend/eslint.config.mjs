@@ -1,10 +1,10 @@
-import js from "@eslint/js";
-import tseslint from "typescript-eslint";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
 
-export default tseslint.config(
-  {
-    ignores: [".next/**", "out/**", "build/**", "next-env.d.ts"],
-  },
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
-);
+// Mencakup .js/.jsx/.ts/.tsx dengan aturan React, React Hooks, dan Next.js.
+export default defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+]);

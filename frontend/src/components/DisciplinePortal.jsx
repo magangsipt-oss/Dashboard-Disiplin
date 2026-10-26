@@ -34,6 +34,9 @@ import {
   X,
   Search,
   Users,
+  Eye,
+  Download,
+  Upload,
 } from 'lucide-react';
 
 const disciplinePillars = [
@@ -126,6 +129,13 @@ export default function App() {
   const [advisorAssignmentResult, setAdvisorAssignmentResult] = useState(null);
   const [advisorAssignmentError, setAdvisorAssignmentError] = useState('');
   const [isImportingAdvisorAssignments, setIsImportingAdvisorAssignments] = useState(false);
+  const [academicFiles, setAcademicFiles] = useState([]);
+  const [isLoadingAcademicFiles, setIsLoadingAcademicFiles] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [previewSearchTerm, setPreviewSearchTerm] = useState('');
 
   const officialLogoUrl = "/poltek-simas-berau.png";
   const bgCampusImage = "/portal-access-background.jpg";
@@ -458,6 +468,61 @@ export default function App() {
   }, [authenticatedUser?.role, activePage, activeTab]);
 
   useEffect(() => {
+    if (
+      authenticatedUser?.role !== 'akademik' ||
+      activePage !== 'dashboard' ||
+      !['upload-absensi', 'pembagian-bimbingan'].includes(activeTab)
+    ) {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadFiles = async () => {
+      try {
+        setIsLoadingAcademicFiles(true);
+        const res = await fetch('/api/auth/academic/files');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted) {
+          setAcademicFiles(data.files || []);
+        }
+      } catch (err) {
+        console.error('Gagal memuat daftar file akademik:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingAcademicFiles(false);
+        }
+      }
+    };
+
+    loadFiles();
+    return () => {
+      isMounted = false;
+    };
+  }, [authenticatedUser?.role, activePage, activeTab]);
+
+  const handleOpenFilePreview = async (fileId) => {
+    setPreviewModalOpen(true);
+    setIsLoadingPreview(true);
+    setPreviewError('');
+    setPreviewData(null);
+    setPreviewSearchTerm('');
+
+    try {
+      const res = await fetch(`/api/auth/academic/files/${fileId}/preview`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Gagal memuat preview file.');
+      }
+      setPreviewData(data);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Gagal memuat preview file.');
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  useEffect(() => {
     if (activePage !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return undefined;
     }
@@ -495,6 +560,14 @@ export default function App() {
         throw new Error(data.message || 'File gagal diproses.');
       }
       setResult(data);
+      fetch('/api/auth/academic/files')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((filesData) => {
+          if (filesData?.files) {
+            setAcademicFiles(filesData.files);
+          }
+        })
+        .catch(() => {});
     } catch (error) {
       setError(error instanceof Error ? error.message : 'File gagal diproses.');
     } finally {
@@ -1627,25 +1700,28 @@ export default function App() {
                       <label htmlFor="academic-attendance-file" className="block text-sm font-semibold text-slate-700">
                         File absensi
                       </label>
-                      <input
-                        id="academic-attendance-file"
-                        type="file"
-                        accept=".csv,.xlsx"
-                        required
-                        onChange={(event) => {
-                          setAcademicAttendanceFile(event.target.files?.[0] ?? null);
-                          setAcademicAttendanceResult(null);
-                          setAcademicAttendanceError('');
-                        }}
-                        className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
-                      />
-                      <button
-                        type="submit"
-                        disabled={isImportingAcademicAttendance || !academicAttendanceFile}
-                        className="rounded-xl bg-red-800 px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {isImportingAcademicAttendance ? 'Mengunggah absensi…' : 'Upload Absensi'}
-                      </button>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <input
+                          id="academic-attendance-file"
+                          type="file"
+                          accept=".csv,.xlsx"
+                          required
+                          onChange={(event) => {
+                            setAcademicAttendanceFile(event.target.files?.[0] ?? null);
+                            setAcademicAttendanceResult(null);
+                            setAcademicAttendanceError('');
+                          }}
+                          className="block w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900 cursor-pointer"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isImportingAcademicAttendance || !academicAttendanceFile}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-red-800 px-6 py-2.5 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 shrink-0"
+                        >
+                          <Upload className="h-4 w-4" />
+                          {isImportingAcademicAttendance ? 'Mengunggah absensi…' : 'Upload Absensi'}
+                        </button>
+                      </div>
                     </form>
                     {academicAttendanceError && (
                       <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -1653,10 +1729,141 @@ export default function App() {
                       </p>
                     )}
                     {academicAttendanceResult && (
-                      <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                        Berhasil menyimpan {academicAttendanceResult.imported} baris. {academicAttendanceResult.skipped} baris duplikat dilewati dari total {academicAttendanceResult.totalRows} baris.
-                      </p>
+                      <div aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900 space-y-2">
+                        <p className="font-semibold">
+                          ✓ Berhasil menyimpan {academicAttendanceResult.imported} baris presensi dari total {academicAttendanceResult.totalRows} baris.
+                        </p>
+                        {academicAttendanceResult.deductions?.totalDeductions > 0 ? (
+                          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                            <p className="font-bold text-amber-950 flex items-center gap-1.5">
+                              <span>⚠️</span> Pengurangan Poin Otomatis Diterapkan:
+                            </p>
+                            <p className="mt-1">
+                              Sebanyak <strong>{academicAttendanceResult.deductions.totalDeductions} catatan ketidakhadiran (Alpa)</strong> diproses dengan total pengurangan <strong>-{academicAttendanceResult.deductions.totalPointsDeducted} poin</strong> pada mahasiswa terkait.
+                            </p>
+                            {academicAttendanceResult.deductions.students?.length > 0 && (
+                              <ul className="mt-2 list-disc list-inside space-y-0.5 text-slate-700 max-h-36 overflow-y-auto">
+                                {academicAttendanceResult.deductions.students.slice(0, 10).map((item, idx) => (
+                                  <li key={idx}>
+                                    <strong>{item.nama}</strong> ({item.nim}) — {item.mataKuliah}: {item.alpa} Alpa ({item.delta} poin, sisa {item.scoreAfter} poin)
+                                  </li>
+                                ))}
+                                {academicAttendanceResult.deductions.students.length > 10 && (
+                                  <li className="font-semibold text-slate-500">
+                                    ...dan {academicAttendanceResult.deductions.students.length - 10} mahasiswa lainnya.
+                                  </li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-emerald-700">
+                            Seluruh mahasiswa memiliki kehadiran penuh / tidak ada catatan Alpa baru yang memotong poin.
+                          </p>
+                        )}
+                      </div>
                     )}
+
+                    {/* Lampiran Riwayat File Absensi */}
+                    <div className="mt-8 border-t border-slate-200 pt-6">
+                      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h4 className="flex items-center gap-2 text-base font-extrabold text-slate-900">
+                            <FileText className="h-5 w-5 text-red-800" />
+                            Lampiran File Absensi yang Pernah Diunggah
+                          </h4>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            Klik nama file atau tombol preview untuk melihat isi data file secara langsung.
+                          </p>
+                        </div>
+                        <span className="self-start sm:self-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                          {academicFiles.filter((f) => f.category === 'attendance').length} File Terlampir
+                        </span>
+                      </div>
+
+                      {isLoadingAcademicFiles ? (
+                        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-500">
+                          <Clock className="mr-2 h-4 w-4 animate-spin text-red-800" /> Memuat daftar file...
+                        </div>
+                      ) : academicFiles.filter((f) => f.category === 'attendance').length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
+                          <FileText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                          Belum ada file absensi yang diunggah.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                          <table className="w-full text-left text-sm">
+                            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                              <tr>
+                                <th className="px-4 py-3">Nama File</th>
+                                <th className="px-4 py-3">Waktu Upload</th>
+                                <th className="px-4 py-3">Ukuran</th>
+                                <th className="px-4 py-3">Ringkasan Data</th>
+                                <th className="px-4 py-3">Pengunggah</th>
+                                <th className="px-4 py-3 text-right">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {academicFiles
+                                .filter((f) => f.category === 'attendance')
+                                .map((file) => (
+                                  <tr
+                                    key={file.id}
+                                    onClick={() => handleOpenFilePreview(file.id)}
+                                    className="cursor-pointer transition hover:bg-red-50/60"
+                                  >
+                                    <td className="px-4 py-3.5 font-semibold text-slate-900">
+                                      <div className="flex items-center gap-2">
+                                        <span className="rounded-lg bg-emerald-100 px-2 py-1 text-emerald-800 font-mono text-[10px] font-extrabold uppercase">
+                                          {file.fileName.split('.').pop() || 'FILE'}
+                                        </span>
+                                        <span className="hover:underline">{file.fileName}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
+                                      {new Date(file.uploadedAt).toLocaleString('id-ID', {
+                                        dateStyle: 'medium',
+                                        timeStyle: 'short',
+                                      })}
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                                      {(file.fileSize / 1024).toFixed(1)} KB
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs">
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800">
+                                        {file.summary || `${file.rowCount} baris`}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
+                                      {file.uploadedBy || 'Akademik'}
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <div className="inline-flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenFilePreview(file.id)}
+                                          className="inline-flex items-center gap-1.5 rounded-xl bg-red-100 px-3 py-1.5 text-xs font-bold text-red-900 hover:bg-red-200 transition"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                          Preview
+                                        </button>
+                                        <a
+                                          href={`/api/auth/academic/files/${file.id}/download`}
+                                          download={file.fileName}
+                                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                                        >
+                                          <Download className="h-3.5 w-3.5" />
+                                          Unduh
+                                        </a>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   </section>
                 )}
 
@@ -1665,7 +1872,7 @@ export default function App() {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xlsx) dengan kolom <strong>No., NIM, Nama Lengkap, Program Studi, Angkatan, DPA</strong> (atau minimal kolom <strong>NIM</strong> dan <strong>DPA</strong> / <strong>NIP</strong>). Nama DPA harus sesuai dengan nama dosen yang terdaftar.
+                        Unggah file CSV atau Excel (.xlsx) dengan kolom <strong>NIM, Program Studi</strong>, dan <strong>DPA</strong> atau <strong>NIP</strong>. NIM dan Program Studi wajib sesuai dengan data mahasiswa; nama DPA harus sesuai dengan nama dosen yang terdaftar.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Format file mendukung nama lengkap DPA dengan atau tanpa gelar akademik.
@@ -1685,25 +1892,28 @@ export default function App() {
                       <label htmlFor="advisor-assignment-file" className="block text-sm font-semibold text-slate-700">
                         File pembagian dosen PA
                       </label>
-                      <input
-                        id="advisor-assignment-file"
-                        type="file"
-                        accept=".csv,.xlsx"
-                        required
-                        onChange={(event) => {
-                          setAdvisorAssignmentFile(event.target.files?.[0] ?? null);
-                          setAdvisorAssignmentResult(null);
-                          setAdvisorAssignmentError('');
-                        }}
-                        className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
-                      />
-                      <button
-                        type="submit"
-                        disabled={isImportingAdvisorAssignments || !advisorAssignmentFile}
-                        className="rounded-xl bg-red-800 px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {isImportingAdvisorAssignments ? 'Menyimpan pembagian…' : 'Upload Pembagian'}
-                      </button>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <input
+                          id="advisor-assignment-file"
+                          type="file"
+                          accept=".csv,.xlsx"
+                          required
+                          onChange={(event) => {
+                            setAdvisorAssignmentFile(event.target.files?.[0] ?? null);
+                            setAdvisorAssignmentResult(null);
+                            setAdvisorAssignmentError('');
+                          }}
+                          className="block w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900 cursor-pointer"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isImportingAdvisorAssignments || !advisorAssignmentFile}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-red-800 px-6 py-2.5 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60 shrink-0"
+                        >
+                          <Upload className="h-4 w-4" />
+                          {isImportingAdvisorAssignments ? 'Menyimpan pembagian…' : 'Upload Pembagian'}
+                        </button>
+                      </div>
                     </form>
                     {advisorAssignmentError && (
                       <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -1715,6 +1925,107 @@ export default function App() {
                         Pembagian DPA berhasil diperbarui untuk {advisorAssignmentResult.assigned} mahasiswa. Data mahasiswa lainnya tetap dipertahankan.
                       </p>
                     )}
+
+                    {/* Lampiran Riwayat File Pembagian DPA */}
+                    <div className="mt-8 border-t border-slate-200 pt-6">
+                      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h4 className="flex items-center gap-2 text-base font-extrabold text-slate-900">
+                            <FileText className="h-5 w-5 text-red-800" />
+                            Lampiran File Pembagian DPA yang Pernah Diunggah
+                          </h4>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            Klik nama file atau tombol preview untuk melihat isi pembagian DPA di dalam file.
+                          </p>
+                        </div>
+                        <span className="self-start sm:self-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                          {academicFiles.filter((f) => f.category === 'advisors').length} File Terlampir
+                        </span>
+                      </div>
+
+                      {isLoadingAcademicFiles ? (
+                        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-500">
+                          <Clock className="mr-2 h-4 w-4 animate-spin text-red-800" /> Memuat daftar file...
+                        </div>
+                      ) : academicFiles.filter((f) => f.category === 'advisors').length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
+                          <FileText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                          Belum ada file pembagian DPA yang diunggah.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                          <table className="w-full text-left text-sm">
+                            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                              <tr>
+                                <th className="px-4 py-3">Nama File</th>
+                                <th className="px-4 py-3">Waktu Upload</th>
+                                <th className="px-4 py-3">Ukuran</th>
+                                <th className="px-4 py-3">Ringkasan Data</th>
+                                <th className="px-4 py-3">Pengunggah</th>
+                                <th className="px-4 py-3 text-right">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {academicFiles
+                                .filter((f) => f.category === 'advisors')
+                                .map((file) => (
+                                  <tr
+                                    key={file.id}
+                                    onClick={() => handleOpenFilePreview(file.id)}
+                                    className="cursor-pointer transition hover:bg-red-50/60"
+                                  >
+                                    <td className="px-4 py-3.5 font-semibold text-slate-900">
+                                      <div className="flex items-center gap-2">
+                                        <span className="rounded-lg bg-emerald-100 px-2 py-1 text-emerald-800 font-mono text-[10px] font-extrabold uppercase">
+                                          {file.fileName.split('.').pop() || 'FILE'}
+                                        </span>
+                                        <span className="hover:underline">{file.fileName}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
+                                      {new Date(file.uploadedAt).toLocaleString('id-ID', {
+                                        dateStyle: 'medium',
+                                        timeStyle: 'short',
+                                      })}
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                                      {(file.fileSize / 1024).toFixed(1)} KB
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs">
+                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800">
+                                        {file.summary || `${file.rowCount} baris`}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
+                                      {file.uploadedBy || 'Akademik'}
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                      <div className="inline-flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenFilePreview(file.id)}
+                                          className="inline-flex items-center gap-1.5 rounded-xl bg-red-100 px-3 py-1.5 text-xs font-bold text-red-900 hover:bg-red-200 transition"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                          Preview
+                                        </button>
+                                        <a
+                                          href={`/api/auth/academic/files/${file.id}/download`}
+                                          download={file.fileName}
+                                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                                        >
+                                          <Download className="h-3.5 w-3.5" />
+                                          Unduh
+                                        </a>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   </section>
                 )}
               </main>
@@ -2474,6 +2785,168 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Preview File Excel / CSV */}
+      {previewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-red-800 p-2.5 text-white shadow-sm">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      {previewData?.record?.fileName || 'Preview File Excel / CSV'}
+                    </h3>
+                    {previewData?.record && (
+                      <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-bold uppercase text-slate-800">
+                        {previewData.record.category === 'advisors' ? 'Pembagian DPA' : 'Absensi'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {previewData?.record
+                      ? `Diunggah ${new Date(previewData.record.uploadedAt).toLocaleString('id-ID', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })} oleh ${previewData.record.uploadedBy} • ${(previewData.record.fileSize / 1024).toFixed(1)} KB`
+                      : 'Memuat detail file...'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {previewData?.record && (
+                  <a
+                    href={`/api/auth/academic/files/${previewData.record.id}/download`}
+                    download={previewData.record.fileName}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                  >
+                    <Download className="h-4 w-4" />
+                    Unduh File
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalOpen(false)}
+                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex flex-1 flex-col overflow-hidden p-6">
+              {isLoadingPreview ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-slate-500">
+                  <Clock className="h-8 w-8 animate-spin text-red-800" />
+                  <p className="text-sm font-semibold">Membaca dan memproses isi file Excel/CSV...</p>
+                </div>
+              ) : previewError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-800">
+                  <AlertCircle className="mx-auto h-8 w-8 text-red-600 mb-2" />
+                  <p className="font-bold">Gagal membuka preview file</p>
+                  <p className="mt-1 text-xs">{previewError}</p>
+                </div>
+              ) : !previewData || previewData.rows.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-12 text-center text-sm text-slate-500">
+                  File ini tidak memiliki baris data.
+                </div>
+              ) : (
+                <>
+                  {/* Search filter in preview */}
+                  <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari dalam file (NIM, Nama, DPA, dll)..."
+                        value={previewSearchTerm}
+                        onChange={(e) => setPreviewSearchTerm(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-4 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-red-800 focus:outline-none"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Total <strong>{previewData.totalRows} baris</strong> data
+                      {previewSearchTerm && (
+                        <span>
+                          {' '}• Menampilkan{' '}
+                          <strong>
+                            {
+                              previewData.rows.filter((r) =>
+                                Object.values(r).some((v) =>
+                                  String(v).toLowerCase().includes(previewSearchTerm.toLowerCase()),
+                                ),
+                              ).length
+                            }
+                          </strong>{' '}
+                          baris cocok
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Preview Table Container */}
+                  <div className="flex-1 overflow-auto rounded-2xl border border-slate-200 shadow-inner max-h-[55vh]">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 font-bold uppercase tracking-wider text-slate-700 shadow-sm">
+                        <tr>
+                          <th className="px-3 py-2.5 text-center w-12 bg-slate-200/80">#</th>
+                          {previewData.headers.map((h, i) => (
+                            <th key={i} className="px-4 py-2.5 whitespace-nowrap">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white font-mono text-[11px]">
+                        {previewData.rows
+                          .filter((r) => {
+                            if (!previewSearchTerm) return true;
+                            const term = previewSearchTerm.toLowerCase();
+                            return Object.values(r).some((v) =>
+                              String(v).toLowerCase().includes(term),
+                            );
+                          })
+                          .map((row, rowIdx) => (
+                            <tr key={rowIdx} className="hover:bg-slate-50 transition">
+                              <td className="px-3 py-2 text-center text-slate-400 bg-slate-50/50 font-sans text-xs">
+                                {row._rowIndex || rowIdx + 1}
+                              </td>
+                              {previewData.headers.map((h, colIdx) => (
+                                <td key={colIdx} className="px-4 py-2 text-slate-800 whitespace-nowrap">
+                                  {row[h] || '-'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-3.5">
+              <p className="text-xs text-slate-500">
+                Data preview dibaca langsung dari file Excel/CSV yang tersimpan di server.
+              </p>
+              <button
+                type="button"
+                onClick={() => setPreviewModalOpen(false)}
+                className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
+              >
+                Tutup Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

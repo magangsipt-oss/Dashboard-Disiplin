@@ -6,6 +6,12 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { Prisma, PrismaClient } from "@prisma/client";
 import multer from "multer";
 import {
+  saveAcademicUpload,
+  listAcademicUploads,
+  getAcademicUploadPreview,
+  getAcademicUploadFilePath,
+} from "./academic-files";
+import {
   AcademicImportValidationError,
   parseAcademicAttendanceFile,
   parseAdvisorAssignmentFile,
@@ -23,6 +29,7 @@ import {
   type ViolationSeverity,
   type PointChangeAction,
 } from "./points";
+import { sendPointDeductionEmail } from "./mailer";
 
 dotenv.config({ path: resolve(__dirname, "../.env") });
 
@@ -408,10 +415,10 @@ authRouter.post(
       const nims = [...new Set(rows.map((row) => row.nim))];
       const students = await database.mahasiswa.findMany({
         where: { nim: { in: nims } },
-        select: { nim: true },
+        select: { id: true, nim: true, pointScore: true, nama: true, email: true, jurusan: true },
       });
-      const knownNims = new Set(students.map((student) => student.nim));
-      const unknownNims = nims.filter((nim) => !knownNims.has(nim));
+      const studentMap = new Map(students.map((student) => [student.nim, student]));
+      const unknownNims = nims.filter((nim) => !studentMap.has(nim));
       if (unknownNims.length > 0) {
         const displayNims = unknownNims.slice(0, 20).join(", ");
         const remaining =
@@ -424,7 +431,7 @@ authRouter.post(
         return;
       }
 
-      const imported = await database.$transaction(async (transaction) => {
+      const { imported, deductionCount, totalPointsDeducted, deductedStudents } = await database.$transaction(async (transaction) => {
         let insertedCount = 0;
         for (let index = 0; index < rows.length; index += 5_000) {
           const chunk = rows.slice(index, index + 5_000);
@@ -442,17 +449,181 @@ authRouter.post(
                 ${row.jumlahKehadiran}
               )`),
             )}
-            ON CONFLICT ("Mata_Kuliah", "Kelas", "NIM") DO NOTHING
+            ON CONFLICT ("Mata_Kuliah", "Kelas", "NIM") 
+            DO UPDATE SET 
+              "Jumlah_Kehadiran" = EXCLUDED."Jumlah_Kehadiran",
+              "Nama_Mahasiswa" = EXCLUDED."Nama_Mahasiswa",
+              "Timestamp" = NOW()
             RETURNING "ID" AS inserted_id
           `;
           insertedCount += inserted.length;
         }
-        return insertedCount;
+
+        const rowsWithAlpa = rows.filter((row) => row.alpa > 0);
+        let deductionCount = 0;
+        let totalPointsDeducted = 0;
+        const deductedStudents: Array<{
+          nim: number;
+          nama: string;
+          email: string | null;
+          prodi: string;
+          mataKuliah: string;
+          alpa: number;
+          delta: number;
+          scoreAfter: number;
+          severity: ViolationSeverity;
+          reason: string;
+        }> = [];
+
+        const currentStudentScores = new Map<number, number>();
+        for (const student of students) {
+          currentStudentScores.set(student.id, student.pointScore);
+        }
+
+        for (const row of rowsWithAlpa) {
+          const student = studentMap.get(row.nim);
+          if (!student) continue;
+
+          const reasonIdentifier = `(${row.mataKuliah} - ${row.kelas})`;
+
+          const existingDeduction = await transaction.pointChange.findFirst({
+            where: {
+              studentId: student.id,
+              type: "UNEXCUSED_ABSENCE",
+              reason: {
+                contains: reasonIdentifier,
+              },
+            },
+          });
+
+          if (existingDeduction) {
+            continue;
+          }
+
+          let delta = -10;
+          let severity: ViolationSeverity = "SEDANG";
+          let reasonText = `Tidak hadir tanpa izin ${reasonIdentifier}: ${row.alpa} Alpa`;
+
+          if (row.alpa === 1) {
+            delta = -10;
+            severity = "SEDANG";
+            reasonText = `Tidak hadir tanpa izin ${reasonIdentifier}: 1 Alpa`;
+          } else if (row.alpa === 2) {
+            delta = -15;
+            severity = "BERAT";
+            reasonText = `Alpa berulang ${reasonIdentifier}: 2 Alpa`;
+          } else {
+            const extra = Math.min(10, (row.alpa - 2) * 5);
+            delta = -15 - extra;
+            severity = "BERAT";
+            reasonText = `Alpa berulang ${reasonIdentifier}: ${row.alpa} Alpa (dikenai sanksi tambahan)`;
+          }
+
+          const currentScore = currentStudentScores.get(student.id) ?? student.pointScore;
+          const { score: newScore, delta: actualDelta } = calculatePointChangeForDelta(currentScore, delta);
+
+          currentStudentScores.set(student.id, newScore);
+
+          await transaction.mahasiswa.update({
+            where: { id: student.id },
+            data: { pointScore: newScore },
+          });
+
+          await transaction.pointChange.create({
+            data: {
+              studentId: student.id,
+              type: "UNEXCUSED_ABSENCE",
+              pillar: "WAKTU",
+              severity,
+              delta: actualDelta,
+              scoreAfter: newScore,
+              reason: reasonText,
+              recordedByIdentity: "Sistem Akademik (Upload Presensi)",
+            },
+          });
+
+          await transaction.pemberitahuan.create({
+            data: {
+              studentId: student.id,
+              judul: "Pengurangan Poin Disiplin Waktu (Ketidakhadiran)",
+              isi: `Poin Anda berkurang ${Math.abs(actualDelta)} poin karena ketidakhadiran (${row.alpa} Alpa) pada mata kuliah ${row.mataKuliah} (${row.kelas}). Saldo poin Anda: ${newScore}.`,
+              tautanTab: "dashboard",
+              dibaca: false,
+            },
+          });
+
+          deductionCount++;
+          totalPointsDeducted += Math.abs(actualDelta);
+          deductedStudents.push({
+            nim: student.nim,
+            nama: student.nama,
+            email: student.email,
+            prodi: student.jurusan,
+            mataKuliah: row.mataKuliah,
+            alpa: row.alpa,
+            delta: actualDelta,
+            scoreAfter: newScore,
+            severity,
+            reason: reasonText,
+          });
+        }
+
+        return {
+          imported: insertedCount,
+          deductionCount,
+          totalPointsDeducted,
+          deductedStudents,
+        };
       });
+
+      // Kirim notifikasi email secara asynchronous (hanya kepada mahasiswa terkait)
+      for (const item of deductedStudents) {
+        if (item.email) {
+          sendPointDeductionEmail({
+            toEmail: item.email,
+            studentName: item.nama,
+            studentNim: item.nim,
+            prodi: item.prodi,
+            pillarName: "Disiplin Waktu",
+            severityName: item.severity === "BERAT" ? "Berat" : "Sedang",
+            delta: item.delta,
+            scoreAfter: item.scoreAfter,
+            reason: item.reason,
+            category: "Ketidakhadiran (Absensi)",
+          }).catch((err) => {
+            console.error(`[Mailer] Error saat mengirim email ke ${item.email}:`, err);
+          });
+        }
+      }
+
+      let savedUploadRecord = null;
+      try {
+        const summaryText = deductionCount > 0
+          ? `${imported} baris presensi disimpan. ${deductionCount} pengurangan poin otomatis diterapkan (${totalPointsDeducted} total poin dipotong).`
+          : `${imported} baris absensi disimpan (${rows.length - imported} baris dilewati)`;
+
+        savedUploadRecord = await saveAcademicUpload({
+          category: "attendance",
+          fileName: request.file.originalname,
+          buffer: request.file.buffer,
+          uploadedBy: getSessionForRequest(request, response)?.profile.name || getSessionForRequest(request, response)?.profile.identity || "Akademik",
+          rowCount: imported,
+          summary: summaryText,
+        });
+      } catch (err) {
+        console.error("Gagal mencatat riwayat file absensi:", err);
+      }
+
       response.json({
         imported,
         skipped: rows.length - imported,
         totalRows: rows.length,
+        deductions: {
+          totalDeductions: deductionCount,
+          totalPointsDeducted,
+          students: deductedStudents,
+        },
+        fileRecord: savedUploadRecord,
       });
     } catch (error) {
       if (error instanceof AcademicImportValidationError) {
@@ -480,6 +651,15 @@ authRouter.post(
         request.file.buffer,
         request.file.originalname,
       );
+      function normalizeProgramStudi(programStudi: string): string {
+        return programStudi
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim();
+      }
+
       function cleanLecturerName(name: string): string {
         return String(name || "")
           .normalize("NFKD")
@@ -495,7 +675,7 @@ authRouter.post(
       const [students, allAdvisors, totalStudents] = await Promise.all([
         database.mahasiswa.findMany({
           where: { nim: { in: nims } },
-          select: { id: true, nim: true },
+          select: { id: true, nim: true, jurusan: true },
         }),
         database.dosen.findMany({
           select: { id: true, nama: true, nip: true },
@@ -543,9 +723,21 @@ authRouter.post(
       }
 
       const missingNims = nims.filter((nim) => !studentByNim.has(nim));
+      const mismatchedPrograms = rows.filter((row) => {
+        const student = studentByNim.get(row.nim);
+        return (
+          student !== undefined &&
+          normalizeProgramStudi(student.jurusan) !==
+            normalizeProgramStudi(row.programStudi)
+        );
+      });
       const unresolvableRows = rows.filter((row) => !resolveAdvisorForRow(row));
 
-      if (missingNims.length > 0 || unresolvableRows.length > 0) {
+      if (
+        missingNims.length > 0 ||
+        mismatchedPrograms.length > 0 ||
+        unresolvableRows.length > 0
+      ) {
         const missingDpas = [
           ...new Set(unresolvableRows.map((r) => r.dpa || r.nip || String(r.nim))),
         ];
@@ -553,12 +745,18 @@ authRouter.post(
           missingNims.length > 0
             ? `NIM tidak ditemukan: ${missingNims.slice(0, 20).join(", ")}`
             : "",
+          mismatchedPrograms.length > 0
+            ? `Program Studi tidak sesuai untuk NIM: ${mismatchedPrograms
+                .slice(0, 20)
+                .map((row) => row.nim)
+                .join(", ")}`
+            : "",
           missingDpas.length > 0
             ? `Dosen PA tidak ditemukan: ${missingDpas.slice(0, 20).join(", ")}`
             : "",
         ].filter(Boolean);
         response.status(400).json({
-          message: `${details.join(". ")}. Tidak ada pembagian yang diubah.`,
+          message: `${details.join(". ")}. Periksa NIM dan Program Studi; tidak ada pembagian yang diubah.`,
         });
         return;
       }
@@ -619,10 +817,25 @@ authRouter.post(
         }
       });
 
+      let savedUploadRecord = null;
+      try {
+        savedUploadRecord = await saveAcademicUpload({
+          category: "advisors",
+          fileName: request.file.originalname,
+          buffer: request.file.buffer,
+          uploadedBy: getSessionForRequest(request, response)?.profile.name || getSessionForRequest(request, response)?.profile.identity || "Akademik",
+          rowCount: rows.length,
+          summary: `${rows.length} mahasiswa dibagikan DPA`,
+        });
+      } catch (err) {
+        console.error("Gagal mencatat riwayat file pembagian DPA:", err);
+      }
+
       response.json({
         assigned: rows.length,
-        unassigned: totalStudents - rows.length,
+        totalUpdated: rows.length,
         totalStudents,
+        fileRecord: savedUploadRecord,
       });
     } catch (error) {
       if (error instanceof AcademicImportValidationError) {
@@ -633,6 +846,60 @@ authRouter.post(
       response.status(500).json({
         message: "Pembagian mahasiswa bimbingan gagal disimpan.",
       });
+    }
+  },
+);
+
+authRouter.get(
+  "/academic/files",
+  requireAcademicUploadSession,
+  async (request, response) => {
+    try {
+      const category = request.query.category as
+        | "attendance"
+        | "advisors"
+        | undefined;
+      const files = await listAcademicUploads(category);
+      response.json({ files });
+    } catch (error) {
+      console.error("Gagal memuat riwayat file akademik:", error);
+      response.status(500).json({ message: "Gagal memuat riwayat file." });
+    }
+  },
+);
+
+authRouter.get(
+  "/academic/files/:id/preview",
+  requireAcademicUploadSession,
+  async (request, response) => {
+    try {
+      const preview = await getAcademicUploadPreview(String(request.params.id));
+      if (!preview) {
+        response.status(404).json({ message: "File upload tidak ditemukan." });
+        return;
+      }
+      response.json(preview);
+    } catch (error) {
+      console.error("Gagal memuat preview file akademik:", error);
+      response.status(500).json({ message: "Gagal memuat preview file." });
+    }
+  },
+);
+
+authRouter.get(
+  "/academic/files/:id/download",
+  requireAcademicUploadSession,
+  async (request, response) => {
+    try {
+      const fileInfo = await getAcademicUploadFilePath(String(request.params.id));
+      if (!fileInfo) {
+        response.status(404).json({ message: "File upload tidak ditemukan." });
+        return;
+      }
+      response.download(fileInfo.absolutePath, fileInfo.record.fileName);
+    } catch (error) {
+      console.error("Gagal mengunduh file akademik:", error);
+      response.status(500).json({ message: "Gagal mengunduh file." });
     }
   },
 );

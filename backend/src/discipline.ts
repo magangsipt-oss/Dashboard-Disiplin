@@ -21,9 +21,12 @@ import {
   calculatePointChangeForDelta,
   getPointChangeMetadata,
   getScorePredicate,
+  disciplinePillarLabels,
+  violationSeverityLabels,
   violationSeverityFollowUps,
   type PointChangeType,
 } from "./points";
+import { sendPointDeductionEmail } from "./mailer";
 import { database, getSessionForRequest, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
 import {
@@ -798,12 +801,24 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
 
         const student = await transaction.mahasiswa.findUnique({
           where: { nim: parsedNim! },
-          select: { id: true, nim: true, pointScore: true },
+          select: { id: true, nim: true, pointScore: true, nama: true, email: true, jurusan: true },
         });
         if (!student) return { kind: "student_not_found" as const };
 
         let pointChangeId: number | null = null;
         let needsTraining = false;
+        let emailNotification: {
+          toEmail: string;
+          studentName: string;
+          studentNim: number;
+          prodi: string;
+          pillarName: string;
+          severityName: string;
+          delta: number;
+          scoreAfter: number;
+          reason: string;
+          category: string;
+        } | null = null;
         if (report.jenis === JenisLaporan.TEMUAN) {
           if (!aturanId) return { kind: "rule_required" as const };
           const rule = await transaction.aturanPelanggaran.findFirst({
@@ -838,6 +853,20 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
           });
           pointChangeId = savedChange.id;
           needsTraining = ["SEDANG", "BERAT", "SANGAT_BERAT"].includes(rule.severity);
+          if (student.email) {
+            emailNotification = {
+              toEmail: student.email,
+              studentName: student.nama,
+              studentNim: student.nim,
+              prodi: student.jurusan,
+              pillarName: disciplinePillarLabels[report.pillar] || report.pillar,
+              severityName: violationSeverityLabels[rule.severity] || rule.severity,
+              delta: pointChange.delta,
+              scoreAfter: pointChange.score,
+              reason: `Laporan terverifikasi: ${rule.nama}`,
+              category: "Pelanggaran Disiplin",
+            };
+          }
 
           if (needsTraining) {
             await transaction.pembinaan.create({
@@ -898,6 +927,7 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
             ? StatusLaporan.DITINDAKLANJUTI
             : StatusLaporan.DIVERIFIKASI,
           pointChangeId,
+          emailNotification,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -917,6 +947,11 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
     if (result.kind === "invalid_rule") {
       response.status(400).json({ message: "Aturan tidak aktif atau tidak sesuai dengan pilar laporan." });
       return;
+    }
+    if ("emailNotification" in result && result.emailNotification?.toEmail) {
+      sendPointDeductionEmail(result.emailNotification).catch((err) => {
+        console.error("[Mailer] Gagal mengirim email notifikasi pelanggaran:", err);
+      });
     }
     response.json(result);
   } catch (error) {

@@ -12,10 +12,14 @@ export type AcademicAttendanceRow = {
   nim: number;
   namaMahasiswa: string;
   jumlahKehadiran: number;
+  alpa: number;
+  ijin: number;
+  sakit: number;
 };
 
 export type AdvisorAssignmentRow = {
   nim: number;
+  programStudi: string;
   nip?: string;
   dpa?: string;
 };
@@ -136,20 +140,73 @@ export function parseAcademicAttendanceFile(
   buffer: Buffer,
   fileName: string,
 ): AcademicAttendanceRow[] {
-  const { records, column } = readRows(buffer, fileName, [
-    "mata_kuliah",
-    "kelas",
-    "nim",
-    "nama_mahasiswa",
-    "jumlah_kehadiran",
-  ]);
+  const matrix = readSheetMatrix(buffer, fileName);
+  const headerRow = matrix[0];
+  if (!headerRow) {
+    throw new AcademicImportValidationError("File tidak memiliki baris judul kolom.");
+  }
+
+  const headers = headerRow.map(normalizeHeader);
+  const findCol = (...aliases: string[]) => headers.findIndex((h) => aliases.includes(h));
+
+  const mataKuliahIndex = findCol("mata_kuliah", "matakuliah", "mata_kuliah_kegiatan", "mk", "matkul");
+  const kelasIndex = findCol("kelas");
+  const nimIndex = findCol("nim");
+  const namaMahasiswaIndex = findCol("nama_mahasiswa", "namamahasiswa", "nama_lengkap", "nama");
+  const jumlahKehadiranIndex = findCol("jumlah_kehadiran", "jumlahkehadiran", "kehadiran", "hadir");
+  const alpaIndex = findCol("alpa", "alpha", "tanpa_keterangan", "a");
+  const ijinIndex = findCol("ijin", "izin", "i");
+  const sakitIndex = findCol("sakit", "s");
+
+  const missing: string[] = [];
+  if (mataKuliahIndex === -1) missing.push("mata_kuliah");
+  if (kelasIndex === -1) missing.push("kelas");
+  if (nimIndex === -1) missing.push("nim");
+  if (namaMahasiswaIndex === -1) missing.push("nama_mahasiswa");
+  if (jumlahKehadiranIndex === -1) missing.push("jumlah_kehadiran");
+
+  if (missing.length > 0) {
+    throw new AcademicImportValidationError(
+      `Kolom wajib tidak ditemukan: ${missing.join(", ")}.`,
+    );
+  }
+
+  const records = matrix
+    .slice(1)
+    .map((row, index) => ({ row, sourceRow: index + 2 }))
+    .filter(({ row }) => {
+      const nimText = cellText(row[nimIndex]);
+      const mkText = cellText(row[mataKuliahIndex]);
+      return nimText !== "" && mkText !== "";
+    });
+
+  if (records.length === 0) {
+    throw new AcademicImportValidationError("File tidak berisi baris data mahasiswa yang valid.");
+  }
+  if (records.length > MAX_IMPORT_ROWS) {
+    throw new AcademicImportValidationError(
+      `File maksimal berisi ${MAX_IMPORT_ROWS.toLocaleString("id-ID")} baris data.`,
+    );
+  }
+
+  const seenNimNames = new Map<string, string>();
 
   return records.map(({ row, sourceRow }) => {
-    const mataKuliah = cellText(row[column("mata_kuliah")]);
-    const kelas = cellText(row[column("kelas")]);
-    const namaMahasiswa = cellText(row[column("nama_mahasiswa")]);
-    const attendanceText = cellText(row[column("jumlah_kehadiran")]);
+    const mataKuliah = cellText(row[mataKuliahIndex]);
+    const kelas = cellText(row[kelasIndex]);
+    const namaMahasiswa = cellText(row[namaMahasiswaIndex]);
+    const attendanceText = cellText(row[jumlahKehadiranIndex]);
     const jumlahKehadiran = Number(attendanceText);
+    const nim = parseNim(row[nimIndex], sourceRow);
+    const key = `${mataKuliah}::${kelas}::${nim}`;
+    const existingName = seenNimNames.get(key);
+
+    if (existingName && existingName !== namaMahasiswa) {
+      throw new AcademicImportValidationError(
+        `NIM ${nim} pada mata kuliah "${mataKuliah}" dan kelas "${kelas}" muncul dengan nama yang berbeda: "${existingName}" dan "${namaMahasiswa}". Gunakan NIM sebagai identitas utama untuk pengurangan poin.`,
+      );
+    }
+    seenNimNames.set(key, namaMahasiswa);
 
     if (!mataKuliah || !kelas || !namaMahasiswa) {
       throw new AcademicImportValidationError(
@@ -162,13 +219,45 @@ export function parseAcademicAttendanceFile(
       );
     }
 
-    return {
+    let alpa = 0;
+    if (alpaIndex !== -1) {
+      const rawAlpa = cellText(row[alpaIndex]);
+      if (rawAlpa && /^\d+$/.test(rawAlpa)) {
+        alpa = Number(rawAlpa);
+      }
+    }
+
+    let ijin = 0;
+    if (ijinIndex !== -1) {
+      const rawIjin = cellText(row[ijinIndex]);
+      if (rawIjin && /^\d+$/.test(rawIjin)) {
+        ijin = Number(rawIjin);
+      }
+    }
+
+    let sakit = 0;
+    if (sakitIndex !== -1) {
+      const rawSakit = cellText(row[sakitIndex]);
+      if (rawSakit && /^\d+$/.test(rawSakit)) {
+        sakit = Number(rawSakit);
+      }
+    }
+
+    const record = {
       mataKuliah,
       kelas,
-      nim: parseNim(row[column("nim")], sourceRow),
+      nim,
       namaMahasiswa,
       jumlahKehadiran,
-    };
+    } as AcademicAttendanceRow;
+
+    Object.defineProperties(record, {
+      alpa: { value: alpa, enumerable: false, writable: true, configurable: true },
+      ijin: { value: ijin, enumerable: false, writable: true, configurable: true },
+      sakit: { value: sakit, enumerable: false, writable: true, configurable: true },
+    });
+
+    return record;
   });
 }
 
@@ -187,6 +276,15 @@ export function parseAdvisorAssignmentFile(
   if (nimIndex === -1) {
     throw new AcademicImportValidationError(
       "Kolom wajib 'NIM' tidak ditemukan pada file pembagian.",
+    );
+  }
+
+  const programStudiIndex = headers.findIndex((header) =>
+    ["program_studi", "prodi", "jurusan"].includes(header),
+  );
+  if (programStudiIndex === -1) {
+    throw new AcademicImportValidationError(
+      "Kolom wajib 'Program Studi' tidak ditemukan pada file pembagian.",
     );
   }
 
@@ -222,6 +320,13 @@ export function parseAdvisorAssignmentFile(
 
   return records.map(({ row, sourceRow }) => {
     const nim = parseNim(row[nimIndex], sourceRow);
+    const programStudi = cellText(row[programStudiIndex]);
+    if (!programStudi) {
+      throw new AcademicImportValidationError(
+        `Program Studi wajib diisi pada baris ${sourceRow}.`,
+      );
+    }
+
     if (seenNims.has(nim)) {
       throw new AcademicImportValidationError(
         `NIM ${nim} muncul lebih dari sekali pada file pembagian.`,
@@ -238,10 +343,21 @@ export function parseAdvisorAssignmentFile(
       );
     }
 
-    return {
+    const record = {
       nim,
-      dpa: dpaText || undefined,
+      programStudi,
       nip: nipText ? parseNip(nipText, sourceRow) : undefined,
-    };
+    } as AdvisorAssignmentRow;
+
+    if (dpaText) {
+      Object.defineProperty(record, "dpa", {
+        value: dpaText,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    }
+
+    return record;
   });
 }

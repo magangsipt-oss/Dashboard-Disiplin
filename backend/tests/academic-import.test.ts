@@ -36,15 +36,38 @@ test("attendance import reads the supplied CSV columns", () => {
   ]);
 });
 
-test("advisor assignment import reads NIM and NIP from an Excel workbook", () => {
+test("attendance import rejects conflicting names for the same NIM", () => {
+  const csv = Buffer.from(
+    [
+      "No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran",
+      '1,"Pemrograman Dasar",TI-1,12345,"Budi Santoso",14',
+      '2,"Pemrograman Dasar",TI-1,12345,"Budi Santoso Jr.",13',
+    ].join("\n"),
+  );
+
+  assert.throws(
+    () => parseAcademicAttendanceFile(csv, "absensi.csv"),
+    (error: unknown) =>
+      error instanceof AcademicImportValidationError &&
+      error.message.includes("Gunakan NIM sebagai identitas utama"),
+  );
+});
+
+test("advisor assignment import reads NIM, Program Studi, and NIP from an Excel workbook", () => {
   const workbook = makeWorkbookBuffer([
-    ["NIM", "NIP"],
-    [12345, "198701012010011001"],
+    ["NIM", "Program Studi", "NIP"],
+    [12345, "Teknologi Rekayasa Logistik", "198701012010011001"],
   ]);
 
   assert.deepEqual(
     parseAdvisorAssignmentFile(workbook, "pembagian.xlsx"),
-    [{ nim: 12345, nip: "198701012010011001" }],
+    [
+      {
+        nim: 12345,
+        programStudi: "Teknologi Rekayasa Logistik",
+        nip: "198701012010011001",
+      },
+    ],
   );
 });
 
@@ -60,12 +83,25 @@ test("attendance import rejects missing required columns", () => {
 });
 
 test("advisor assignment import rejects duplicate student NIMs", () => {
-  const csv = Buffer.from("NIM,NIP\n12345,198701012010011001\n12345,198901012010011002");
+  const csv = Buffer.from(
+    "NIM,Program Studi,NIP\n12345,TR Logistik,198701012010011001\n12345,TR Logistik,198901012010011002",
+  );
 
   assert.throws(
     () => parseAdvisorAssignmentFile(csv, "pembagian.csv"),
     (error: unknown) =>
       error instanceof AcademicImportValidationError &&
       error.message.includes("muncul lebih dari sekali"),
+  );
+});
+
+test("advisor assignment import requires Program Studi", () => {
+  const csv = Buffer.from("NIM,NIP\n12345,198701012010011001");
+
+  assert.throws(
+    () => parseAdvisorAssignmentFile(csv, "pembagian.csv"),
+    (error: unknown) =>
+      error instanceof AcademicImportValidationError &&
+      error.message.includes("Program Studi"),
   );
 });

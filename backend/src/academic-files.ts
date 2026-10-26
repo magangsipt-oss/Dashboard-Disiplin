@@ -120,6 +120,47 @@ export async function getAcademicUploadRecord(
   return records.find((r) => r.id === id) ?? null;
 }
 
+export function isValidAttendancePreviewRow(
+  headers: string[],
+  row: unknown[],
+): boolean {
+  const normalizedHeaders = headers.map((header) =>
+    header
+      .replace(/^\uFEFF/, "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, ""),
+  );
+  const findColumn = (...aliases: string[]) =>
+    normalizedHeaders.findIndex((header) => aliases.includes(header));
+  const columns = [
+    findColumn("mata_kuliah", "matakuliah", "mata_kuliah_kegiatan", "mk", "matkul"),
+    findColumn("kelas"),
+    findColumn("nim"),
+    findColumn("nama_mahasiswa", "namamahasiswa", "nama_lengkap", "nama"),
+    findColumn("jumlah_kehadiran", "jumlahkehadiran", "kehadiran", "hadir"),
+  ];
+  if (columns.some((index) => index < 0)) {
+    return true;
+  }
+
+  const [courseIndex, classIndex, nimIndex, nameIndex, attendanceIndex] = columns;
+  const requiredValues = [row[courseIndex], row[classIndex], row[nameIndex]]
+    .map((value) => String(value ?? "").trim());
+  const nim = String(row[nimIndex] ?? "").trim().replace(/\.0+$/, "");
+  const attendance = String(row[attendanceIndex] ?? "").trim();
+  return (
+    requiredValues.every((value) => value && !/^[-–—]+$/.test(value)) &&
+    /^[1-9]\d*$/.test(nim) &&
+    Number.isSafeInteger(Number(nim)) &&
+    /^\d+$/.test(attendance) &&
+    Number.isSafeInteger(Number(attendance))
+  );
+}
+
 export async function getAcademicUploadPreview(id: string): Promise<{
   record: AcademicUploadRecord;
   headers: string[];
@@ -162,7 +203,15 @@ export async function getAcademicUploadPreview(id: string): Promise<{
   const dataRows: Array<Record<string, string>> = [];
   for (let idx = 1; idx < rawRows.length; idx++) {
     const row = rawRows[idx];
-    if (!row || !row.some((val) => String(val ?? "").trim() !== "")) {
+    const hasData = row?.some((val) => {
+      const value = String(val ?? "").trim();
+      return value !== "" &&
+        (record.category !== "attendance" || !/^[-–—]+$/.test(value));
+    });
+    if (!hasData) {
+      continue;
+    }
+    if (record.category === "attendance" && !isValidAttendancePreviewRow(headerRow, row)) {
       continue;
     }
     const rowObj: Record<string, string> = { _rowIndex: String(idx) };
@@ -190,4 +239,3 @@ export async function getAcademicUploadFilePath(
   const absolutePath = resolve(academicUploadsDirectory, record.storedFileName);
   return { record, absolutePath };
 }
-

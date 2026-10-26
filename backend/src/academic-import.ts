@@ -29,8 +29,8 @@ export type NewStudentImportRow = {
   nama: string;
   jurusan: string;
   password: string;
-  email?: string;
-  noHandphone?: string;
+  email: string;
+  noHandphone: string;
   angkatan?: number;
   namaSmta?: string;
 };
@@ -240,6 +240,8 @@ export function parseNewStudentImportFile(
     ["NIM", columns.nim],
     ["Nama Lengkap", columns.nama],
     ["PRODI", columns.jurusan],
+    ["Email", columns.email],
+    ["No Handphone", columns.noHandphone],
     ["Kata Sandi", columns.password],
   ] as const;
   const missing = required.filter(([, column]) => column === -1);
@@ -267,8 +269,13 @@ export function parseNewStudentImportFile(
       );
     }
 
-    const emailText = columns.email === -1 ? "" : cellText(row[columns.email]);
-    const phone = columns.noHandphone === -1 ? "" : cellText(row[columns.noHandphone]);
+    const emailText = cellText(row[columns.email]);
+    const phone = cellText(row[columns.noHandphone]);
+    if (!emailText || !phone) {
+      throw new AcademicImportValidationError(
+        `Email dan No Handphone wajib diisi pada baris ${sourceRow}.`,
+      );
+    }
     const school = columns.namaSmta === -1 ? "" : cellText(row[columns.namaSmta]);
     const angkatanText = columns.angkatan === -1 ? "" : cellText(row[columns.angkatan]);
     let angkatan: number | undefined;
@@ -296,8 +303,8 @@ export function parseNewStudentImportFile(
       nama,
       jurusan,
       password: parseImportPassword(row[columns.password], sourceRow),
-      email: emailText ? parseEmail(emailText, sourceRow) : undefined,
-      noHandphone: phone || undefined,
+      email: parseEmail(emailText, sourceRow),
+      noHandphone: phone,
       angkatan,
       namaSmta: school || undefined,
     };

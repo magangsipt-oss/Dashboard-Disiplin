@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
+import { isValidAttendancePreviewRow } from "../src/academic-files";
 import {
   AcademicImportValidationError,
   parseAcademicAttendanceFile,
@@ -36,6 +37,40 @@ test("attendance import reads the supplied CSV columns", () => {
       jumlahKehadiran: 14,
     },
   ]);
+});
+
+test("attendance preview skips rows that only contain placeholders or incomplete records", () => {
+  const headers = [
+    "No",
+    "MataKuliah",
+    "Kelas",
+    "NIM",
+    "Nama Mahasiswa",
+    "Jumlah Kehadiran",
+  ];
+
+  assert.equal(
+    isValidAttendancePreviewRow(headers, [
+      "2",
+      "Elektronika",
+      "-",
+      "-",
+      "-",
+      "-",
+    ]),
+    false,
+  );
+  assert.equal(
+    isValidAttendancePreviewRow(headers, [
+      "1",
+      "Elektronika",
+      "SBC2005-1",
+      "23409901",
+      "Abin Nabawi",
+      "0",
+    ]),
+    true,
+  );
 });
 
 test("attendance import rejects conflicting names for the same NIM", () => {
@@ -119,7 +154,7 @@ test("advisor assignment import does not accept legacy lecturer identifiers", ()
   );
 });
 
-test("new student import reads the required profile fields and optional details", () => {
+test("new student import reads required email and phone alongside optional details", () => {
   const csv = Buffer.from(
     "NIM,Nama Lengkap,PRODI,Angkatan,Email,No Handphone,Nama SMTA,Kata Sandi\n24409901,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,mahasiswa@example.com,081234567890,SMA Berau,rahasia123",
   );
@@ -140,7 +175,7 @@ test("new student import reads the required profile fields and optional details"
 
 test("new student import rejects duplicate NIMs and missing passwords", () => {
   const duplicateNims = Buffer.from(
-    "NIM,Nama,PRODI,Kata Sandi\n12345,Budi,TI,rahasia123\n12345,Budi,TI,rahasia456",
+    "NIM,Nama,PRODI,Email,No Handphone,Kata Sandi\n12345,Budi,TI,budi@example.com,081234567890,rahasia123\n12345,Budi,TI,budi@example.com,081234567890,rahasia456",
   );
   assert.throws(
     () => parseNewStudentImportFile(duplicateNims, "mahasiswa.csv"),
@@ -148,11 +183,37 @@ test("new student import rejects duplicate NIMs and missing passwords", () => {
   );
 
   const missingPassword = Buffer.from(
-    "NIM,Nama,PRODI\n12345,Budi,TI",
+    "NIM,Nama,PRODI,Email,No Handphone\n12345,Budi,TI,budi@example.com,081234567890",
   );
   assert.throws(
     () => parseNewStudentImportFile(missingPassword, "mahasiswa.csv"),
     /Kata Sandi/,
+  );
+});
+
+test("new student import requires Email and No Handphone columns and values", () => {
+  const missingColumns = Buffer.from(
+    "NIM,Nama,PRODI,Kata Sandi\n12345,Budi,TI,rahasia123",
+  );
+  assert.throws(
+    () => parseNewStudentImportFile(missingColumns, "mahasiswa.csv"),
+    /Email, No Handphone/,
+  );
+
+  const emptyEmail = Buffer.from(
+    "NIM,Nama,PRODI,Email,No Handphone,Kata Sandi\n12345,Budi,TI,,081234567890,rahasia123",
+  );
+  assert.throws(
+    () => parseNewStudentImportFile(emptyEmail, "mahasiswa.csv"),
+    /Email dan No Handphone wajib diisi/,
+  );
+
+  const emptyPhone = Buffer.from(
+    "NIM,Nama,PRODI,Email,No Handphone,Kata Sandi\n12345,Budi,TI,budi@example.com,,rahasia123",
+  );
+  assert.throws(
+    () => parseNewStudentImportFile(emptyPhone, "mahasiswa.csv"),
+    /Email dan No Handphone wajib diisi/,
   );
 });
 

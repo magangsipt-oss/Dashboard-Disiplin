@@ -169,7 +169,6 @@ export default function App() {
       { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
     ],
     akademik: [
-      { id: 'dashboard', label: 'Dashboard Akademik' },
       { id: 'lapor', label: 'Lapor Satgas' },
       { id: 'upload-absensi', label: 'Upload Absensi' },
       { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
@@ -235,7 +234,11 @@ export default function App() {
         if (isMounted && data?.profile) {
           setAuthenticatedUser(data.profile);
           setActiveTab(
-            data.profile.role === 'dosen' ? 'bimbingan' : 'dashboard',
+            data.profile.role === 'dosen'
+              ? 'bimbingan'
+              : data.profile.role === 'akademik'
+                ? 'lapor'
+                : 'dashboard',
           );
           setActivePage('dashboard');
           if (data.profile.role === 'mhs') {
@@ -1789,9 +1792,8 @@ export default function App() {
                                 <th className="px-4 py-3">Nama File</th>
                                 <th className="px-4 py-3">Waktu Upload</th>
                                 <th className="px-4 py-3">Ukuran</th>
-                                <th className="px-4 py-3">Ringkasan Data</th>
                                 <th className="px-4 py-3">Pengunggah</th>
-                                <th className="px-4 py-3 text-right">Aksi</th>
+                                <th className="px-4 py-3 text-left">Aksi</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -1820,15 +1822,10 @@ export default function App() {
                                     <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                                       {(file.fileSize / 1024).toFixed(1)} KB
                                     </td>
-                                    <td className="px-4 py-3.5 text-xs">
-                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800">
-                                        {file.summary || `${file.rowCount} baris`}
-                                      </span>
-                                    </td>
                                     <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
                                       {file.uploadedBy || 'Akademik'}
                                     </td>
-                                    <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-4 py-3.5 text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                       <div className="inline-flex items-center gap-2">
                                         <button
                                           type="button"
@@ -1863,7 +1860,7 @@ export default function App() {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Data Mahasiswa Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file Excel (.xls atau .xlsx) dengan kolom wajib <strong>NIM, Nama Lengkap, PRODI, dan Kata Sandi</strong>. Email, No Handphone, Angkatan, dan Nama SMTA bersifat opsional.
+                        Unggah file Excel (.xls atau .xlsx) dengan kolom wajib <strong>NIM, Nama Lengkap, PRODI, Email, No Handphone, dan Kata Sandi</strong>. Angkatan dan Nama SMTA bersifat opsional.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Baris dengan NIM yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
@@ -2070,9 +2067,8 @@ export default function App() {
                                 <th className="px-4 py-3">Nama File</th>
                                 <th className="px-4 py-3">Waktu Upload</th>
                                 <th className="px-4 py-3">Ukuran</th>
-                                <th className="px-4 py-3">Ringkasan Data</th>
                                 <th className="px-4 py-3">Pengunggah</th>
-                                <th className="px-4 py-3 text-right">Aksi</th>
+                                <th className="px-4 py-3 text-left">Aksi</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -2101,15 +2097,10 @@ export default function App() {
                                     <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
                                       {(file.fileSize / 1024).toFixed(1)} KB
                                     </td>
-                                    <td className="px-4 py-3.5 text-xs">
-                                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800">
-                                        {file.summary || `${file.rowCount} baris`}
-                                      </span>
-                                    </td>
                                     <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
                                       {file.uploadedBy || 'Akademik'}
                                     </td>
-                                    <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-4 py-3.5 text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                       <div className="inline-flex items-center gap-2">
                                         <button
                                           type="button"

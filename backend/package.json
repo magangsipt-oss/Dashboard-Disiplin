@@ -23,7 +23,8 @@
     "prisma:hash-passwords": "tsx prisma/hash-legacy-passwords.ts",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:migrate:baseline": "prisma migrate resolve --applied 0_init"
+    "prisma:migrate:baseline": "prisma migrate resolve --applied 0_init",
+    "prisma:fix-constraints": "tsx prisma/fix-staff-constraint-names.ts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

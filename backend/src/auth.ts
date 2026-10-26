@@ -106,7 +106,10 @@ export async function loadSession(
     }
     next();
   } catch (error) {
-    next(error);
+    // Jangan jatuhkan semua request (termasuk rute publik) bila tabel sesi
+    // bermasalah; anggap belum login dan catat errornya.
+    console.error("Gagal memuat sesi login:", error);
+    next();
   }
 }
 

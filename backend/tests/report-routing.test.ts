@@ -138,7 +138,7 @@ test("nama berbeda, NIM tidak ditemukan, dan NIM di luar int32 tidak terdaftar",
   assert.equal(tooLargeNimDb.queryCount(), 0);
 });
 
-test("laporan temuan teridentifikasi hanya memberi notifikasi mahasiswa dan DPA sebelum konfirmasi", async () => {
+test("laporan temuan teridentifikasi memberi notifikasi mahasiswa, DPA, dan Kemahasiswaan", async () => {
   const route: ReportRoute = { jalur: "TERIDENTIFIKASI", student: makeStudent() };
   const { tx, calls } = makeNotificationTransaction();
   await createReportNotifications(tx, {
@@ -146,11 +146,11 @@ test("laporan temuan teridentifikasi hanya memberi notifikasi mahasiswa dan DPA 
     route,
     texts: makeTexts(route),
   });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls.filter((call) => call.model === "pemberitahuan").length, 1);
-  assert.equal(calls.filter((call) => call.model === "pemberitahuanStaf").length, 1);
+  assert.equal(calls.filter((call) => call.model === "pemberitahuanStaf").length, 2);
   assert.ok(calls.some((call) => call.data.peran === "DOSEN"));
-  assert.equal(calls.some((call) => call.data.peran === "KEMAHASISWAAN"), false);
+  assert.ok(calls.some((call) => call.data.peran === "KEMAHASISWAAN"));
   for (const call of calls.filter((item) => item.model === "pemberitahuan" || item.data.peran === "DOSEN")) {
     assert.doesNotMatch(String(call.data.isi), /lokasi|pelapor/i);
   }

@@ -128,16 +128,11 @@ export function buildReportNotificationTexts({
           tautanTab: "laporan",
         }
       : null,
-    kemahasiswaan:
-      route.jalur !== "TERIDENTIFIKASI" ||
-      route.student.dosenPaId === null ||
-      isApresiasi
-        ? {
+    kemahasiswaan: {
       judul: isApresiasi ? "Laporan apresiasi baru" : "Laporan baru perlu ditinjau",
       isi: kemahasiswaanIsi,
       tautanTab: "laporan",
-          }
-        : null,
+    },
   };
 }
 

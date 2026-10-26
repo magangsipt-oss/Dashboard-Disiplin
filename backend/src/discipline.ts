@@ -1150,6 +1150,11 @@ reportRouter.get("/admin/laporan", async (request, response) => {
         OR: [
           {
             status: StatusLaporan.DITERIMA,
+            jalur: "TERIDENTIFIKASI",
+            jenis: JenisLaporan.TEMUAN,
+          },
+          {
+            status: StatusLaporan.DITERIMA,
             jalur: { not: "TERIDENTIFIKASI" },
           },
           {

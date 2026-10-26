@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calculatePointChange,
+  calculatePointChangeForDelta,
   getPointChangeMetadata,
   getScorePredicate,
   violationSeverityPointRanges,
@@ -35,6 +36,17 @@ test("point changes start from 100 and apply the agreed values", () => {
     score: 105,
     delta: 5,
   });
+});
+
+test("confirmed violation point deductions can be restored as a positive change", () => {
+  const deducted = calculatePointChangeForDelta(100, -15);
+  const restored = calculatePointChangeForDelta(
+    deducted.score,
+    Math.abs(deducted.delta),
+  );
+
+  assert.deepEqual(deducted, { score: 85, delta: -15 });
+  assert.deepEqual(restored, { score: 100, delta: 15 });
 });
 
 test("point changes stay within the 0 to 200 score range", () => {
@@ -81,7 +93,7 @@ test("all stored violation severities use educational follow-up guidance", () =>
   );
 });
 
-test("manual violation deductions use the configured severity ranges", () => {
+test("reported violation deductions use the configured severity ranges", () => {
   assert.deepEqual(violationSeverityPointRanges.RINGAN, {
     minimum: 5,
     maximum: 10,

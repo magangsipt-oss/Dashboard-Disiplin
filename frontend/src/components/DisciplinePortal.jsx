@@ -6,6 +6,8 @@ import LaporSatgas from './student/LaporSatgas';
 import TindakLanjut from './student/TindakLanjut';
 import SanggahanMahasiswa from './student/SanggahanMahasiswa';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
+import AdminReportQueue from './reports/AdminReportQueue';
+import DosenReportWorkflow from './reports/DosenReportWorkflow';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -107,17 +109,6 @@ export default function App() {
   const [adminMonitoringError, setAdminMonitoringError] = useState('');
   const [adminMonitoringSearch, setAdminMonitoringSearch] = useState('');
   const [adminCoachingFilter, setAdminCoachingFilter] = useState('ALL');
-  const [pointChangeForm, setPointChangeForm] = useState({
-    nim: '',
-    type: 'reported_violation',
-    pillar: 'WAKTU',
-    severity: 'RINGAN',
-    deductionPoints: '5',
-    reason: '',
-  });
-  const [isSubmittingPointChange, setIsSubmittingPointChange] = useState(false);
-  const [pointChangeStatus, setPointChangeStatus] = useState('');
-  const [pointChangeError, setPointChangeError] = useState('');
   const [academicAttendanceFile, setAcademicAttendanceFile] = useState(null);
   const [academicAttendanceResult, setAcademicAttendanceResult] = useState(null);
   const [academicAttendanceError, setAcademicAttendanceError] = useState('');
@@ -149,11 +140,13 @@ export default function App() {
     ],
     dosen: [
       { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
+      { id: 'laporan-dpa', label: 'Konfirmasi Laporan' },
       { id: 'konseling', label: 'Catatan & Konseling' },
       { id: 'lapor', label: 'Lapor Satgas' },
     ],
     admin: [
       { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
+      { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
       { id: 'monitoring', label: 'Monitoring Mahasiswa & Dosen PA' },
       { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
     ],
@@ -549,50 +542,6 @@ export default function App() {
       setAdvisorError('');
       setActiveTab('dashboard');
       setActivePage('landing');
-    }
-  };
-
-  const handlePointChangeSubmit = async (event) => {
-    event.preventDefault();
-    setPointChangeStatus('');
-    setPointChangeError('');
-    setIsSubmittingPointChange(true);
-
-    try {
-      const response = await fetch('/api/auth/points/adjust', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...pointChangeForm,
-          deductionPoints: Number(pointChangeForm.deductionPoints),
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Perubahan poin gagal disimpan.');
-      }
-
-      const sign = data.delta > 0 ? '+' : '';
-      setPointChangeStatus(
-        `Poin ${data.name} berhasil dicatat: ${sign}${data.delta} (total ${data.score}, ${data.predicate}).`,
-      );
-      setAdminMonitoring((current) => ({
-        ...current,
-        students: current.students.map((student) => (
-          String(student.nim) === String(data.nim)
-            ? { ...student, pointScore: data.score }
-            : student
-        )),
-      }));
-      setPointChangeForm((current) => ({ ...current, reason: '' }));
-    } catch (error) {
-      setPointChangeError(
-        error instanceof Error
-          ? error.message
-          : 'Perubahan poin gagal disimpan.',
-      );
-    } finally {
-      setIsSubmittingPointChange(false);
     }
   };
 
@@ -1154,6 +1103,14 @@ export default function App() {
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
                 <LaporSatgas />
               </main>
+            )}
+
+            {authenticatedUser?.role === 'dosen' && activeTab === 'laporan-dpa' && (
+              <DosenReportWorkflow />
+            )}
+
+            {authenticatedUser?.role === 'admin' && activeTab === 'laporan-kemahasiswaan' && (
+              <AdminReportQueue />
             )}
 
             {authenticatedUser?.role === 'mhs' && activeTab !== 'lapor' && (
@@ -1720,7 +1677,7 @@ export default function App() {
               </main>
             )}
 
-            {authenticatedUser?.role === 'dosen' && activeTab !== 'lapor' && (
+            {authenticatedUser?.role === 'dosen' && !['lapor', 'laporan-dpa'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl md:flex-row md:items-center sm:p-8">
                   <div className="z-10 space-y-2">
@@ -2009,7 +1966,7 @@ export default function App() {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && activeTab !== 'lapor' && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
@@ -2017,12 +1974,12 @@ export default function App() {
                     Dashboard Monitoring Kedisiplinan Mahasiswa
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
-                    Pantau data mahasiswa dan dosen PA, tindak lanjut coaching, serta kelola keputusan pengurangan poin berdasarkan pelanggaran yang telah diverifikasi.
+                    Pantau data mahasiswa dan dosen PA, telusuri laporan anonim, dan tetapkan tindak lanjut edukatif setelah laporan dikonfirmasi Dosen PA.
                   </p>
                 </section>
 
                 <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow">
-                  Status coaching mengikuti catatan pembinaan dosen PA. Kemahasiswaan dapat memantau seluruh data mahasiswa dan dosen, lalu menetapkan pengurangan poin untuk pelanggaran yang telah diverifikasi.
+                  Poin berkurang setelah Dosen PA mengonfirmasi pelanggaran. Kemahasiswaan menetapkan tindak lanjut; poin dipulihkan oleh sistem setelah bukti mahasiswa disetujui Dosen PA.
                 </p>
 
                 <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -2246,113 +2203,19 @@ export default function App() {
                 )}
 
                 {activeTab === 'pengurangan-poin' && (
-                <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-                  <h3 className="text-lg font-extrabold text-slate-900">
-                    Tetapkan Pengurangan Poin
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Catat pelanggaran yang sudah diverifikasi. Besaran pengurangan mengikuti tingkat pelanggaran dan skor mahasiswa tidak akan turun di bawah nol.
-                  </p>
-                    <form onSubmit={handlePointChangeSubmit} className="mt-5 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2">
-                      <div>
-                        <label htmlFor="point-student-nim" className="mb-1.5 block text-sm font-bold text-slate-700">Mahasiswa</label>
-                        <select
-                          id="point-student-nim"
-                          required
-                          value={pointChangeForm.nim}
-                          onChange={(event) => setPointChangeForm((current) => ({ ...current, nim: event.target.value }))}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                        >
-                          <option value="">Pilih mahasiswa</option>
-                          {adminMonitoring.students.map((student) => (
-                            <option key={student.id} value={String(student.nim)}>
-                              {student.nama} — NIM {student.nim}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="point-change-pillar" className="mb-1.5 block text-sm font-bold text-slate-700">Pilar pelanggaran</label>
-                        <select
-                          id="point-change-pillar"
-                          value={pointChangeForm.pillar}
-                          onChange={(event) => setPointChangeForm((current) => ({ ...current, pillar: event.target.value }))}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                        >
-                          {disciplinePillars.map(({ pillar, label }) => (
-                            <option key={pillar} value={pillar}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="point-change-severity" className="mb-1.5 block text-sm font-bold text-slate-700">Tingkat pelanggaran</label>
-                        <select
-                          id="point-change-severity"
-                          value={pointChangeForm.severity}
-                          onChange={(event) => {
-                            const severity = violationSeverities.find((item) => item.severity === event.target.value);
-                            setPointChangeForm((current) => ({
-                              ...current,
-                              severity: event.target.value,
-                              deductionPoints: String(severity.minimumPoints),
-                            }));
-                          }}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                        >
-                          {violationSeverities.map(({ severity, label, pointRange }) => (
-                            <option key={severity} value={severity}>{label} ({pointRange} poin)</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="point-change-deduction" className="mb-1.5 block text-sm font-bold text-slate-700">Jumlah poin yang dikurangi</label>
-                        <input
-                          id="point-change-deduction"
-                          type="number"
-                          required
-                          min={violationSeverities.find((item) => item.severity === pointChangeForm.severity)?.minimumPoints}
-                          max={violationSeverities.find((item) => item.severity === pointChangeForm.severity)?.maximumPoints}
-                          step="1"
-                          value={pointChangeForm.deductionPoints}
-                          onChange={(event) => setPointChangeForm((current) => ({ ...current, deductionPoints: event.target.value }))}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label htmlFor="point-change-reason" className="mb-1.5 block text-sm font-bold text-slate-700">Uraian pelanggaran dan bukti verifikasi</label>
-                        <textarea
-                          id="point-change-reason"
-                          required
-                          maxLength={500}
-                          rows={3}
-                          value={pointChangeForm.reason}
-                          onChange={(event) => setPointChangeForm((current) => ({ ...current, reason: event.target.value }))}
-                          placeholder="Jelaskan pelanggaran dan dasar penetapan pengurangan poin"
-                          className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                        />
-                      </div>
-                      {pointChangeError && (
-                        <p className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-                          {pointChangeError}
-                        </p>
-                      )}
-                      {pointChangeStatus && (
-                        <p className="sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
-                          {pointChangeStatus}
-                        </p>
-                      )}
-                      <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3">
-                        <p className="text-xs text-slate-500">Besar pengurangan harus berada pada rentang untuk tingkat pelanggaran yang dipilih.</p>
-                        <button
-                          type="submit"
-                          disabled={isSubmittingPointChange}
-                          className="rounded-xl bg-red-800 px-5 py-3 text-sm font-bold text-white shadow transition hover:bg-red-900 disabled:cursor-wait disabled:opacity-60"
-                        >
-                          {isSubmittingPointChange ? 'Menyimpan...' : 'Simpan Pengurangan Poin'}
-                        </button>
-                      </div>
-                    </form>
-                </section>
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
+                    <h3 className="text-lg font-extrabold text-slate-900">Pengurangan poin melalui konfirmasi laporan</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                      Kemahasiswaan tidak lagi mengurangi poin secara manual. Pengurangan hanya dicatat setelah Dosen PA mengonfirmasi laporan teridentifikasi; gunakan antrean laporan untuk menetapkan tindak lanjut edukatif.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('laporan-kemahasiswaan')}
+                      className="mt-4 rounded-xl bg-red-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-900"
+                    >
+                      Buka antrean laporan
+                    </button>
+                  </section>
                 )}
               </main>
             )}

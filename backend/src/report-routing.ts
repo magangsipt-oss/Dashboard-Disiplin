@@ -79,7 +79,7 @@ type NotificationText = { judul: string; isi: string; tautanTab: string };
 export type ReportNotificationTexts = {
   student: NotificationText | null;
   dosen: NotificationText | null;
-  kemahasiswaan: NotificationText;
+  kemahasiswaan: NotificationText | null;
 };
 
 export function buildReportNotificationTexts({
@@ -103,8 +103,8 @@ export function buildReportNotificationTexts({
 
   if (route.jalur === "TERIDENTIFIKASI") {
     kemahasiswaanIsi = route.student.dosenPaId === null
-      ? `Terlapor sudah diberi pemberitahuan. Dosen PA belum ditetapkan. ${detailKejadian}`
-      : `Terlapor sudah diberi pemberitahuan beserta Dosen PA-nya. ${detailKejadian}`;
+      ? `Terlapor sudah menerima notifikasi, tetapi Dosen PA belum ditetapkan. ${detailKejadian}`
+      : `Laporan diteruskan kepada terlapor dan Dosen PA untuk konfirmasi. ${detailKejadian}`;
   } else if (route.jalur === "TIDAK_TERDAFTAR") {
     kemahasiswaanIsi = `Nama/NIM yang diisi (${terlaporNama ?? ""} / ${terlaporNim ?? ""}) tidak cocok dengan data mahasiswa. Perlu ditelusuri. ${detailKejadian}`;
   } else {
@@ -117,7 +117,7 @@ export function buildReportNotificationTexts({
           judul: isApresiasi ? "Laporan apresiasi diterima" : "Ada laporan yang melibatkan Anda",
           isi: isApresiasi
             ? `Anda menerima laporan apresiasi. ${detailKejadian}`
-            : `Ada laporan yang melibatkan Anda. Poin tidak berubah sebelum laporan diverifikasi dan dikonfirmasi. ${detailKejadian}`,
+            : `Ada laporan yang melibatkan Anda. Dosen PA akan meninjau laporan; poin belum berubah sebelum konfirmasi. ${detailKejadian}`,
           tautanTab: isApresiasi ? "dashboard" : "tindak-lanjut",
         }
       : null,
@@ -125,14 +125,19 @@ export function buildReportNotificationTexts({
       ? {
           judul: "Laporan terkait mahasiswa bimbingan",
           isi: `Ada ${jenisLabel.toLowerCase()} terkait mahasiswa bimbingan Anda. ${detailKejadian}`,
-          tautanTab: "mahasiswa",
+          tautanTab: "laporan",
         }
       : null,
-    kemahasiswaan: {
+    kemahasiswaan:
+      route.jalur !== "TERIDENTIFIKASI" ||
+      route.student.dosenPaId === null ||
+      isApresiasi
+        ? {
       judul: isApresiasi ? "Laporan apresiasi baru" : "Laporan baru perlu ditinjau",
       isi: kemahasiswaanIsi,
       tautanTab: "laporan",
-    },
+          }
+        : null,
   };
 }
 
@@ -140,21 +145,24 @@ type CreateReportNotificationsInput = {
   laporanId: number;
   route: ReportRoute;
   texts: ReportNotificationTexts;
+  notifyKemahasiswaan?: boolean;
 };
 
 export async function createReportNotifications(
   tx: Prisma.TransactionClient,
-  { laporanId, route, texts }: CreateReportNotificationsInput,
+  { laporanId, route, texts, notifyKemahasiswaan = true }: CreateReportNotificationsInput,
 ): Promise<void> {
-  await tx.pemberitahuanStaf.create({
-    data: {
-      peran: PeranPenerima.KEMAHASISWAAN,
-      laporanId,
-      judul: texts.kemahasiswaan.judul,
-      isi: texts.kemahasiswaan.isi,
-      tautanTab: texts.kemahasiswaan.tautanTab,
-    },
-  });
+  if (notifyKemahasiswaan && texts.kemahasiswaan) {
+    await tx.pemberitahuanStaf.create({
+      data: {
+        peran: PeranPenerima.KEMAHASISWAAN,
+        laporanId,
+        judul: texts.kemahasiswaan.judul,
+        isi: texts.kemahasiswaan.isi,
+        tautanTab: texts.kemahasiswaan.tautanTab,
+      },
+    });
+  }
 
   if (route.jalur !== "TERIDENTIFIKASI") return;
 

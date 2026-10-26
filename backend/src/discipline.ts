@@ -367,17 +367,26 @@ reportRouter.get("/mahasiswa/tindak-lanjut", async (request, response) => {
   try {
     const reports = await database.laporan.findMany({
       where: {
-        terlaporNim: session.profile.identity,
-        status: { in: [StatusLaporan.DIVERIFIKASI, StatusLaporan.DITINDAKLANJUTI] },
+        terlaporId: session.profile.id,
+        status: {
+          in: [
+            StatusLaporan.DITERIMA,
+            StatusLaporan.DIVERIFIKASI,
+            StatusLaporan.DITINDAKLANJUTI,
+            StatusLaporan.SELESAI,
+            StatusLaporan.DITOLAK,
+          ],
+        },
         jenis: JenisLaporan.TEMUAN,
-        perubahanPoinId: { not: null },
       },
       orderBy: { id: "desc" },
       select: {
         id: true,
         pillar: true,
         tanggalKejadian: true,
+        deskripsi: true,
         status: true,
+        aturan: { select: { nama: true } },
         perubahanPoin: {
           select: {
             id: true,
@@ -390,7 +399,13 @@ reportRouter.get("/mahasiswa/tindak-lanjut", async (request, response) => {
               take: 1,
             },
             pembinaans: {
-              select: { id: true, jenis: true, status: true },
+              select: {
+                id: true,
+                jenis: true,
+                instruksi: true,
+                status: true,
+                buktiUrl: true,
+              },
               orderBy: { createdAt: "desc" },
               take: 1,
             },
@@ -407,7 +422,8 @@ reportRouter.get("/mahasiswa/tindak-lanjut", async (request, response) => {
         tanggalKejadian: formatDateOnly(report.tanggalKejadian),
         status: report.status,
         pointsDeducted: Math.abs(report.perubahanPoin?.delta ?? 0),
-        reason: report.perubahanPoin?.reason ?? "",
+        reason: report.perubahanPoin?.reason ?? report.deskripsi,
+        aturan: report.aturan?.nama ?? null,
         followUp: report.perubahanPoin?.severity
           ? violationSeverityFollowUps[report.perubahanPoin.severity]
           : null,
@@ -519,6 +535,7 @@ reportRouter.get("/mahasiswa/pembinaan", async (request, response) => {
         instruksi: true,
         status: true,
         isiRefleksi: true,
+        buktiUrl: true,
         catatanPemeriksa: true,
         createdAt: true,
         perubahanPoin: { select: { reason: true, pillar: true, severity: true } },
@@ -528,6 +545,88 @@ reportRouter.get("/mahasiswa/pembinaan", async (request, response) => {
   } catch (error) {
     console.error("Gagal memuat pembinaan mahasiswa:", error);
     response.status(500).json({ message: "Data pembinaan gagal dimuat." });
+  }
+});
+
+reportRouter.post("/pembinaan/:id/bukti", async (request, response) => {
+  const session = requireStudent(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const buktiUrl =
+    typeof request.body?.buktiUrl === "string" ? request.body.buktiUrl.trim() : "";
+  let parsedUrl: URL | null = null;
+  try {
+    parsedUrl = new URL(buktiUrl);
+  } catch {
+    parsedUrl = null;
+  }
+  const catatan =
+    typeof request.body?.catatan === "string" ? request.body.catatan.trim() : "";
+  if (
+    !id ||
+    !parsedUrl ||
+    !["https:", "http:"].includes(parsedUrl.protocol) ||
+    buktiUrl.length > 2000 ||
+    catatan.length > 5000
+  ) {
+    response.status(400).json({ message: "Masukkan tautan bukti HTTP/HTTPS yang valid dan catatan maksimal 5000 karakter." });
+    return;
+  }
+  try {
+    const submitted = await database.$transaction(async (transaction) => {
+      const training = await transaction.pembinaan.findFirst({
+        where: {
+          id,
+          studentId: session.profile.id,
+          status: { in: [StatusPembinaan.DIMINTA, StatusPembinaan.DITOLAK] },
+        },
+        include: {
+          student: { select: { dosenPaId: true } },
+          perubahanPoin: { select: { laporan: { select: { id: true } } } },
+        },
+      });
+      if (!training) return false;
+      const updated = await transaction.pembinaan.updateMany({
+        where: {
+          id,
+          studentId: session.profile.id,
+          status: { in: [StatusPembinaan.DIMINTA, StatusPembinaan.DITOLAK] },
+        },
+        data: {
+          buktiUrl,
+          isiRefleksi: catatan || null,
+          status: StatusPembinaan.DIKIRIM,
+          catatanPemeriksa: null,
+        },
+      });
+      if (updated.count === 0) return false;
+
+      await transaction.pemberitahuanStaf.create({
+        data: {
+          peran: training.student.dosenPaId
+            ? PeranPenerima.DOSEN
+            : PeranPenerima.KEMAHASISWAAN,
+          dosenId: training.student.dosenPaId,
+          laporanId: training.perubahanPoin.laporan?.id,
+          judul: training.student.dosenPaId
+            ? "Bukti tindak lanjut menunggu pemeriksaan"
+            : "Bukti tindak lanjut menunggu penetapan Dosen PA",
+          isi: training.student.dosenPaId
+            ? "Mahasiswa telah mengirim bukti penyelesaian. Tinjau dan setujui atau minta perbaikan."
+            : "Mahasiswa telah mengirim bukti, tetapi belum memiliki Dosen PA untuk memeriksanya.",
+          tautanTab: training.student.dosenPaId ? "laporan-dpa" : "laporan",
+        },
+      });
+      return true;
+    });
+    if (!submitted) {
+      response.status(404).json({ message: "Tugas tindak lanjut tidak ditemukan atau tidak dapat dikirim." });
+      return;
+    }
+    response.json({ message: "Bukti tindak lanjut berhasil dikirim kepada Dosen PA." });
+  } catch (error) {
+    console.error("Gagal mengirim bukti tindak lanjut mahasiswa:", error);
+    response.status(500).json({ message: "Bukti tindak lanjut gagal dikirim." });
   }
 });
 
@@ -696,6 +795,337 @@ reportRouter.patch("/admin/pemberitahuan/:id/dibaca", async (request, response) 
   }
 });
 
+reportRouter.get("/dosen/laporan", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  try {
+    const laporan = await database.laporan.findMany({
+      where: {
+        jenis: JenisLaporan.TEMUAN,
+        status: StatusLaporan.DITERIMA,
+        jalur: "TERIDENTIFIKASI",
+        terlapor: { dosenPaId: session.profile.id },
+      },
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        pillar: true,
+        severityUsulan: true,
+        terlaporNama: true,
+        terlaporNim: true,
+        lokasi: true,
+        tanggalKejadian: true,
+        deskripsi: true,
+        buktiPath: true,
+        aturanId: true,
+        terlapor: { select: { id: true, nim: true, nama: true, pointScore: true } },
+      },
+    });
+    response.json({ laporan });
+  } catch (error) {
+    console.error("Gagal memuat antrean konfirmasi laporan Dosen PA:", error);
+    response.status(500).json({ message: "Antrean konfirmasi laporan gagal dimuat." });
+  }
+});
+
+reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const keputusan = request.body?.keputusan;
+  const aturanId = parsePositiveInteger(String(request.body?.aturanId ?? ""));
+  const catatan =
+    typeof request.body?.catatan === "string" ? request.body.catatan.trim() : "";
+  if (
+    !id ||
+    !["KONFIRMASI", "DITOLAK"].includes(keputusan) ||
+    catatan.length > 1000 ||
+    (keputusan === "KONFIRMASI" && !aturanId)
+  ) {
+    response.status(400).json({ message: "Keputusan atau aturan pelanggaran tidak valid." });
+    return;
+  }
+  try {
+    const result = await database.$transaction(
+      async (transaction) => {
+        const report = await transaction.laporan.findFirst({
+          where: {
+            id,
+            status: StatusLaporan.DITERIMA,
+            jenis: JenisLaporan.TEMUAN,
+            terlapor: { dosenPaId: session.profile.id },
+          },
+          include: { terlapor: true },
+        });
+        if (!report?.terlapor) return { kind: "not_assigned" as const };
+
+        if (keputusan === "DITOLAK") {
+          await transaction.laporan.update({
+            where: { id },
+            data: {
+              status: StatusLaporan.DITOLAK,
+              dikonfirmasiDosenId: session.profile.id,
+              tanggalKonfirmasiDosen: new Date(),
+              catatanUntukPelapor: catatan || null,
+            },
+          });
+          await transaction.pemberitahuan.create({
+            data: {
+              studentId: report.terlaporId!,
+              judul: "Laporan tidak dikonfirmasi Dosen PA",
+              isi: catatan || "Dosen PA telah meninjau laporan dan tidak mengonfirmasi pelanggaran.",
+              tautanTab: "tindak-lanjut",
+            },
+          });
+          await transaction.pemberitahuanStaf.create({
+            data: {
+              peran: PeranPenerima.KEMAHASISWAAN,
+              laporanId: id,
+              judul: "Laporan ditolak Dosen PA",
+              isi: `Dosen PA tidak mengonfirmasi laporan #${id}.${catatan ? ` Catatan: ${catatan}` : ""}`,
+              tautanTab: "laporan",
+            },
+          });
+          await writeAudit(transaction, session, "LAPORAN_DITOLAK_DPA", "Laporan", id);
+          return { kind: "decided" as const, status: StatusLaporan.DITOLAK };
+        }
+
+        const rule = await transaction.aturanPelanggaran.findFirst({
+          where: { id: aturanId!, pillar: report.pillar, aktif: true },
+        });
+        if (!rule || rule.bobotPoin <= 0) return { kind: "invalid_rule" as const };
+
+        const pointChange = calculatePointChangeForDelta(
+          report.terlapor.pointScore,
+          -rule.bobotPoin,
+        );
+        const savedChange = await transaction.pointChange.create({
+          data: {
+            studentId: report.terlapor.id,
+            type: "REPORTED_VIOLATION" as PointChangeType,
+            pillar: rule.pillar,
+            severity: rule.severity,
+            delta: pointChange.delta,
+            scoreAfter: pointChange.score,
+            reason: `Pelanggaran dikonfirmasi Dosen PA: ${rule.nama}`,
+            recordedByIdentity: session.profile.identity,
+          },
+          select: { id: true },
+        });
+        await transaction.mahasiswa.update({
+          where: { id: report.terlapor.id },
+          data: { pointScore: pointChange.score },
+        });
+        await transaction.laporan.update({
+          where: { id },
+          data: {
+            status: StatusLaporan.DIVERIFIKASI,
+            aturanId: rule.id,
+            severityUsulan: rule.severity,
+            perubahanPoinId: savedChange.id,
+            dikonfirmasiDosenId: session.profile.id,
+            tanggalKonfirmasiDosen: new Date(),
+            catatanUntukPelapor: catatan || null,
+          },
+        });
+        await transaction.pemberitahuan.create({
+          data: {
+            studentId: report.terlapor.id,
+            judul: "Pelanggaran dikonfirmasi Dosen PA",
+            isi: `Dosen PA mengonfirmasi pelanggaran "${rule.nama}". Poin berkurang ${Math.abs(pointChange.delta)}. Kemahasiswaan akan menetapkan tindak lanjut edukatif.`,
+            tautanTab: "tindak-lanjut",
+          },
+        });
+        await transaction.pemberitahuanStaf.create({
+          data: {
+            peran: PeranPenerima.KEMAHASISWAAN,
+            laporanId: id,
+            judul: "Laporan terkonfirmasi, perlu tindak lanjut",
+            isi: `Dosen PA telah mengonfirmasi pelanggaran mahasiswa ${report.terlapor.nama} (NIM ${report.terlapor.nim}). Tetapkan tugas edukatif atau coaching.`,
+            tautanTab: "laporan",
+          },
+        });
+        await writeAudit(transaction, session, "LAPORAN_DIKONFIRMASI_DPA", "Laporan", id);
+        return {
+          kind: "decided" as const,
+          status: StatusLaporan.DIVERIFIKASI,
+          delta: pointChange.delta,
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    if (result.kind === "not_assigned") {
+      response.status(404).json({ message: "Laporan tidak ditemukan, sudah diproses, atau bukan mahasiswa bimbingan Anda." });
+      return;
+    }
+    if (result.kind === "invalid_rule") {
+      response.status(400).json({ message: "Aturan tidak aktif atau tidak sesuai dengan pilar laporan." });
+      return;
+    }
+    response.json(result);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      response.status(409).json({ message: "Laporan sedang diproses. Muat ulang antrean dan coba lagi." });
+      return;
+    }
+    console.error("Gagal menyimpan konfirmasi Dosen PA:", error);
+    response.status(500).json({ message: "Konfirmasi laporan gagal disimpan." });
+  }
+});
+
+reportRouter.get("/dosen/pembinaan", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  try {
+    const pembinaan = await database.pembinaan.findMany({
+      where: {
+        status: StatusPembinaan.DIKIRIM,
+        buktiUrl: { not: null },
+        student: { dosenPaId: session.profile.id },
+        perubahanPoin: { is: { type: "REPORTED_VIOLATION" } },
+      },
+      orderBy: { updatedAt: "asc" },
+      select: {
+        id: true,
+        jenis: true,
+        instruksi: true,
+        status: true,
+        isiRefleksi: true,
+        buktiUrl: true,
+        updatedAt: true,
+        student: { select: { nama: true, nim: true } },
+        perubahanPoin: {
+          select: {
+            id: true,
+            reason: true,
+            laporan: { select: { id: true, pillar: true } },
+          },
+        },
+      },
+    });
+    response.json({ pembinaan });
+  } catch (error) {
+    console.error("Gagal memuat bukti tindak lanjut untuk Dosen PA:", error);
+    response.status(500).json({ message: "Bukti tindak lanjut gagal dimuat." });
+  }
+});
+
+reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const keputusan = request.body?.keputusan;
+  const catatan =
+    typeof request.body?.catatanPemeriksa === "string"
+      ? request.body.catatanPemeriksa.trim()
+      : "";
+  if (!id || !["DISETUJUI", "DITOLAK"].includes(keputusan) || catatan.length > 1000) {
+    response.status(400).json({ message: "Putusan bukti tindak lanjut tidak valid." });
+    return;
+  }
+  try {
+    const result = await database.$transaction(
+      async (transaction) => {
+        const training = await transaction.pembinaan.findFirst({
+          where: {
+            id,
+            status: StatusPembinaan.DIKIRIM,
+            buktiUrl: { not: null },
+            student: { dosenPaId: session.profile.id },
+            perubahanPoin: { is: { type: "REPORTED_VIOLATION" } },
+          },
+          include: {
+            perubahanPoin: {
+              include: { laporan: true },
+            },
+          },
+        });
+        if (!training) return null;
+        const updatedCount = await transaction.pembinaan.updateMany({
+          where: { id, status: StatusPembinaan.DIKIRIM },
+          data: {
+            status: keputusan as StatusPembinaan,
+            catatanPemeriksa: catatan || null,
+          },
+        });
+        if (updatedCount.count === 0) return null;
+
+        let restoredPoints = 0;
+        if (keputusan === "DISETUJUI") {
+          const student = await transaction.mahasiswa.findUniqueOrThrow({
+            where: { id: training.studentId },
+            select: { pointScore: true },
+          });
+          const restored = calculatePointChangeForDelta(
+            student.pointScore,
+            Math.abs(training.perubahanPoin.delta),
+          );
+          restoredPoints = Math.abs(restored.delta);
+          await transaction.mahasiswa.update({
+            where: { id: training.studentId },
+            data: { pointScore: restored.score },
+          });
+          await transaction.pointChange.create({
+            data: {
+              studentId: training.studentId,
+              type: "POINT_RESTORATION",
+              pillar: training.perubahanPoin.pillar,
+              severity: training.perubahanPoin.severity,
+              delta: restored.delta,
+              scoreAfter: restored.score,
+              reason: `Pemulihan poin setelah bukti tindak lanjut laporan #${training.perubahanPoin.laporan?.id ?? training.id} disetujui Dosen PA`,
+              recordedByIdentity: session.profile.identity,
+            },
+          });
+          if (training.perubahanPoin.laporan) {
+            await transaction.laporan.update({
+              where: { id: training.perubahanPoin.laporan.id },
+              data: { status: StatusLaporan.SELESAI },
+            });
+            await transaction.pemberitahuanStaf.create({
+              data: {
+                peran: PeranPenerima.KEMAHASISWAAN,
+                laporanId: training.perubahanPoin.laporan.id,
+                judul: "Tindak lanjut laporan selesai",
+                isi: `Dosen PA menyetujui bukti tindak lanjut. ${restoredPoints} poin dipulihkan; riwayat pelanggaran tetap tercatat.`,
+                tautanTab: "laporan",
+              },
+            });
+          }
+        }
+
+        await transaction.pemberitahuan.create({
+          data: {
+            studentId: training.studentId,
+            judul: keputusan === "DISETUJUI"
+              ? "Bukti tindak lanjut disetujui"
+              : "Bukti tindak lanjut perlu diperbaiki",
+            isi: keputusan === "DISETUJUI"
+              ? `Dosen PA menyetujui bukti tindak lanjut. ${restoredPoints} poin telah dipulihkan.${catatan ? ` Catatan: ${catatan}` : ""}`
+              : catatan || "Silakan perbaiki dan kirim kembali bukti tindak lanjut.",
+            tautanTab: "tindak-lanjut",
+          },
+        });
+        await writeAudit(transaction, session, `BUKTI_TINDAK_LANJUT_${keputusan}`, "Pembinaan", id);
+        return { id, status: keputusan };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    if (!result) {
+      response.status(404).json({ message: "Bukti tidak ditemukan, bukan mahasiswa bimbingan Anda, atau sudah diputuskan." });
+      return;
+    }
+    response.json({ pembinaan: result });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      response.status(409).json({ message: "Bukti sedang diproses. Muat ulang antrean dan coba lagi." });
+      return;
+    }
+    console.error("Gagal memutuskan bukti tindak lanjut:", error);
+    response.status(500).json({ message: "Putusan bukti tindak lanjut gagal disimpan." });
+  }
+});
+
 reportRouter.get("/admin/laporan", async (request, response) => {
   if (!requireAdmin(request, response)) return;
   const status = request.query.status;
@@ -714,6 +1144,26 @@ reportRouter.get("/admin/laporan", async (request, response) => {
   try {
     const laporan = await database.laporan.findMany({
       where: {
+        OR: [
+          {
+            status: StatusLaporan.DITERIMA,
+            jalur: { not: "TERIDENTIFIKASI" },
+          },
+          {
+            status: StatusLaporan.DITERIMA,
+            jenis: JenisLaporan.APRESIASI,
+          },
+          {
+            status: {
+              in: [
+                StatusLaporan.DIVERIFIKASI,
+                StatusLaporan.DITINDAKLANJUTI,
+                StatusLaporan.SELESAI,
+                StatusLaporan.DITOLAK,
+              ],
+            },
+          },
+        ],
         ...(status ? { status: status as StatusLaporan } : {}),
         ...(pillar ? { pillar: pillar as DisciplinePillar } : {}),
       },
@@ -735,14 +1185,210 @@ reportRouter.get("/admin/laporan", async (request, response) => {
         buktiPath: true,
         status: true,
         catatanUntukPelapor: true,
+        tanggalKonfirmasiDosen: true,
         terlapor: { select: { id: true, nim: true, nama: true } },
         aturan: { select: { nama: true, severity: true, bobotPoin: true } },
+        dikonfirmasiDosen: { select: { nama: true } },
+        perubahanPoin: {
+          select: {
+            delta: true,
+            pembinaans: {
+              select: {
+                id: true,
+                jenis: true,
+                instruksi: true,
+                status: true,
+                buktiUrl: true,
+                isiRefleksi: true,
+                catatanPemeriksa: true,
+              },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        },
       },
     });
     response.json({ laporan });
   } catch (error) {
     console.error("Gagal memuat antrean laporan:", error);
     response.status(500).json({ message: "Antrean laporan gagal dimuat." });
+  }
+});
+
+reportRouter.patch("/admin/laporan/:id/rute", async (request, response) => {
+  const session = requireAdmin(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const nim = parsePositiveInteger(
+    typeof request.body?.nim === "string" ? request.body.nim.trim() : "",
+  );
+  if (!id || !nim) {
+    response.status(400).json({ message: "ID laporan dan NIM mahasiswa tidak valid." });
+    return;
+  }
+  try {
+    const result = await database.$transaction(async (transaction) => {
+      const report = await transaction.laporan.findUnique({ where: { id } });
+      if (
+        !report ||
+        report.status !== StatusLaporan.DITERIMA ||
+        report.jalur === "TERIDENTIFIKASI"
+      ) {
+        return { kind: "not_pending" as const };
+      }
+      const student = await transaction.mahasiswa.findUnique({
+        where: { nim },
+        select: { id: true, nama: true, nim: true, dosenPaId: true },
+      });
+      if (!student) return { kind: "student_not_found" as const };
+
+      await transaction.laporan.update({
+        where: { id },
+        data: {
+          terlaporId: student.id,
+          terlaporNama: student.nama,
+          terlaporNim: String(student.nim),
+          jalur: "TERIDENTIFIKASI",
+        },
+      });
+      const route = { jalur: "TERIDENTIFIKASI" as const, student };
+      const texts = buildReportNotificationTexts({
+        jenis: report.jenis,
+        pillar: report.pillar,
+        tanggalKejadian: report.tanggalKejadian,
+        route,
+        terlaporNama: student.nama,
+        terlaporNim: String(student.nim),
+      });
+      await createReportNotifications(transaction, {
+        laporanId: id,
+        route,
+        texts,
+        notifyKemahasiswaan: false,
+      });
+      const adminNotice = await transaction.pemberitahuanStaf.updateMany({
+        where: { peran: PeranPenerima.KEMAHASISWAAN, laporanId: id },
+        data: {
+          judul: "Laporan berhasil ditelusuri",
+          isi: student.dosenPaId
+            ? `Laporan #${id} diteruskan kepada mahasiswa ${student.nama} dan Dosen PA untuk konfirmasi. Poin belum berubah.`
+            : `Laporan #${id} diteruskan kepada mahasiswa ${student.nama}, tetapi Dosen PA belum ditetapkan. Poin belum berubah.`,
+          tautanTab: "laporan",
+        },
+      });
+      if (adminNotice.count === 0) {
+        await transaction.pemberitahuanStaf.create({
+          data: {
+            peran: PeranPenerima.KEMAHASISWAAN,
+            laporanId: id,
+            judul: "Laporan berhasil ditelusuri",
+            isi: student.dosenPaId
+              ? `Laporan #${id} diteruskan kepada mahasiswa ${student.nama} dan Dosen PA untuk konfirmasi. Poin belum berubah.`
+              : `Laporan #${id} diteruskan kepada mahasiswa ${student.nama}, tetapi Dosen PA belum ditetapkan. Poin belum berubah.`,
+            tautanTab: "laporan",
+          },
+        });
+      }
+      await writeAudit(transaction, session, "LAPORAN_DIRUTEKAN", "Laporan", id);
+      return { kind: "routed" as const, dosenPaId: student.dosenPaId };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    if (result.kind === "not_pending") {
+      response.status(409).json({ message: "Laporan tidak lagi menunggu penelusuran." });
+      return;
+    }
+    if (result.kind === "student_not_found") {
+      response.status(404).json({ message: "Mahasiswa dengan NIM tersebut tidak ditemukan." });
+      return;
+    }
+    response.json({
+      message: result.dosenPaId
+        ? "Laporan diteruskan kepada mahasiswa dan Dosen PA untuk konfirmasi."
+        : "Laporan diteruskan kepada mahasiswa. Mahasiswa ini belum memiliki Dosen PA.",
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      response.status(409).json({ message: "Laporan sedang diproses. Muat ulang antrean dan coba lagi." });
+      return;
+    }
+    console.error("Gagal merutekan laporan ke mahasiswa:", error);
+    response.status(500).json({ message: "Laporan gagal diteruskan." });
+  }
+});
+
+reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response) => {
+  const session = requireAdmin(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const jenis = request.body?.jenis;
+  const instruksi =
+    typeof request.body?.instruksi === "string" ? request.body.instruksi.trim() : "";
+  if (
+    !id ||
+    !Object.values(JenisPembinaan).includes(jenis) ||
+    instruksi.length < 10 ||
+    instruksi.length > 2000
+  ) {
+    response.status(400).json({ message: "Jenis dan instruksi tindak lanjut wajib diisi (10–2000 karakter)." });
+    return;
+  }
+  try {
+    const result = await database.$transaction(async (transaction) => {
+      const report = await transaction.laporan.findUnique({
+        where: { id },
+        include: { perubahanPoin: true, terlapor: true },
+      });
+      if (
+        !report ||
+        report.jenis !== JenisLaporan.TEMUAN ||
+        report.status !== StatusLaporan.DIVERIFIKASI ||
+        !report.perubahanPoin ||
+        !report.terlapor
+      ) {
+        return null;
+      }
+      const existingTraining = await transaction.pembinaan.findFirst({
+        where: { perubahanPoinId: report.perubahanPoin.id },
+        select: { id: true },
+      });
+      if (existingTraining) return null;
+
+      const training = await transaction.pembinaan.create({
+        data: {
+          perubahanPoinId: report.perubahanPoin.id,
+          studentId: report.terlapor.id,
+          jenis,
+          instruksi,
+        },
+        select: { id: true },
+      });
+      await transaction.laporan.update({
+        where: { id },
+        data: { status: StatusLaporan.DITINDAKLANJUTI },
+      });
+      await transaction.pemberitahuan.create({
+        data: {
+          studentId: report.terlapor.id,
+          judul: "Tindak lanjut edukatif telah ditetapkan",
+          isi: instruksi,
+          tautanTab: "tindak-lanjut",
+        },
+      });
+      await writeAudit(transaction, session, "TINDAK_LANJUT_DITETAPKAN", "Laporan", id);
+      return training;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    if (!result) {
+      response.status(409).json({ message: "Laporan belum dikonfirmasi Dosen PA atau tindak lanjut sudah ditetapkan." });
+      return;
+    }
+    response.status(201).json({ pembinaan: result });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      response.status(409).json({ message: "Laporan sedang diproses. Muat ulang antrean dan coba lagi." });
+      return;
+    }
+    console.error("Gagal menetapkan tindak lanjut laporan:", error);
+    response.status(500).json({ message: "Tindak lanjut gagal ditetapkan." });
   }
 });
 
@@ -781,12 +1427,17 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
         if (!report || report.status !== StatusLaporan.DITERIMA) {
           return { kind: "not_pending" as const };
         }
+        if (
+          report.jenis === JenisLaporan.TEMUAN &&
+          (keputusan === "DIVERIFIKASI" || report.jalur === "TERIDENTIFIKASI")
+        ) {
+          return { kind: "dpa_confirmation_required" as const };
+        }
         if (keputusan === "DITOLAK") {
           const updated = await transaction.laporan.update({
             where: { id },
             data: {
               status: StatusLaporan.DITOLAK,
-              diverifikasiOlehId: session.profile.id,
               tanggalVerifikasi: new Date(),
               catatanUntukPelapor: catatanUntukPelapor || null,
             },
@@ -884,7 +1535,6 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
                     select: { severity: true },
                   })).severity
                 : report.severityUsulan,
-            diverifikasiOlehId: session.profile.id,
             tanggalVerifikasi: new Date(),
             catatanUntukPelapor: catatanUntukPelapor || null,
             perubahanPoinId: pointChangeId,
@@ -908,6 +1558,12 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
     }
     if (result.kind === "student_not_found") {
       response.status(404).json({ message: "Mahasiswa hasil pencocokan tidak ditemukan." });
+      return;
+    }
+    if (result.kind === "dpa_confirmation_required") {
+      response.status(409).json({
+        message: "Temuan harus dikonfirmasi Dosen PA sebelum Kemahasiswaan menetapkan tindak lanjut.",
+      });
       return;
     }
     if (result.kind === "rule_required") {
@@ -1026,6 +1682,16 @@ reportRouter.patch("/admin/pembinaan/:id", async (request, response) => {
   }
   try {
     const result = await database.$transaction(async (transaction) => {
+      const training = await transaction.pembinaan.findUnique({
+        where: { id },
+        include: { perubahanPoin: { select: { type: true } } },
+      });
+      if (
+        training?.perubahanPoin.type === "REPORTED_VIOLATION" &&
+        training.status === StatusPembinaan.DIKIRIM
+      ) {
+        return { kind: "dpa_required" as const };
+      }
       const updatedCount = await transaction.pembinaan.updateMany({
         where: { id, status: StatusPembinaan.DIKIRIM },
         data: {
@@ -1033,19 +1699,25 @@ reportRouter.patch("/admin/pembinaan/:id", async (request, response) => {
           catatanPemeriksa: note || null,
         },
       });
-      if (updatedCount.count === 0) return null;
+      if (updatedCount.count === 0) return { kind: "not_pending" as const };
       const pembinaan = await transaction.pembinaan.findUniqueOrThrow({
         where: { id },
         select: { id: true },
       });
       await writeAudit(transaction, session, `PEMBINAAN_${decision}`, "Pembinaan", id);
-      return pembinaan;
+      return { kind: "decided" as const, pembinaan };
     });
-    if (!result) {
+    if (result.kind === "dpa_required") {
+      response.status(403).json({
+        message: "Bukti tindak lanjut laporan hanya dapat disetujui Dosen PA mahasiswa.",
+      });
+      return;
+    }
+    if (result.kind === "not_pending") {
       response.status(404).json({ message: "Pembinaan tidak ditemukan atau belum dikirim untuk diperiksa." });
       return;
     }
-    response.json({ pembinaan: result });
+    response.json({ pembinaan: result.pembinaan });
   } catch (error) {
     console.error("Gagal memutuskan pembinaan:", error);
     response.status(500).json({ message: "Putusan pembinaan gagal disimpan." });

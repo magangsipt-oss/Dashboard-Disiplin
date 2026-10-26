@@ -129,6 +129,7 @@ enum StatusLaporan {
   DITERIMA
   DIVERIFIKASI
   DITINDAKLANJUTI
+  SELESAI
   DITOLAK
 }
 
@@ -152,6 +153,7 @@ enum StatusSanggahan {
 enum JenisPembinaan {
   REFLEKSI_TERTULIS
   KONSELING
+  TUGAS_EDUKATIF
 }
 
 enum StatusPembinaan {
@@ -175,32 +177,35 @@ model AturanPelanggaran {
 }
 
 model Laporan {
-  id                  Int                @id @default(autoincrement())
-  kodeHash            String             @unique @db.Char(64)
-  jenis               JenisLaporan
-  pillar              DisciplinePillar
-  aturanId            Int?
-  severityUsulan      ViolationSeverity?
-  terlaporNama        String?            @db.VarChar(200)
-  terlaporNim         String?            @db.VarChar(32)
-  terlaporKeterangan  String?            @db.VarChar(500)
-  terlaporId          Int?
-  jalur               JalurLaporan       @default(TIDAK_DIKETAHUI)
-  lokasi              String             @db.VarChar(300)
-  tanggalKejadian     DateTime           @db.Date
-  deskripsi           String             @db.VarChar(1000)
-  buktiPath           String?            @db.VarChar(500)
-  tanggalLapor        DateTime           @default(now()) @db.Date
-  status              StatusLaporan      @default(DITERIMA)
-  catatanUntukPelapor String?            @db.VarChar(1000)
-  diverifikasiOlehId  Int?
-  tanggalVerifikasi   DateTime?
-  perubahanPoinId     Int?               @unique
-  terlapor            Mahasiswa?         @relation(fields: [terlaporId], references: [id], onDelete: SetNull)
-  aturan              AturanPelanggaran? @relation(fields: [aturanId], references: [id], onDelete: SetNull)
-  diverifikasiOleh    Akademik?           @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
-  perubahanPoin       PointChange?       @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
-  pemberitahuanStaf   PemberitahuanStaf[]
+  id                     Int                 @id @default(autoincrement())
+  kodeHash               String              @unique @db.Char(64)
+  jenis                  JenisLaporan
+  pillar                 DisciplinePillar
+  aturanId               Int?
+  severityUsulan         ViolationSeverity?
+  terlaporNama           String?             @db.VarChar(200)
+  terlaporNim            String?             @db.VarChar(32)
+  terlaporKeterangan     String?             @db.VarChar(500)
+  terlaporId             Int?
+  jalur                  JalurLaporan        @default(TIDAK_DIKETAHUI)
+  lokasi                 String              @db.VarChar(300)
+  tanggalKejadian        DateTime            @db.Date
+  deskripsi              String              @db.VarChar(1000)
+  buktiPath              String?             @db.VarChar(500)
+  tanggalLapor           DateTime            @default(now()) @db.Date
+  status                 StatusLaporan       @default(DITERIMA)
+  catatanUntukPelapor    String?             @db.VarChar(1000)
+  diverifikasiOlehId     Int?
+  tanggalVerifikasi      DateTime?
+  dikonfirmasiDosenId    Int?
+  tanggalKonfirmasiDosen DateTime?
+  perubahanPoinId        Int?                @unique
+  terlapor               Mahasiswa?          @relation(fields: [terlaporId], references: [id], onDelete: SetNull)
+  aturan                 AturanPelanggaran?  @relation(fields: [aturanId], references: [id], onDelete: SetNull)
+  diverifikasiOleh       Akademik?           @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
+  dikonfirmasiDosen      Dosen?              @relation("LaporanDosenKonfirmasi", fields: [dikonfirmasiDosenId], references: [id], onDelete: SetNull)
+  perubahanPoin          PointChange?        @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
+  pemberitahuanStaf      PemberitahuanStaf[]
 
   @@index([status, id])
   @@index([terlaporNim, status])
@@ -231,6 +236,7 @@ model Pembinaan {
   instruksi        String          @db.VarChar(2000)
   status           StatusPembinaan @default(DIMINTA)
   isiRefleksi      String?         @db.VarChar(5000)
+  buktiUrl         String?         @db.VarChar(2000)
   catatanPemeriksa String?         @db.VarChar(1000)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
@@ -282,27 +288,28 @@ model LogAudit {
 }
 
 model Dosen {
-  id                 Int                @id @default(autoincrement()) @map("ID")
-  email              String?            @map("Email") @db.VarChar(255)
-  nidn               BigInt             @unique @map("NIDN")
-  nip                BigInt             @unique @map("NIP")
-  nama               String             @map("Nama")
-  password           String             @map("Password") @db.VarChar(255)
-  timestamp          DateTime           @default(now())
-  mahasiswaBimbingan Mahasiswa[]
-  advisorRequests    AdvisorRequest[]
-  counselingRecords  CounselingRecord[]
-  pemberitahuanStaf  PemberitahuanStaf[]
+  id                  Int                 @id @default(autoincrement()) @map("ID")
+  email               String?             @map("Email") @db.VarChar(255)
+  nidn                BigInt              @unique @map("NIDN")
+  nip                 BigInt              @unique @map("NIP")
+  nama                String              @map("Nama")
+  password            String              @map("Password") @db.VarChar(255)
+  timestamp           DateTime            @default(now())
+  mahasiswaBimbingan  Mahasiswa[]
+  advisorRequests     AdvisorRequest[]
+  laporanDikonfirmasi Laporan[]           @relation("LaporanDosenKonfirmasi")
+  counselingRecords   CounselingRecord[]
+  pemberitahuanStaf   PemberitahuanStaf[]
 
   @@map("Dosen")
 }
 
 model Kemahasiswaan {
-  id                  Int       @id @default(autoincrement()) @map("ID")
-  email               String?   @unique @map("Email") @db.VarChar(255)
-  nama                String    @map("Nama")
-  password            String    @map("Password") @db.VarChar(255)
-  timestamp           DateTime  @default(now()) @map("Timestamp")
+  id        Int      @id @default(autoincrement()) @map("ID")
+  email     String?  @unique @map("Email") @db.VarChar(255)
+  nama      String   @map("Nama")
+  password  String   @map("Password") @db.VarChar(255)
+  timestamp DateTime @default(now()) @map("Timestamp")
 
   @@map("Kemahasiswaan")
 }
@@ -319,14 +326,14 @@ model Akademik {
 }
 
 model PresensiAkademik {
-  id               Int       @id @default(autoincrement()) @map("ID")
-  mataKuliah       String    @map("Mata_Kuliah")
-  kelas            String    @map("Kelas")
-  nim              Int       @map("NIM")
-  namaMahasiswa    String    @map("Nama_Mahasiswa")
-  jumlahKehadiran  Int       @map("Jumlah_Kehadiran")
-  timestamp        DateTime  @default(now()) @map("Timestamp")
-  mahasiswa        Mahasiswa @relation(fields: [nim], references: [nim], onDelete: Cascade)
+  id              Int       @id @default(autoincrement()) @map("ID")
+  mataKuliah      String    @map("Mata_Kuliah")
+  kelas           String    @map("Kelas")
+  nim             Int       @map("NIM")
+  namaMahasiswa   String    @map("Nama_Mahasiswa")
+  jumlahKehadiran Int       @map("Jumlah_Kehadiran")
+  timestamp       DateTime  @default(now()) @map("Timestamp")
+  mahasiswa       Mahasiswa @relation(fields: [nim], references: [nim], onDelete: Cascade)
 
   @@unique([mataKuliah, kelas, nim])
   @@index([mataKuliah, kelas])

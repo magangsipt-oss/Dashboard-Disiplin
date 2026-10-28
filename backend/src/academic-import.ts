@@ -345,7 +345,15 @@ export function parseAcademicAttendanceFile(
   }
 
   const headers = headerRow.map(normalizeHeader);
-  const findCol = (...aliases: string[]) => headers.findIndex((h) => aliases.includes(h));
+  // Alias dicek berurutan: template punya kolom "Jumlah Kehadiran" dan "Kehadiran",
+  // jadi nama yang lebih spesifik harus menang.
+  const findCol = (...aliases: string[]) => {
+    for (const alias of aliases) {
+      const index = headers.indexOf(alias);
+      if (index !== -1) return index;
+    }
+    return -1;
+  };
 
   const mataKuliahIndex = findCol("mata_kuliah", "matakuliah", "mata_kuliah_kegiatan", "mk", "matkul");
   const kelasIndex = findCol("kelas");

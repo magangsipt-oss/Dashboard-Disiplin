@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LaporSatgas from './student/LaporSatgas';
 import CekLaporan from './student/CekLaporan';
@@ -10,6 +10,7 @@ import AktivitasMahasiswa from './student/AktivitasMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
 import FilePreviewModal from './modals/FilePreviewModal';
+import TemplatePreviewModal from './modals/TemplatePreviewModal';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -210,6 +211,8 @@ export default function App({ hasSessionCookie = false }) {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const [previewSearchTerm, setPreviewSearchTerm] = useState('');
+  const [templatePreviewCategory, setTemplatePreviewCategory] = useState(null);
+  const closeTemplatePreview = useCallback(() => setTemplatePreviewCategory(null), []);
 
   const dashboardNavigation =
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
@@ -225,7 +228,11 @@ export default function App({ hasSessionCookie = false }) {
     }
     return true;
   });
-  const selectedCounselingStudent = counselingStudents.find(
+  // Menu konseling dosen hanya menampilkan mahasiswa yang pernah mengajukan sanggahan.
+  const appealingStudents = counselingStudents.filter(
+    (student) => (student.sanggahans ?? []).length > 0,
+  );
+  const selectedCounselingStudent = appealingStudents.find(
     (student) => String(student.id) === selectedCounselingStudentId,
   );
   const deferredMonitoringSearch = useDeferredValue(adminMonitoringSearch);
@@ -1755,11 +1762,19 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Absensi</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xls, .xlsx) dengan kolom No, Mata_Kuliah, Kelas, NIM, Nama_Mahasiswa, dan Jumlah_Kehadiran.
+                        Unggah file CSV atau Excel (.xls, .xlsx) sesuai template dengan kolom <strong>NO, Matakuliah, Kelas, NIM, Nama Mahasiswa, Jumlah Kehadiran</strong>, serta Kehadiran, Sakit, Ijin, dan Alpa. Poin dipotong otomatis berdasarkan kolom Alpa.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Baris absensi yang sama untuk mata kuliah, kelas, dan NIM yang sudah tersimpan akan dilewati.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setTemplatePreviewCategory('attendance')}
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Lihat template absensi
+                      </button>
                     </div>
                     <form onSubmit={handleAcademicAttendanceImport} className="space-y-4">
                       <label htmlFor="academic-attendance-file" className="block text-sm font-semibold text-slate-700">
@@ -1931,18 +1946,19 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Data Mahasiswa Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file Excel (.xls atau .xlsx) dengan kolom wajib <strong>NIM, Nama Lengkap, PRODI, Email, No Handphone, dan Kata Sandi</strong>. Angkatan dan Nama SMTA bersifat opsional.
+                        Unggah file Excel (.xls atau .xlsx) sesuai template dengan kolom wajib <strong>NIM, Nama Lengkap, Program Studi, Email, No Handphone, dan Kata Sandi</strong>. Kolom No., Angkatan, dan Nama SMTA bersifat opsional.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Baris dengan NIM yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
                       </p>
-                      <a
-                        href={`data:text/csv;charset=utf-8,${encodeURIComponent('NIM,Nama Lengkap,PRODI,Angkatan,Email,No Handphone,Nama SMTA,Kata Sandi\n')}`}
-                        download="template-data-mahasiswa.csv"
-                        className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
+                      <button
+                        type="button"
+                        onClick={() => setTemplatePreviewCategory('students')}
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
                       >
-                        Unduh template data mahasiswa
-                      </a>
+                        <FileText className="h-4 w-4" />
+                        Lihat template data mahasiswa
+                      </button>
                     </div>
                     <form onSubmit={handleNewStudentImport} className="space-y-4">
                       <label htmlFor="new-student-file" className="block text-sm font-semibold text-slate-700">
@@ -1989,7 +2005,7 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Data Dosen Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file Excel (.xls atau .xlsx) dengan kolom wajib <strong>NUPTK, Nama, Email, dan Kata Sandi</strong>. Email digunakan dosen untuk login.
+                        Unggah file Excel (.xls atau .xlsx) sesuai template dengan kolom wajib <strong>Nama Dosen, Email, NUPTK, dan Password</strong>. Kolom No dan PRODI bersifat opsional. Email digunakan dosen untuk login.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Baris dengan NUPTK atau Email yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
@@ -1997,13 +2013,14 @@ export default function App({ hasSessionCookie = false }) {
                       <p className="mt-1 text-xs text-slate-500">
                         Atur kolom NUPTK sebagai teks di Excel agar seluruh digit tetap terjaga.
                       </p>
-                      <a
-                        href={`data:text/csv;charset=utf-8,${encodeURIComponent('NUPTK,Nama,Email,Kata Sandi\n')}`}
-                        download="template-data-dosen.csv"
-                        className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
+                      <button
+                        type="button"
+                        onClick={() => setTemplatePreviewCategory('lecturers')}
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
                       >
-                        Unduh template data dosen
-                      </a>
+                        <FileText className="h-4 w-4" />
+                        Lihat template data dosen
+                      </button>
                     </div>
                     <form onSubmit={handleNewLecturerImport} className="space-y-4">
                       <label htmlFor="new-lecturer-file" className="block text-sm font-semibold text-slate-700">
@@ -2050,7 +2067,7 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xls, .xlsx) dengan kolom <strong>NIM, Program Studi</strong>, dan <strong>DPA</strong> atau <strong>NUPTK</strong>. NIM dan Program Studi wajib sesuai dengan data mahasiswa; nama DPA harus sesuai dengan nama dosen yang terdaftar.
+                        Unggah file CSV atau Excel (.xls, .xlsx) sesuai template dengan kolom wajib <strong>NIM, Program Studi</strong>, dan <strong>DPA</strong> atau <strong>NUPTK</strong>. Kolom No., Nama Lengkap, dan Angkatan bersifat opsional. NIM dan Program Studi wajib sesuai dengan data mahasiswa; nama DPA harus sesuai dengan nama dosen yang terdaftar.
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Format file mendukung nama lengkap DPA dengan atau tanpa gelar akademik.
@@ -2058,13 +2075,14 @@ export default function App({ hasSessionCookie = false }) {
                       <p className="mt-1 text-sm font-semibold text-amber-800">
                         Pembagian ini otomatis tersinkronisasi ke Dashboard Mahasiswa, Mahasiswa Bimbingan Dosen PA, dan Monitoring Kemahasiswaan.
                       </p>
-                      <a
-                        href="/contoh-pembagian-dosen-pa.csv"
-                        download="contoh-pembagian-dosen-pa.csv"
-                        className="mt-3 inline-flex text-sm font-bold text-red-800 underline underline-offset-2 hover:text-red-950"
+                      <button
+                        type="button"
+                        onClick={() => setTemplatePreviewCategory('advisor-assignments')}
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
                       >
-                        Unduh contoh format file (CSV/Excel)
-                      </a>
+                        <FileText className="h-4 w-4" />
+                        Lihat template pembagian DPA
+                      </button>
                     </div>
                     <form onSubmit={handleAdvisorAssignmentImport} className="space-y-4">
                       <label htmlFor="advisor-assignment-file" className="block text-sm font-semibold text-slate-700">
@@ -2268,7 +2286,7 @@ export default function App({ hasSessionCookie = false }) {
                       <div>
                         <h3 className="text-lg font-extrabold text-slate-900">Monitoring & Konseling Kedisiplinan</h3>
                         <p className="mt-1 max-w-2xl text-sm text-slate-500">
-                          Pilih mahasiswa bimbingan untuk meninjau skor, tren perubahan poin, dan catatan konseling sebelumnya.
+                          Daftar mahasiswa bimbingan yang mengajukan sanggahan. Pilih nama untuk meninjau sanggahan, riwayat poin, dan catatan konseling.
                         </p>
                       </div>
                     </div>
@@ -2286,15 +2304,15 @@ export default function App({ hasSessionCookie = false }) {
 
                     {isLoadingCounseling ? (
                       <p className="mt-5 rounded-xl bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">Memuat mahasiswa bimbingan...</p>
-                    ) : counselingStudents.length === 0 ? (
+                    ) : appealingStudents.length === 0 ? (
                       <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                        <p className="font-semibold text-slate-700">Belum ada mahasiswa bimbingan</p>
-                        <p className="mt-1 text-sm text-slate-500">Mahasiswa yang menetapkan Anda sebagai Dosen PA akan muncul di sini.</p>
+                        <p className="font-semibold text-slate-700">Belum ada sanggahan</p>
+                        <p className="mt-1 text-sm text-slate-500">Mahasiswa bimbingan yang mengajukan sanggahan pelanggaran akan muncul di sini.</p>
                       </div>
                     ) : (
                       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
                         <div className="space-y-2">
-                          {counselingStudents.map((student) => {
+                          {appealingStudents.map((student) => {
                             const zone = student.pointScore <= 50
                               ? 'Tidak Disiplin'
                               : student.pointScore < 100
@@ -2860,6 +2878,10 @@ export default function App({ hasSessionCookie = false }) {
           onSearchChange={setPreviewSearchTerm}
           onClose={() => setPreviewModalOpen(false)}
         />
+      )}
+
+      {templatePreviewCategory && (
+        <TemplatePreviewModal category={templatePreviewCategory} onClose={closeTemplatePreview} />
       )}
 
     </div>

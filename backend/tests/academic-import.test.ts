@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import { isValidAttendancePreviewRow } from "../src/academic-files";
+import { academicTemplates, buildTemplateWorkbook } from "../src/academic-templates";
 import {
   AcademicImportValidationError,
   parseAcademicAttendanceFile,
@@ -37,6 +38,75 @@ test("attendance import reads the supplied CSV columns", () => {
       jumlahKehadiran: 14,
     },
   ]);
+});
+
+test("attendance import reads the official Tamplate Absensi layout", () => {
+  // Kolom "Kehadiran" sengaja ditaruh sebelum "Jumlah Kehadiran" untuk menguji prioritas alias.
+  const rows = parseAcademicAttendanceFile(
+    makeWorkbookBuffer([
+      ["NO", "Matakuliah", "Kelas", "NIM", "Nama Mahasiswa", "Kehadiran", "Jumlah Kehadiran", "Sakit", "Ijin", "Alpa"],
+      [1, "Kepelabuhan", "SBC2005-1", 23401024, "Abin Nabawi", 9, 12, 1, 1, 2],
+    ]),
+    "Tamplate Absensi.xlsx",
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].mataKuliah, "Kepelabuhan");
+  assert.equal(rows[0].jumlahKehadiran, 12);
+  assert.equal(rows[0].sakit, 1);
+  assert.equal(rows[0].ijin, 1);
+  assert.equal(rows[0].alpa, 2);
+});
+
+test("student import reads the official Tamplate Mahasiswa layout", () => {
+  const rows = parseNewStudentImportFile(
+    makeWorkbookBuffer([
+      ["No.", "NIM", "Nama Lengkap", "Program Studi", "Angkatan", "Nama SMTA", "Email", "No Handphone", "Kata Sandi"],
+      ["1", "24401001", "Haura Nurhaliza", "Teknologi Rekayasa Logistik", "2024", "SMAN 4 BERAU", "haura@contoh.ac.id", "081234567890", "GantiSandi123"],
+    ]),
+    "Tamplate Mahasiswa.xls",
+  );
+
+  assert.deepEqual(rows, [
+    {
+      nim: 24401001,
+      nama: "Haura Nurhaliza",
+      jurusan: "Teknologi Rekayasa Logistik",
+      password: "GantiSandi123",
+      email: "haura@contoh.ac.id",
+      noHandphone: "081234567890",
+      angkatan: 2024,
+      namaSmta: "SMAN 4 BERAU",
+    },
+  ]);
+});
+
+test("every generated template is accepted by its own import parser", () => {
+  const parsers = {
+    attendance: parseAcademicAttendanceFile,
+    students: parseNewStudentImportFile,
+    lecturers: parseNewLecturerImportFile,
+    "advisor-assignments": parseAdvisorAssignmentFile,
+  } as const;
+  assert.deepEqual(Object.keys(academicTemplates).sort(), Object.keys(parsers).sort());
+
+  for (const [category, parse] of Object.entries(parsers)) {
+    const template = academicTemplates[category];
+    const rows = parse(buildTemplateWorkbook(template), template.fileName);
+    assert.equal(rows.length, template.rows.length, category);
+  }
+
+  // NUPTK 16 digit dan nol di depan No Handphone harus utuh.
+  const [lecturer] = parseNewLecturerImportFile(
+    buildTemplateWorkbook(academicTemplates.lecturers),
+    "Template Dosen.xlsx",
+  );
+  assert.equal(lecturer.nuptk, 9954763664230202n);
+  const [student] = parseNewStudentImportFile(
+    buildTemplateWorkbook(academicTemplates.students),
+    "Template Mahasiswa.xlsx",
+  );
+  assert.equal(student.noHandphone, "081234567890");
 });
 
 test("attendance preview skips rows that only contain placeholders or incomplete records", () => {

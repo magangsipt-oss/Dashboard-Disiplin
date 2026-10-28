@@ -14,6 +14,7 @@ import {
   parseNewStudentImportFile,
   parseAdvisorAssignmentFile,
 } from "../academic-import";
+import { academicTemplates, buildTemplateWorkbook, type AcademicTemplate } from "../academic-templates";
 import { calculatePointChangeForDelta, type ViolationSeverity } from "../points";
 import { sendPointDeductionEmail } from "../mailer";
 import { skipNotificationEmailFor } from "../notification-email";
@@ -65,6 +66,39 @@ function academicUploadFile(
 const requireAcademicUploadSession = requireRole(
   ["akademik"],
   "Fitur ini hanya tersedia untuk akun Akademik.",
+);
+
+function findTemplate(request: Request, response: Response): AcademicTemplate | null {
+  const category = String(request.params.category);
+  const template = Object.hasOwn(academicTemplates, category) ? academicTemplates[category] : undefined;
+  if (!template) {
+    response.status(404).json({ message: "Template tidak ditemukan." });
+    return null;
+  }
+  return template;
+}
+
+// Pratinjau isi template sebelum diunduh.
+academicRouter.get(
+  "/academic/templates/:category",
+  requireAcademicUploadSession,
+  (request, response) => {
+    const template = findTemplate(request, response);
+    if (!template) return;
+    response.json({ template });
+  },
+);
+
+academicRouter.get(
+  "/academic/templates/:category/download",
+  requireAcademicUploadSession,
+  (request, response) => {
+    const template = findTemplate(request, response);
+    if (!template) return;
+    response.attachment(template.fileName);
+    response.type("xlsx");
+    response.send(buildTemplateWorkbook(template));
+  },
 );
 
 academicRouter.post(

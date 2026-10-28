@@ -132,8 +132,14 @@ export function isValidAttendancePreviewRow(
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, ""),
   );
-  const findColumn = (...aliases: string[]) =>
-    normalizedHeaders.findIndex((header) => aliases.includes(header));
+  // Alias berurutan agar "Jumlah Kehadiran" menang atas kolom "Kehadiran".
+  const findColumn = (...aliases: string[]) => {
+    for (const alias of aliases) {
+      const index = normalizedHeaders.indexOf(alias);
+      if (index !== -1) return index;
+    }
+    return -1;
+  };
   const columns = [
     findColumn("mata_kuliah", "matakuliah", "mata_kuliah_kegiatan", "mk", "matkul"),
     findColumn("kelas"),

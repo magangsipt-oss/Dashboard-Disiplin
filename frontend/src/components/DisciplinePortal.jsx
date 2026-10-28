@@ -6,8 +6,10 @@ import LaporSatgas from './student/LaporSatgas';
 import CekLaporan from './student/CekLaporan';
 import TindakLanjut from './student/TindakLanjut';
 import SanggahanMahasiswa from './student/SanggahanMahasiswa';
+import KlaimKegiatan from './student/KlaimKegiatan';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
+import AdminClaimQueue from './reports/AdminClaimQueue';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
 import FilePreviewModal from './modals/FilePreviewModal';
 import { 
@@ -106,6 +108,7 @@ const navigationByRole = {
   admin: [
     { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
     { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
+    { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan' },
     { id: 'monitoring', label: 'Monitoring Mahasiswa & Dosen PA' },
     { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
     { id: 'cek-laporan', label: 'Cek Laporan' },
@@ -1305,6 +1308,10 @@ export default function App({ hasSessionCookie = false }) {
               <AdminReportQueue />
             )}
 
+            {authenticatedUser?.role === 'admin' && activeTab === 'klaim-kemahasiswaan' && (
+              <AdminClaimQueue />
+            )}
+
             {authenticatedUser?.role === 'mhs' && activeTab !== 'lapor' && (
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
               <div data-scroll-reveal className="bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-red-600/30">
@@ -1345,8 +1352,8 @@ export default function App({ hasSessionCookie = false }) {
                     Skor kedisiplinan dimulai dari 100 poin dan dipengaruhi oleh 5 pilar: Disiplin Waktu, Disiplin Akademik, Disiplin Tata Tertib dan Etika, Disiplin Prosedur dan Keselamatan (K3), serta Disiplin Lingkungan. Poin juga dapat bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi, dengan skor maksimal 200 poin.
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div data-scroll-reveal data-reveal-delay="80" className="sm:col-span-2 lg:col-span-1 bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Skor Kedisiplinan</span>
                     <Bookmark className="w-5 h-5 text-red-800" />
@@ -1376,6 +1383,25 @@ export default function App({ hasSessionCookie = false }) {
                             : studentPoints?.predicate ?? 'Belum tersedia'}
                       </span>
                     </div>
+                    {studentPoints && !studentPointsError && (
+                      <dl className="space-y-1 border-t border-slate-100 pt-2 text-xs">
+                        <div className="flex justify-between">
+                          <dt className="text-slate-500">Poin awal</dt>
+                          <dd className="font-semibold text-slate-700">100</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-slate-500">Pengurangan pelanggaran</dt>
+                          <dd className="font-semibold text-red-700">−{studentPoints.pointsDeducted ?? 0}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-slate-500">
+                            Penambahan poin
+                            {studentPoints.verifiedActivityCount > 0 && ` (${studentPoints.verifiedActivityCount} lomba/kegiatan)`}
+                          </dt>
+                          <dd className="font-semibold text-emerald-700">+{studentPoints.pointsAdded ?? 0}</dd>
+                        </div>
+                      </dl>
+                    )}
                     <p className="text-[10px] leading-relaxed text-slate-500">
                       Disiplin 90–200 · Kurang disiplin 51–89 · Tidak disiplin 0–50
                     </p>
@@ -1397,23 +1423,6 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="flex justify-between text-xs text-slate-600">
                       <span>Sumber data: unggahan Excel/CSV tim akademik</span>
                     </div>
-                  </div>
-                </div>
-
-                <div data-scroll-reveal data-reveal-delay="240" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Poin Lomba / Kegiatan</span>
-                    <TrendingUp className="w-5 h-5 text-rose-600" />
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">
-                      {isLoadingStudentPoints ? '…' : studentPointsError ? '--' : studentPoints?.activityPoints ?? '--'}
-                    </span>
-                    <span className="text-xs text-slate-400 font-semibold">Poin</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
-                    <span>Lomba/kegiatan terverifikasi</span>
-                    <span className="font-semibold">{studentPointsError ? '--' : studentPoints?.verifiedActivityCount ?? '--'}</span>
                   </div>
                 </div>
 
@@ -1600,9 +1609,12 @@ export default function App({ hasSessionCookie = false }) {
                 />
               )}
 
+              {activeTab === 'klaim' && authenticatedUser?.role === 'mhs' && <KlaimKegiatan />}
+
               {activeTab !== 'konseling' &&
                 activeTab !== 'lapor' &&
                 activeTab !== 'tindak-lanjut' &&
+                activeTab !== 'klaim' &&
                 !(activeTab === 'sanggah' && authenticatedUser?.role === 'mhs') && (
                 <>
               <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
@@ -1611,7 +1623,6 @@ export default function App({ hasSessionCookie = false }) {
                     <h3 className="text-lg font-bold text-slate-900">
                       {activeTab === 'dashboard' && 'Ringkasan Aktivitas & Poin'}
                       {activeTab === 'sanggah' && (authenticatedUser?.role === 'mhs' ? 'Pengajuan Sanggah Pelanggaran' : 'Pengajuan Sanggah Presensi')}
-                      {activeTab === 'klaim' && 'Klaim Poin Kegiatan Non-Akademik'}
                       {activeTab === 'konseling' && 'Pengawasan & Bimbingan Konseling PA'}
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
@@ -1621,13 +1632,6 @@ export default function App({ hasSessionCookie = false }) {
                     </p>
                   </div>
 
-                  <div className="flex gap-2">
-                    {activeTab === 'klaim' && (
-                      <span className="rounded-xl border border-dashed border-slate-300 px-4 py-2 text-xs font-semibold text-slate-500">
-                        Pengajuan klaim kegiatan segera tersedia
-                      </span>
-                    )}
-                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -2568,7 +2572,7 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan'].includes(activeTab) && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>

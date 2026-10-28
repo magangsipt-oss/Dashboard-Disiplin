@@ -7,10 +7,12 @@ import multer from "multer";
 import sharp from "sharp";
 import {
   DisciplinePillar,
+  JenisKlaimKegiatan,
   JenisLaporan,
   JenisPembinaan,
   PeranPenerima,
   Prisma,
+  StatusKlaimKegiatan,
   StatusLaporan,
   StatusPembinaan,
   StatusSanggahan,
@@ -28,7 +30,13 @@ import { sendPointDeductionEmail } from "./mailer";
 import { skipNotificationEmailFor } from "./notification-email";
 import { database, getSessionForRequest, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
-import { appealSchema, parseBody, trainingEvidenceSchema } from "./validation";
+import {
+  activityClaimDecisionSchema,
+  activityClaimSchema,
+  appealSchema,
+  parseBody,
+  trainingEvidenceSchema,
+} from "./validation";
 import {
   buildReportNotificationTexts,
   createReportNotifications,
@@ -1825,6 +1833,314 @@ reportRouter.patch("/admin/pembinaan/:id", async (request, response) => {
   } catch (error) {
     console.error("Gagal memutuskan pembinaan:", error);
     response.status(500).json({ message: "Putusan pembinaan gagal disimpan." });
+  }
+});
+
+// Klaim poin kegiatan non-akademik: mahasiswa melampirkan sertifikat atau
+// dokumentasi, Kemahasiswaan memverifikasi dan menetapkan poin tambahan.
+const claimUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_request, file, callback) => {
+    callback(null, ["image/jpeg", "image/png", "application/pdf"].includes(file.mimetype));
+  },
+});
+
+const claimTypeLabels: Record<JenisKlaimKegiatan, string> = {
+  LOMBA: "Lomba",
+  KEGIATAN_NON_AKADEMIK: "Kegiatan non-akademik",
+};
+
+const createClaimLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: 10,
+  keyGenerator: reportRateLimitKey,
+  message: { message: "Batas pengajuan klaim harian tercapai. Silakan coba kembali besok." },
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+
+const claimSelect = {
+  id: true,
+  jenis: true,
+  namaKegiatan: true,
+  penyelenggara: true,
+  tingkat: true,
+  capaian: true,
+  tanggalKegiatan: true,
+  deskripsi: true,
+  buktiFileName: true,
+  status: true,
+  poinDisetujui: true,
+  catatanPemeriksa: true,
+  createdAt: true,
+  reviewedAt: true,
+} satisfies Prisma.KlaimKegiatanSelect;
+
+reportRouter.get("/mahasiswa/klaim-kegiatan", async (request, response) => {
+  const session = requireStudent(request, response);
+  if (!session) return;
+  try {
+    const klaim = await database.klaimKegiatan.findMany({
+      where: { studentId: session.profile.id },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: claimSelect,
+    });
+    response.json({ klaim });
+  } catch (error) {
+    console.error("Gagal memuat klaim kegiatan mahasiswa:", error);
+    response.status(500).json({ message: "Daftar klaim kegiatan gagal dimuat." });
+  }
+});
+
+reportRouter.post(
+  "/klaim-kegiatan",
+  (request, response, next) => {
+    if (!requireStudent(request, response)) return;
+    next();
+  },
+  createClaimLimiter,
+  (request, response, next) => {
+    claimUpload.single("bukti")(request, response, (error: unknown) => {
+      if (error) {
+        response.status(400).json({
+          message:
+            error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE"
+              ? "Ukuran file bukti maksimal 5 MB."
+              : "File bukti tidak valid.",
+        });
+        return;
+      }
+      next();
+    });
+  },
+  async (request, response) => {
+    const session = requireStudent(request, response);
+    if (!session) return;
+    const claim = parseBody(activityClaimSchema, request.body);
+    if (!claim || claim.tanggalKegiatan > formatDateOnly(new Date())) {
+      response.status(400).json({ message: "Periksa kembali data kegiatan. Tanggal kegiatan tidak boleh melewati hari ini." });
+      return;
+    }
+    if (!request.file) {
+      response.status(400).json({ message: "Lampirkan sertifikat atau dokumentasi kegiatan (JPEG, PNG, atau PDF)." });
+      return;
+    }
+    try {
+      const { mimetype, buffer } = request.file;
+      let fileData: Buffer;
+      let extension: string;
+      if (mimetype === "application/pdf") {
+        if (buffer.subarray(0, 5).toString("latin1") !== "%PDF-") {
+          response.status(400).json({ message: "File PDF tidak valid." });
+          return;
+        }
+        fileData = buffer;
+        extension = "pdf";
+      } else {
+        const isJpeg = mimetype === "image/jpeg";
+        fileData = await sharp(buffer).rotate()[isJpeg ? "jpeg" : "png"]().toBuffer();
+        extension = isJpeg ? "jpg" : "png";
+      }
+      const fileName = `${randomBytes(18).toString("hex")}.${extension}`;
+      const created = await database.$transaction(async (transaction) => {
+        await transaction.buktiFoto.create({
+          data: { fileName, mimeType: mimetype, data: fileData },
+        });
+        const klaim = await transaction.klaimKegiatan.create({
+          data: {
+            studentId: session.profile.id,
+            jenis: claim.jenis,
+            namaKegiatan: claim.namaKegiatan,
+            penyelenggara: claim.penyelenggara,
+            tingkat: claim.tingkat,
+            capaian: claim.capaian,
+            tanggalKegiatan: new Date(`${claim.tanggalKegiatan}T00:00:00.000Z`),
+            deskripsi: claim.deskripsi || null,
+            buktiFileName: fileName,
+          },
+          select: claimSelect,
+        });
+        await transaction.pemberitahuanStaf.create({
+          data: {
+            peran: PeranPenerima.KEMAHASISWAAN,
+            judul: "Klaim kegiatan baru menunggu verifikasi",
+            isi: `${session.profile.name} (${session.profile.identity}) mengajukan klaim ${claimTypeLabels[claim.jenis].toLowerCase()} "${claim.namaKegiatan}". Tinjau di menu Klaim Kegiatan.`,
+            tautanTab: "klaim-kemahasiswaan",
+          },
+        });
+        return klaim;
+      });
+      response.status(201).json({ klaim: created });
+    } catch (error) {
+      console.error("Gagal menyimpan klaim kegiatan:", error);
+      response.status(500).json({ message: "Klaim kegiatan gagal dikirim. Silakan coba kembali." });
+    }
+  },
+);
+
+reportRouter.get("/admin/klaim-kegiatan", async (request, response) => {
+  if (!requireAdmin(request, response)) return;
+  const status = request.query.status;
+  if (
+    status !== undefined &&
+    (typeof status !== "string" ||
+      !Object.values(StatusKlaimKegiatan).includes(status as StatusKlaimKegiatan))
+  ) {
+    response.status(400).json({ message: "Filter klaim tidak valid." });
+    return;
+  }
+  try {
+    const [pendingCount, klaim] = await Promise.all([
+      database.klaimKegiatan.count({ where: { status: StatusKlaimKegiatan.DIAJUKAN } }),
+      database.klaimKegiatan.findMany({
+        where: status ? { status: status as StatusKlaimKegiatan } : {},
+        // Enum terurut sesuai deklarasi: klaim yang menunggu tampil dulu.
+        orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+        take: 100,
+        select: {
+          ...claimSelect,
+          student: { select: { nim: true, nama: true, jurusan: true, pointScore: true } },
+        },
+      }),
+    ]);
+    response.json({ klaim, pendingCount });
+  } catch (error) {
+    console.error("Gagal memuat antrean klaim kegiatan:", error);
+    response.status(500).json({ message: "Antrean klaim kegiatan gagal dimuat." });
+  }
+});
+
+reportRouter.patch("/admin/klaim-kegiatan/:id", async (request, response) => {
+  const session = requireAdmin(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const decision = parseBody(activityClaimDecisionSchema, request.body);
+  if (!id || !decision) {
+    response.status(400).json({
+      message: "Putusan klaim tidak valid. Isi poin 1–50 untuk persetujuan atau alasan penolakan minimal 5 karakter.",
+    });
+    return;
+  }
+  const note = decision.catatanPemeriksa;
+  try {
+    const result = await database.$transaction(
+      async (transaction) => {
+        const claim = await transaction.klaimKegiatan.findFirst({
+          where: { id, status: StatusKlaimKegiatan.DIAJUKAN },
+          select: { id: true, studentId: true, jenis: true, namaKegiatan: true },
+        });
+        if (!claim) return null;
+        let perubahanPoinId: number | null = null;
+        let awarded: number | null = null;
+        if (decision.keputusan === "DISETUJUI") {
+          const student = await transaction.mahasiswa.findUniqueOrThrow({
+            where: { id: claim.studentId },
+            select: { pointScore: true },
+          });
+          const added = calculatePointChangeForDelta(student.pointScore, decision.poin);
+          await transaction.mahasiswa.update({
+            where: { id: claim.studentId },
+            data: { pointScore: added.score },
+          });
+          const change = await transaction.pointChange.create({
+            data: {
+              studentId: claim.studentId,
+              type: claim.jenis === "LOMBA" ? "COMPETITION" : "NON_ACADEMIC_ACTIVITY",
+              pillar: null,
+              severity: null,
+              delta: added.delta,
+              scoreAfter: added.score,
+              reason: `${claimTypeLabels[claim.jenis]}: ${claim.namaKegiatan}`.slice(0, 500),
+              recordedByIdentity: session.profile.identity,
+            },
+            select: { id: true },
+          });
+          perubahanPoinId = change.id;
+          awarded = added.delta;
+        }
+        const updated = await transaction.klaimKegiatan.update({
+          where: { id },
+          data: {
+            status: decision.keputusan,
+            poinDisetujui: awarded,
+            catatanPemeriksa: note || null,
+            reviewedAt: new Date(),
+            perubahanPoinId,
+          },
+          select: claimSelect,
+        });
+        await transaction.pemberitahuan.create({
+          data: {
+            studentId: claim.studentId,
+            judul: decision.keputusan === "DISETUJUI" ? "Klaim kegiatan disetujui" : "Klaim kegiatan ditolak",
+            isi: decision.keputusan === "DISETUJUI"
+              ? `Kemahasiswaan menyetujui klaim "${claim.namaKegiatan}". Poin bertambah ${awarded}.${note ? ` Catatan: ${note}` : ""}`
+              : `Kemahasiswaan menolak klaim "${claim.namaKegiatan}". Catatan: ${note}`,
+            tautanTab: "klaim",
+          },
+        });
+        await writeAudit(transaction, session, `KLAIM_KEGIATAN_${decision.keputusan}`, "KlaimKegiatan", id);
+        return updated;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    if (!result) {
+      response.status(404).json({ message: "Klaim tidak ditemukan atau sudah diputuskan." });
+      return;
+    }
+    response.json({ klaim: result });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      response.status(409).json({ message: "Klaim sedang diproses. Muat ulang dan coba lagi." });
+      return;
+    }
+    console.error("Gagal memutuskan klaim kegiatan:", error);
+    response.status(500).json({ message: "Putusan klaim gagal disimpan." });
+  }
+});
+
+// Bukti klaim hanya untuk mahasiswa pemilik dan admin kemahasiswaan.
+reportRouter.get("/klaim-kegiatan/:id/bukti", async (request, response) => {
+  const session = requireLogin(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const { role } = session.profile;
+  if (role !== "admin" && role !== "mhs") {
+    response.status(403).json({ message: "Anda tidak berhak melihat bukti ini." });
+    return;
+  }
+  if (!id) {
+    response.status(404).json({ message: "Bukti tidak ditemukan." });
+    return;
+  }
+  try {
+    const claim = await database.klaimKegiatan.findFirst({
+      where: { id, ...(role === "mhs" ? { studentId: session.profile.id } : {}) },
+      select: { buktiFileName: true },
+    });
+    const file = claim
+      ? await database.buktiFoto.findUnique({
+          where: { fileName: claim.buktiFileName },
+          select: { mimeType: true, data: true },
+        })
+      : null;
+    if (!file) {
+      response.status(404).json({ message: "Bukti tidak ditemukan." });
+      return;
+    }
+    response.setHeader("Cache-Control", "private, no-store");
+    // Viewer PDF bawaan browser butuh object-src; skrip tetap diblokir.
+    response.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; img-src 'self'; object-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'",
+    );
+    response.setHeader("Content-Disposition", `inline; filename="bukti-klaim-${id}.${claim!.buktiFileName.split(".").pop()}"`);
+    response.type(file.mimeType).send(Buffer.from(file.data));
+  } catch (error) {
+    console.error("Gagal memuat bukti klaim kegiatan:", error);
+    response.status(500).json({ message: "Bukti gagal dimuat." });
   }
 });
 

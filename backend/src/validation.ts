@@ -45,6 +45,28 @@ export const trainingEvidenceSchema = z.object({
   catatan: z.string().trim().max(5000).nullish().transform((value) => value ?? ""),
 });
 
+export const activityClaimSchema = z.object({
+  jenis: z.enum(["LOMBA", "KEGIATAN_NON_AKADEMIK"]),
+  namaKegiatan: z.string().trim().min(3).max(200),
+  penyelenggara: z.string().trim().min(2).max(200),
+  tingkat: z.enum(["KAMPUS", "KABUPATEN_KOTA", "PROVINSI", "NASIONAL", "INTERNASIONAL"]),
+  capaian: z.string().trim().min(2).max(100),
+  tanggalKegiatan: dateOnlySchema,
+  deskripsi: z.string().trim().max(1000).nullish().transform((value) => value ?? ""),
+});
+
+export const activityClaimDecisionSchema = z.discriminatedUnion("keputusan", [
+  z.object({
+    keputusan: z.literal("DISETUJUI"),
+    poin: z.coerce.number().int().min(1).max(50),
+    catatanPemeriksa: z.string().trim().max(1000).nullish().transform((value) => value ?? ""),
+  }),
+  z.object({
+    keputusan: z.literal("DITOLAK"),
+    catatanPemeriksa: z.string().trim().min(5).max(1000),
+  }),
+]);
+
 export function parseBody<T extends z.ZodTypeAny>(
   schema: T,
   body: unknown,

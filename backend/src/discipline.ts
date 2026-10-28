@@ -25,6 +25,7 @@ import {
   type PointChangeType,
 } from "./points";
 import { sendPointDeductionEmail } from "./mailer";
+import { skipNotificationEmailFor } from "./notification-email";
 import { database, getSessionForRequest, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
 import { appealSchema, parseBody, trainingEvidenceSchema } from "./validation";
@@ -934,6 +935,8 @@ reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) =>
             catatanUntukPelapor: catatan || null,
           },
         });
+        // Mahasiswa sudah dapat email rinci pengurangan poin.
+        if (report.terlapor.email) skipNotificationEmailFor(report.terlapor.id);
         await transaction.pemberitahuan.create({
           data: {
             studentId: report.terlapor.id,
@@ -1560,6 +1563,8 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
             });
           }
 
+          // Mahasiswa sudah dapat email rinci pengurangan poin.
+          if (student.email) skipNotificationEmailFor(student.id);
           await transaction.pemberitahuan.create({
             data: {
               studentId: student.id,

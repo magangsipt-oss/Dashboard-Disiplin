@@ -272,3 +272,113 @@ Sistem Budaya Disiplin Mahasiswa
     return { sent: false };
   }
 }
+
+export interface NotificationEmailOptions {
+  toEmail: string;
+  recipientName: string;
+  judul: string;
+  isi: string;
+}
+
+// Email umum untuk setiap baris Pemberitahuan / PemberitahuanStaf.
+export async function sendNotificationEmail(
+  options: NotificationEmailOptions,
+): Promise<{ sent: boolean; messageId?: string; simulated?: boolean }> {
+  const { toEmail, recipientName, judul, isi } = options;
+
+  if (!toEmail || !toEmail.includes("@")) {
+    console.warn(`[Mailer] Email tidak valid atau kosong untuk ${recipientName}: "${toEmail}". Pengiriman dilewati.`);
+    return { sent: false };
+  }
+
+  const fromAddress = process.env.EMAIL_FROM || '"Budaya Disiplin Kampus" <no-reply@poltek-simas-berau.ac.id>';
+  const subject = `[Pemberitahuan] ${judul}`;
+  const portalUrl = process.env.PORTAL_URL?.trim();
+  const portalLink = portalUrl || null;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%); padding: 24px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 800;">Sistem Budaya Disiplin Mahasiswa</h1>
+              <p style="margin: 6px 0 0; color: #fecaca; font-size: 13px;">Pemberitahuan Baru</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 28px 24px;">
+              <p style="margin: 0 0 16px; font-size: 15px; line-height: 1.6; color: #334155;">Yth. <strong>${escapeHtml(recipientName)}</strong>,</p>
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px; font-size: 15px; font-weight: 800; color: #0f172a;">${escapeHtml(judul)}</h3>
+                <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #475569; white-space: pre-line;">${escapeHtml(isi)}</p>
+              </div>
+              ${portalLink
+                ? `<p style="margin: 0; text-align: center;"><a href="${escapeHtml(portalLink)}" style="display: inline-block; background-color: #991b1b; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 10px 20px; border-radius: 8px;">Buka Portal</a></p>`
+                : `<p style="margin: 0; font-size: 13px; color: #64748b;">Silakan masuk ke Portal Budaya Disiplin untuk melihat detailnya.</p>`}
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center;">
+              <p style="margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+                Email ini dikirimkan secara otomatis oleh Sistem Budaya Disiplin Mahasiswa.<br>
+                Mohon tidak membalas langsung ke alamat email ini (no-reply).
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const textContent = `
+Yth. ${recipientName},
+
+${judul}
+
+${isi}
+
+${portalLink ? `Buka portal: ${portalLink}` : "Silakan masuk ke Portal Budaya Disiplin untuk melihat detailnya."}
+
+--
+Sistem Budaya Disiplin Mahasiswa
+(Email otomatis, mohon tidak membalas)
+  `.trim();
+
+  const transporter = getTransporter();
+
+  if (!transporter) {
+    console.info(`[Mailer (Dev/Simulated)] Notifikasi email disimulasikan untuk:
+  - Kepada : ${toEmail} (${recipientName})
+  - Subjek : ${subject}
+  * (Untuk mengirimkan email riil ke inbox, lengkapi SMTP_HOST, SMTP_USER, dan SMTP_PASS di file backend/.env)`);
+    return { sent: true, simulated: true };
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to: toEmail,
+      subject,
+      text: textContent,
+      html: htmlContent,
+    });
+    console.info(`[Mailer] Notifikasi email berhasil terkirim ke ${toEmail} (Message ID: ${info.messageId})`);
+    return { sent: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Mailer] Gagal mengirimkan email ke ${toEmail}:`, err);
+    return { sent: false };
+  }
+}

@@ -607,7 +607,7 @@ authRouter.get("/points", requireRole(["mhs"], "Data poin hanya tersedia untuk a
   const session = currentSession(response);
 
   try {
-    const [student, activityTotals, pillarTotals, severityTotals] = await Promise.all([
+    const [student, activityTotals, deductionTotals, additionTotals, pillarTotals, severityTotals] = await Promise.all([
       database.mahasiswa.findUnique({
         where: { id: session.profile.id },
         select: {
@@ -635,6 +635,14 @@ authRouter.get("/points", requireRole(["mhs"], "Data poin hanya tersedia untuk a
         },
         _sum: { delta: true },
         _count: { _all: true },
+      }),
+      database.pointChange.aggregate({
+        where: { studentId: session.profile.id, delta: { lt: 0 } },
+        _sum: { delta: true },
+      }),
+      database.pointChange.aggregate({
+        where: { studentId: session.profile.id, delta: { gt: 0 } },
+        _sum: { delta: true },
       }),
       database.pointChange.groupBy({
         by: ["pillar"],
@@ -678,6 +686,9 @@ authRouter.get("/points", requireRole(["mhs"], "Data poin hanya tersedia untuk a
       predicate: getScorePredicate(student.pointScore),
       activityPoints: activityTotals._sum.delta ?? 0,
       verifiedActivityCount: activityTotals._count._all,
+      // Skor = 100 - pengurangan + penambahan (lomba, kegiatan, pemulihan).
+      pointsDeducted: Math.abs(deductionTotals._sum.delta ?? 0),
+      pointsAdded: additionTotals._sum.delta ?? 0,
       changes: student.pointChanges.map((change) => ({
         ...change,
         followUp: change.severity

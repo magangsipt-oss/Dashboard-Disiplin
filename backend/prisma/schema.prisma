@@ -29,6 +29,7 @@ model Mahasiswa {
   sanggahans        Sanggahan[]
   pembinaans        Pembinaan[]
   pemberitahuan     Pemberitahuan[]
+  klaimKegiatan     KlaimKegiatan[]
 
   @@index([dosenPaId])
   @@map("Mahasiswa")
@@ -115,6 +116,7 @@ model PointChange {
   sanggahans         Sanggahan[]
   pembinaans         Pembinaan[]
   laporan            Laporan?
+  klaimKegiatan      KlaimKegiatan?
 
   @@index([studentId, createdAt])
   @@index([studentId, pillar])
@@ -256,6 +258,51 @@ model Pembinaan {
   student          Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId, status, createdAt])
+}
+
+enum JenisKlaimKegiatan {
+  LOMBA
+  KEGIATAN_NON_AKADEMIK
+}
+
+enum TingkatKegiatan {
+  KAMPUS
+  KABUPATEN_KOTA
+  PROVINSI
+  NASIONAL
+  INTERNASIONAL
+}
+
+enum StatusKlaimKegiatan {
+  DIAJUKAN
+  DISETUJUI
+  DITOLAK
+}
+
+// Klaim poin tambahan dari lomba/kegiatan non-akademik. File sertifikat atau
+// dokumentasi disimpan di tabel BuktiFoto (JPEG, PNG, atau PDF).
+model KlaimKegiatan {
+  id               Int                 @id @default(autoincrement())
+  studentId        Int
+  jenis            JenisKlaimKegiatan
+  namaKegiatan     String              @db.VarChar(200)
+  penyelenggara    String              @db.VarChar(200)
+  tingkat          TingkatKegiatan
+  capaian          String              @db.VarChar(100)
+  tanggalKegiatan  DateTime            @db.Date
+  deskripsi        String?             @db.VarChar(1000)
+  buktiFileName    String              @db.VarChar(64)
+  status           StatusKlaimKegiatan @default(DIAJUKAN)
+  poinDisetujui    Int?
+  catatanPemeriksa String?             @db.VarChar(1000)
+  createdAt        DateTime            @default(now())
+  reviewedAt       DateTime?
+  perubahanPoinId  Int?                @unique
+  student          Mahasiswa           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  perubahanPoin    PointChange?        @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
 }
 
 model Pemberitahuan {

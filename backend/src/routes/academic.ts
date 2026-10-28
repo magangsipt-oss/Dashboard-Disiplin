@@ -16,6 +16,7 @@ import {
 } from "../academic-import";
 import { calculatePointChangeForDelta, type ViolationSeverity } from "../points";
 import { sendPointDeductionEmail } from "../mailer";
+import { skipNotificationEmailFor } from "../notification-email";
 import { hashImportedPasswords } from "../password";
 import { currentSession, database, requireRole } from "../auth";
 
@@ -376,6 +377,11 @@ academicRouter.post(
             WHERE m."ID" = v.id`;
           await transaction.pointChange.createMany({ data: pointChangeRows });
           await transaction.pemberitahuan.createMany({ data: notificationRows });
+          // Mahasiswa sudah dapat email rinci ketidakhadiran di bawah.
+          for (const item of deductedStudents) {
+            const student = studentMap.get(item.nim);
+            if (student && item.email) skipNotificationEmailFor(student.id);
+          }
         }
 
         return {

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Router, type Request, type Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
@@ -25,6 +25,7 @@ import {
   type PointChangeType,
 } from "./points";
 import { sendPointDeductionEmail } from "./mailer";
+import { skipNotificationEmailFor } from "./notification-email";
 import { database, getSessionForRequest, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
 import { appealSchema, parseBody, trainingEvidenceSchema } from "./validation";
@@ -47,6 +48,7 @@ const upload = multer({
     callback(null, true);
   },
 });
+// Hanya untuk membaca foto lama yang belum dipindah ke tabel BuktiFoto.
 const evidenceDirectory = resolve(process.cwd(), "uploads", "evidence");
 const pillarValues = Object.values(DisciplinePillar);
 const severityValues = Object.values(ViolationSeverity);
@@ -188,7 +190,6 @@ reportRouter.post(
   },
   upload.single("bukti"),
   async (request, response) => {
-    let savedEvidencePath: string | null = null;
     try {
       const jenis = request.body.jenis as JenisLaporan;
       const pillar = request.body.pillar as DisciplinePillar;
@@ -276,22 +277,23 @@ reportRouter.post(
         .rotate()
         [isJpeg ? "jpeg" : "png"]()
         .toBuffer();
-      await mkdir(evidenceDirectory, { recursive: true });
-      savedEvidencePath = resolve(evidenceDirectory, fileName);
-      await writeFile(savedEvidencePath, normalizedImage, { flag: "wx" });
       const buktiPath = `/uploads/evidence/${fileName}`;
 
       const session = requireLogin(request, response);
-      if (!session) {
-        if (savedEvidencePath) await unlink(savedEvidencePath);
-        return;
-      }
+      if (!session) return;
       const kodePelacakan = createTrackingCode();
       await database.$transaction(async (transaction) => {
         const route = await resolveReportRoute(transaction, {
           diketahui,
           nama: terlaporNama,
           nim: terlaporNim,
+        });
+        await transaction.buktiFoto.create({
+          data: {
+            fileName,
+            mimeType: isJpeg ? "image/jpeg" : "image/png",
+            data: normalizedImage,
+          },
         });
         const laporan = await transaction.laporan.create({
           data: {
@@ -330,9 +332,6 @@ reportRouter.post(
       response.status(201).json({ kodePelacakan });
     } catch (error) {
       console.error("Gagal menyimpan laporan:", error);
-      if (savedEvidencePath) {
-        await unlink(savedEvidencePath).catch(() => undefined);
-      }
       response.status(500).json({ message: "Laporan gagal dikirim. Silakan coba kembali." });
     }
   },
@@ -945,6 +944,8 @@ reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) =>
             catatanUntukPelapor: catatan || null,
           },
         });
+        // Mahasiswa sudah dapat email rinci pengurangan poin.
+        if (report.terlapor.email) skipNotificationEmailFor(report.terlapor.id);
         await transaction.pemberitahuan.create({
           data: {
             studentId: report.terlapor.id,
@@ -1571,6 +1572,8 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
             });
           }
 
+          // Mahasiswa sudah dapat email rinci pengurangan poin.
+          if (student.email) skipNotificationEmailFor(student.id);
           await transaction.pemberitahuan.create({
             data: {
               studentId: student.id,
@@ -1852,12 +1855,22 @@ evidenceRouter.get("/:fileName", async (request, response) => {
       response.status(404).json({ message: "Bukti tidak ditemukan." });
       return;
     }
-    response.setHeader("Cache-Control", "private, no-store");
-    response.sendFile(resolve(evidenceDirectory, fileName), (error) => {
-      if (error && !response.headersSent) {
-        response.status(404).json({ message: "Bukti tidak ditemukan." });
-      }
+    const photo = await database.buktiFoto.findUnique({
+      where: { fileName },
+      select: { mimeType: true, data: true },
     });
+    const image = photo
+      ? { mimeType: photo.mimeType, data: Buffer.from(photo.data) }
+      : await readFile(resolve(evidenceDirectory, fileName))
+          .then((data) => ({ mimeType: fileName.endsWith(".png") ? "image/png" : "image/jpeg", data }))
+          .catch(() => null);
+    if (!image) {
+      response.status(404).json({ message: "Bukti tidak ditemukan." });
+      return;
+    }
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.type(image.mimeType).send(image.data);
   } catch (error) {
     console.error("Gagal memuat bukti laporan:", error);
     response.status(500).json({ message: "Bukti gagal dimuat." });

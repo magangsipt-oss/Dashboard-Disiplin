@@ -3,6 +3,7 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LaporSatgas from './student/LaporSatgas';
+import CekLaporan from './student/CekLaporan';
 import TindakLanjut from './student/TindakLanjut';
 import SanggahanMahasiswa from './student/SanggahanMahasiswa';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
@@ -91,6 +92,7 @@ const navigationByRole = {
     { id: 'dashboard', label: 'Aktivitas' },
     { id: 'sanggah', label: 'Sanggah Pelanggaran' },
     { id: 'lapor', label: 'Lapor Satgas' },
+    { id: 'cek-laporan', label: 'Cek Laporan' },
     { id: 'tindak-lanjut', label: 'Tindak Lanjut' },
     { id: 'klaim', label: 'Klaim Kegiatan' },
   ],
@@ -99,15 +101,18 @@ const navigationByRole = {
     { id: 'laporan-dpa', label: 'Konfirmasi Laporan' },
     { id: 'konseling', label: 'Catatan & Konseling' },
     { id: 'lapor', label: 'Lapor Satgas' },
+    { id: 'cek-laporan', label: 'Cek Laporan' },
   ],
   admin: [
     { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
     { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
     { id: 'monitoring', label: 'Monitoring Mahasiswa & Dosen PA' },
     { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
+    { id: 'cek-laporan', label: 'Cek Laporan' },
   ],
   akademik: [
     { id: 'lapor', label: 'Lapor Satgas' },
+    { id: 'cek-laporan', label: 'Cek Laporan' },
     { id: 'upload-absensi', label: 'Upload Absensi' },
     { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
     { id: 'upload-dosen', label: 'Upload Data Dosen' },
@@ -1283,6 +1288,12 @@ export default function App({ hasSessionCookie = false }) {
             {activeTab === 'lapor' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
                 <LaporSatgas />
+              </main>
+            )}
+
+            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
+                <CekLaporan />
               </main>
             )}
 

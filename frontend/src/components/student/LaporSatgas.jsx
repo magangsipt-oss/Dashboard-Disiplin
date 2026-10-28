@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import { studentApi } from "@/lib/api";
+import { saveStoredReport, normalizeTrackingCode } from "@/lib/reportTracking";
 
 const pillars = [
   { value: "WAKTU", label: "Disiplin Waktu" },
@@ -93,7 +94,16 @@ export default function LaporSatgas() {
         method: "POST",
         body,
       });
-      setTrackingCode(result.kodePelacakan);
+
+      const kodePelacakan = normalizeTrackingCode(result?.kodePelacakan || `SATGAS-${Date.now().toString().slice(-8)}`);
+      saveStoredReport({
+        ...form,
+        kodePelacakan,
+        status: "Diterima",
+        createdAt: new Date().toISOString(),
+      });
+
+      setTrackingCode(kodePelacakan);
       setForm(initialForm);
       setPhoto(null);
     } catch (error) {

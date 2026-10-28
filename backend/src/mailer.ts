@@ -82,10 +82,42 @@ function getTransporter(): Transporter | null {
         user,
         pass,
       },
+      // Kirim pelan dan satu koneksi: lonjakan email dari akun Gmail biasa
+      // mudah dianggap spam.
+      pool: true,
+      maxConnections: 1,
+      rateDelta: 2000,
+      rateLimit: 1,
     });
   }
 
   return transporterInstance;
+}
+
+function organizationName(): string {
+  return process.env.EMAIL_ORG_NAME?.trim() || "Politeknik Simas Berau";
+}
+
+// Pengirim harus sama dengan akun SMTP; alamat lain dianggap pemalsuan.
+function senderAddress(): string {
+  return process.env.EMAIL_FROM || `"Sistem Budaya Disiplin - ${organizationName()}" <${process.env.SMTP_USER}>`;
+}
+
+function replyToAddress(): string | undefined {
+  return process.env.EMAIL_REPLY_TO || process.env.SMTP_USER;
+}
+
+// Footer jujur dan bisa dibalas: email "no-reply" dari akun Gmail biasa
+// terlihat seperti phishing bagi filter spam.
+function footerHtml(reason: string): string {
+  return `Anda menerima email ini karena ${escapeHtml(reason)} di Sistem Budaya Disiplin Mahasiswa ${escapeHtml(organizationName())}.<br>
+                Jika ada pertanyaan, balas email ini atau hubungi bagian Kemahasiswaan.`;
+}
+
+function footerText(reason: string): string {
+  return `Sistem Budaya Disiplin Mahasiswa - ${organizationName()}
+Anda menerima email ini karena ${reason}.
+Jika ada pertanyaan, balas email ini atau hubungi bagian Kemahasiswaan.`;
 }
 
 export async function sendPointDeductionEmail(
@@ -111,8 +143,8 @@ export async function sendPointDeductionEmail(
 
   const categoryInfo = getScoreCategory(scoreAfter);
   const deductionPoints = Math.abs(delta);
-  const fromAddress = process.env.EMAIL_FROM || '"Budaya Disiplin Kampus" <no-reply@poltek-simas-berau.ac.id>';
-  const subject = `[Pemberitahuan] Pengurangan Poin Budaya Disiplin - ${studentName} (${studentNim})`;
+  const fromAddress = senderAddress();
+  const subject = `Pengurangan Poin Budaya Disiplin - ${studentName} (${studentNim})`;
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -201,7 +233,7 @@ export async function sendPointDeductionEmail(
                 Harap senantiasa menjaga kedisiplinan dan tata tertib selama menempuh perkuliahan. Sanksi pembinaan bersifat edukatif untuk menumbuhkan etos disiplin profesional Anda.
               </p>
               <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #64748b; background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px;">
-                💡 <em>Jika Anda merasa terdapat kekeliruan data presensi atau catatan pelanggaran ini, silakan berkonsultasi dengan Dosen Pembimbing Akademik (DPA) Anda atau mengajukan formulir klarifikasi/sanggahan di Portal Budaya Disiplin Mahasiswa.</em>
+                <em>Jika Anda merasa terdapat kekeliruan data presensi atau catatan pelanggaran ini, silakan berkonsultasi dengan Dosen Pembimbing Akademik (DPA) Anda atau mengajukan formulir klarifikasi/sanggahan di Portal Budaya Disiplin Mahasiswa.</em>
               </p>
             </td>
           </tr>
@@ -210,8 +242,7 @@ export async function sendPointDeductionEmail(
           <tr>
             <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center;">
               <p style="margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.5;">
-                Email ini dikirimkan secara otomatis oleh Sistem Budaya Disiplin Mahasiswa.<br>
-                Mohon tidak membalas langsung ke alamat email ini (no-reply).
+                ${footerHtml("Anda terdaftar sebagai mahasiswa")}
               </p>
             </td>
           </tr>
@@ -240,8 +271,7 @@ Kami informasikan bahwa terdapat pencatatan pengurangan poin budaya disiplin pad
 Jika Anda merasa terdapat kekeliruan data, silakan berkonsultasi dengan Dosen Pembimbing Akademik (DPA) Anda atau mengajukan klarifikasi melalui Portal Budaya Disiplin Mahasiswa.
 
 --
-Sistem Budaya Disiplin Mahasiswa
-(Email otomatis, mohon tidak membalas)
+${footerText("Anda terdaftar sebagai mahasiswa")}
   `.trim();
 
   const transporter = getTransporter();
@@ -260,6 +290,7 @@ Sistem Budaya Disiplin Mahasiswa
   try {
     const info = await transporter.sendMail({
       from: fromAddress,
+      replyTo: replyToAddress(),
       to: toEmail,
       subject,
       text: textContent,
@@ -291,8 +322,8 @@ export async function sendNotificationEmail(
     return { sent: false };
   }
 
-  const fromAddress = process.env.EMAIL_FROM || '"Budaya Disiplin Kampus" <no-reply@poltek-simas-berau.ac.id>';
-  const subject = `[Pemberitahuan] ${judul}`;
+  const fromAddress = senderAddress();
+  const subject = judul;
   const portalUrl = process.env.PORTAL_URL?.trim();
   const portalLink = portalUrl || null;
 
@@ -330,8 +361,7 @@ export async function sendNotificationEmail(
           <tr>
             <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 24px; text-align: center;">
               <p style="margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.5;">
-                Email ini dikirimkan secara otomatis oleh Sistem Budaya Disiplin Mahasiswa.<br>
-                Mohon tidak membalas langsung ke alamat email ini (no-reply).
+                ${footerHtml("akun Anda terdaftar sebagai penerima notifikasi")}
               </p>
             </td>
           </tr>
@@ -353,8 +383,7 @@ ${isi}
 ${portalLink ? `Buka portal: ${portalLink}` : "Silakan masuk ke Portal Budaya Disiplin untuk melihat detailnya."}
 
 --
-Sistem Budaya Disiplin Mahasiswa
-(Email otomatis, mohon tidak membalas)
+${footerText("akun Anda terdaftar sebagai penerima notifikasi")}
   `.trim();
 
   const transporter = getTransporter();
@@ -370,6 +399,7 @@ Sistem Budaya Disiplin Mahasiswa
   try {
     const info = await transporter.sendMail({
       from: fromAddress,
+      replyTo: replyToAddress(),
       to: toEmail,
       subject,
       text: textContent,

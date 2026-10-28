@@ -214,6 +214,16 @@ model Laporan {
   @@index([terlaporId, status])
 }
 
+// Foto bukti laporan disimpan di database agar bisa dilihat dari backend
+// mana pun yang memakai database yang sama. Laporan.buktiPath menunjuk ke
+// "/uploads/evidence/<fileName>".
+model BuktiFoto {
+  fileName  String   @id @db.VarChar(64)
+  mimeType  String   @db.VarChar(20)
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
 model Sanggahan {
   id               Int             @id @default(autoincrement())
   perubahanPoinId  Int

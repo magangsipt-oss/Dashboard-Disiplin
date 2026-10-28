@@ -484,7 +484,7 @@ reportRouter.post("/sanggahan", async (request, response) => {
             studentId: session.profile.id,
             delta: { lt: 0 },
           },
-          select: { id: true },
+          select: { id: true, student: { select: { nama: true, nim: true, dosenPaId: true } } },
         });
         if (!change) return { kind: "not_found" as const };
         const activeAppeal = await transaction.sanggahan.findFirst({
@@ -496,6 +496,17 @@ reportRouter.post("/sanggahan", async (request, response) => {
           data: { perubahanPoinId, studentId: session.profile.id, alasan },
           select: { id: true, status: true, createdAt: true },
         });
+        if (change.student.dosenPaId) {
+          await transaction.pemberitahuanStaf.create({
+            data: {
+              peran: PeranPenerima.DOSEN,
+              dosenId: change.student.dosenPaId,
+              judul: "Sanggahan baru dari mahasiswa bimbingan",
+              isi: `${change.student.nama} (${change.student.nim}) mengajukan sanggahan atas perubahan poin. Tinjau di menu Catatan & Konseling.`,
+              tautanTab: "konseling",
+            },
+          });
+        }
         return { kind: "created" as const, sanggahan };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -1650,8 +1661,20 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
   }
 });
 
-reportRouter.patch("/admin/sanggahan/:id", async (request, response) => {
-  const session = requireAdmin(request, response);
+reportRouter.patch("/admin/sanggahan/:id", (request, response) =>
+  decideAppeal(request, response, requireAdmin(request, response)),
+);
+
+// Dosen PA hanya boleh memutus sanggahan mahasiswa bimbingannya sendiri.
+reportRouter.patch("/dosen/sanggahan/:id", (request, response) =>
+  decideAppeal(request, response, requireDosen(request, response)),
+);
+
+async function decideAppeal(
+  request: Request,
+  response: Response,
+  session: Session | null,
+): Promise<void> {
   if (!session) return;
   const id = parsePositiveInteger(request.params.id);
   const decision = request.body?.keputusan;
@@ -1666,13 +1689,20 @@ reportRouter.patch("/admin/sanggahan/:id", async (request, response) => {
   try {
     const result = await database.$transaction(
       async (transaction) => {
-        const appeal = await transaction.sanggahan.findUnique({
-          where: { id },
+        const appeal = await transaction.sanggahan.findFirst({
+          where: {
+            id,
+            status: StatusSanggahan.DIAJUKAN,
+            ...(session.profile.role === "dosen"
+              ? { student: { dosenPaId: session.profile.id } }
+              : {}),
+          },
           include: { perubahanPoin: true },
         });
-        if (!appeal || appeal.status !== StatusSanggahan.DIAJUKAN) {
+        if (!appeal) {
           return null;
         }
+        const examiner = session.profile.role === "dosen" ? "Dosen PA" : "Kemahasiswaan";
         const updated = await transaction.sanggahan.update({
           where: { id },
           data: {
@@ -1707,30 +1737,36 @@ reportRouter.patch("/admin/sanggahan/:id", async (request, response) => {
               recordedByIdentity: session.profile.identity,
             },
           });
-          await transaction.pemberitahuan.create({
-            data: {
-              studentId: appeal.studentId,
-              judul: "Sanggahan Anda disetujui",
-              isi: "Poin telah dipulihkan sesuai hasil pemeriksaan sanggahan.",
-              tautanTab: "dashboard",
-            },
-          });
         }
+        await transaction.pemberitahuan.create({
+          data: {
+            studentId: appeal.studentId,
+            judul: decision === "DISETUJUI" ? "Sanggahan Anda disetujui" : "Sanggahan Anda ditolak",
+            isi: decision === "DISETUJUI"
+              ? `${examiner} menyetujui sanggahan Anda. Poin telah dipulihkan.${note ? ` Catatan: ${note}` : ""}`
+              : `${examiner} menolak sanggahan Anda.${note ? ` Catatan: ${note}` : ""}`,
+            tautanTab: "sanggah",
+          },
+        });
         await writeAudit(transaction, session, `SANGGAHAN_${decision}`, "Sanggahan", updated.id);
         return updated;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
     if (!result) {
-      response.status(404).json({ message: "Sanggahan tidak ditemukan atau sudah diputuskan." });
+      response.status(404).json({ message: "Sanggahan tidak ditemukan, bukan mahasiswa bimbingan Anda, atau sudah diputuskan." });
       return;
     }
     response.json({ sanggahan: result });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      response.status(409).json({ message: "Sanggahan sedang diproses. Muat ulang dan coba lagi." });
+      return;
+    }
     console.error("Gagal memutuskan sanggahan:", error);
     response.status(500).json({ message: "Putusan sanggahan gagal disimpan." });
   }
-});
+}
 
 reportRouter.patch("/admin/pembinaan/:id", async (request, response) => {
   const session = requireAdmin(request, response);

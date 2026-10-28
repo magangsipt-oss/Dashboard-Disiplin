@@ -535,6 +535,21 @@ authRouter.get("/counseling", requireRole(["mhs", "dosen"], "Catatan konseling h
             createdAt: true,
           },
         },
+        sanggahans: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: {
+            id: true,
+            alasan: true,
+            status: true,
+            catatanPemeriksa: true,
+            createdAt: true,
+            reviewedAt: true,
+            perubahanPoin: {
+              select: { id: true, reason: true, delta: true, createdAt: true },
+            },
+          },
+        },
       },
     });
     response.json({ students });

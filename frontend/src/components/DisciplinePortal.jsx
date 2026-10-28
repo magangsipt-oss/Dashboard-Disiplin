@@ -174,6 +174,8 @@ export default function App({ hasSessionCookie = false }) {
   });
   const [isSavingCounseling, setIsSavingCounseling] = useState(false);
   const [counselingStatus, setCounselingStatus] = useState('');
+  const [appealNotes, setAppealNotes] = useState({});
+  const [decidingAppealId, setDecidingAppealId] = useState(null);
   const [adminMonitoring, setAdminMonitoring] = useState({ students: [], lecturers: [] });
   const [isLoadingAdminMonitoring, setIsLoadingAdminMonitoring] = useState(false);
   const [adminMonitoringError, setAdminMonitoringError] = useState('');
@@ -717,6 +719,40 @@ export default function App({ hasSessionCookie = false }) {
       );
     } finally {
       setIsSavingCounseling(false);
+    }
+  };
+
+  const handleAppealDecision = async (appealId, keputusan) => {
+    setCounselingStudentsError('');
+    setCounselingStatus('');
+    setDecidingAppealId(appealId);
+
+    try {
+      const response = await fetch(`/api/dosen/sanggahan/${appealId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keputusan, catatanPemeriksa: appealNotes[appealId] ?? '' }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Putusan sanggahan gagal disimpan.');
+      }
+
+      // Muat ulang agar skor dan riwayat poin ikut berubah saat sanggahan disetujui.
+      const refreshed = await fetch('/api/auth/counseling');
+      const refreshedData = await refreshed.json();
+      if (refreshed.ok) {
+        setCounselingStudents(refreshedData.students ?? []);
+      }
+      setCounselingStatus(keputusan === 'DISETUJUI'
+        ? 'Sanggahan disetujui. Poin mahasiswa telah dipulihkan.'
+        : 'Sanggahan ditolak. Mahasiswa akan menerima pemberitahuan.');
+    } catch (error) {
+      setCounselingStudentsError(
+        error instanceof Error ? error.message : 'Putusan sanggahan gagal disimpan.',
+      );
+    } finally {
+      setDecidingAppealId(null);
     }
   };
 
@@ -2258,6 +2294,7 @@ export default function App({ hasSessionCookie = false }) {
                               : zone === 'Kurang Disiplin'
                                 ? 'bg-amber-100 text-amber-900'
                                 : 'bg-emerald-100 text-emerald-800';
+                            const pendingAppeals = (student.sanggahans ?? []).filter((appeal) => appeal.status === 'DIAJUKAN').length;
                             return (
                               <button
                                 key={student.id}
@@ -2279,7 +2316,14 @@ export default function App({ hasSessionCookie = false }) {
                                   </span>
                                   <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${zoneClass}`}>{zone}</span>
                                 </span>
-                                <span className="mt-3 block text-xs font-semibold text-slate-600">Skor kedisiplinan: {student.pointScore}</span>
+                                <span className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-600">
+                                  <span>Skor kedisiplinan: {student.pointScore}</span>
+                                  {pendingAppeals > 0 && (
+                                    <span className="rounded-full bg-red-700 px-2.5 py-1 text-[10px] font-bold text-white">
+                                      {pendingAppeals} sanggahan baru
+                                    </span>
+                                  )}
+                                </span>
                               </button>
                             );
                           })}
@@ -2306,6 +2350,74 @@ export default function App({ hasSessionCookie = false }) {
                                 </ul>
                               )}
                             </article>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900">Sanggahan pelanggaran</h4>
+                              {(selectedCounselingStudent.sanggahans ?? []).length === 0 ? (
+                                <p className="mt-2 rounded-xl bg-slate-50 px-4 py-5 text-sm text-slate-500">Belum ada sanggahan dari mahasiswa ini.</p>
+                              ) : (
+                                <div className="mt-3 space-y-3">
+                                  {selectedCounselingStudent.sanggahans.map((appeal) => {
+                                    const statusClass = appeal.status === 'DIAJUKAN'
+                                      ? 'bg-amber-100 text-amber-900'
+                                      : appeal.status === 'DISETUJUI'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-red-100 text-red-800';
+                                    const statusLabel = appeal.status === 'DIAJUKAN'
+                                      ? 'Menunggu putusan'
+                                      : appeal.status === 'DISETUJUI'
+                                        ? 'Disetujui'
+                                        : 'Ditolak';
+                                    return (
+                                      <article key={appeal.id} className="rounded-xl border border-slate-200 p-4">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                          <p className="text-xs font-bold text-slate-700">
+                                            {appeal.perubahanPoin?.reason} ({appeal.perubahanPoin?.delta})
+                                            {' · '}
+                                            {new Date(appeal.createdAt).toLocaleDateString('id-ID')}
+                                          </p>
+                                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${statusClass}`}>{statusLabel}</span>
+                                        </div>
+                                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{appeal.alasan}</p>
+                                        {appeal.status === 'DIAJUKAN' ? (
+                                          <div className="mt-3 space-y-2">
+                                            <textarea
+                                              maxLength={1000}
+                                              rows={2}
+                                              value={appealNotes[appeal.id] ?? ''}
+                                              onChange={(event) => setAppealNotes((current) => ({ ...current, [appeal.id]: event.target.value }))}
+                                              placeholder="Catatan untuk mahasiswa (opsional)"
+                                              aria-label="Catatan pemeriksa sanggahan"
+                                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                                            />
+                                            <div className="flex flex-wrap gap-2">
+                                              <button
+                                                type="button"
+                                                disabled={decidingAppealId !== null}
+                                                onClick={() => handleAppealDecision(appeal.id, 'DISETUJUI')}
+                                                className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                              >
+                                                {decidingAppealId === appeal.id ? 'Menyimpan...' : 'Setujui & pulihkan poin'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={decidingAppealId !== null}
+                                                onClick={() => handleAppealDecision(appeal.id, 'DITOLAK')}
+                                                className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                              >
+                                                Tolak
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : appeal.catatanPemeriksa && (
+                                          <p className="mt-2 text-xs text-slate-500">Catatan pemeriksa: {appeal.catatanPemeriksa}</p>
+                                        )}
+                                      </article>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
 
                             <div>
                               <h4 className="font-bold text-slate-900">Riwayat catatan pembinaan</h4>

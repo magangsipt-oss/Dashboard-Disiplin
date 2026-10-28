@@ -34,41 +34,9 @@ Contoh format URL:
 DATABASE_URL="postgresql://postgres:password@localhost:5432/dashboard_disiplin?schema=public"
 ```
 
-URL ini menggunakan username/password PostgreSQL lokal Anda. Jangan commit
-`backend/.env` atau membagikan kredensialnya.
-Pengguna PostgreSQL pada URL perlu memiliki izin `CREATEDB` agar perintah
-setup dapat membuat database secara otomatis.
-
-### Menyiapkan database yang sama di komputer teman
-
-Di komputer Anda, pastikan `backend/.env` menunjuk ke database sumber
-`dashboard_disiplin`, lalu jalankan dari folder `backend`:
-
-```powershell
-npm.cmd install
-npm.cmd run prisma:data:export
-```
-
-Perintah ini mengekspor seluruh data terkini dari ketiga tabel ke
-`backend/prisma/database-data.json`. File ini berisi data pribadi termasuk
-password. File tersebut dikecualikan dari Git. Pindahkan file itu ke teman
-Anda melalui kanal privat yang aman; jangan mengirimkannya melalui kanal
-publik.
-
-Di komputer teman, salin `backend/.env.example` menjadi `backend/.env`, lalu
-ubah `DATABASE_URL` agar menggunakan host, username, dan password PostgreSQL
-lokalnya dengan nama database `dashboard_disiplin`. Pindahkan file
-`database-data.json` ke folder `backend/prisma/`, lalu jalankan:
-
-```powershell
-npm.cmd install
-npm.cmd run prisma:setup
-```
-
-Perintah tersebut membuat database jika belum tersedia, membuat tabel sesuai
-`backend/prisma/schema.prisma`, lalu memasukkan data ekspor. Jika baris
-bertabrakan dengan primary key atau unique key yang sudah ada, baris itu
-dilewati dan data yang sudah ada tidak ditimpa.
+Database berada di server bersama, sehingga semua anggota tim memakai dan
+mengedit database yang sama. Jangan commit `backend/.env` atau membagikan
+kredensialnya.
 
 ### Memulai backend
 

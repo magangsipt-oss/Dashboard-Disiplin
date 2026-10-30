@@ -255,7 +255,7 @@ export default function App({ hasSessionCookie = false }) {
             data.profile.role === 'dosen'
               ? 'bimbingan'
               : data.profile.role === 'akademik'
-                ? 'lapor'
+                ? 'upload-absensi'
                 : 'dashboard',
           );
           setActivePage('dashboard');

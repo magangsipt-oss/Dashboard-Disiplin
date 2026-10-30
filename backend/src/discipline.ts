@@ -7,6 +7,7 @@ import multer from "multer";
 import sharp from "sharp";
 import {
   DisciplinePillar,
+  JalurLaporan,
   JenisKlaimKegiatan,
   JenisLaporan,
   JenisPembinaan,
@@ -28,8 +29,14 @@ import {
 } from "./points";
 import { sendPointDeductionEmail } from "./mailer";
 import { skipNotificationEmailFor } from "./notification-email";
-import { database, getSessionForRequest, type Session } from "./auth";
+import { database, getSessionForRequest, requireRole, type Session } from "./auth";
 import { createTrackingCode, hashTrackingCode } from "./report-security";
+import {
+  isPunishmentLate,
+  openPunishmentStatuses,
+  settlePunishmentPenalty,
+  todayInCampusTime,
+} from "./punishment";
 import {
   activityClaimDecisionSchema,
   activityClaimSchema,
@@ -60,8 +67,27 @@ const upload = multer({
 const evidenceDirectory = resolve(process.cwd(), "uploads", "evidence");
 const pillarValues = Object.values(DisciplinePillar);
 const severityValues = Object.values(ViolationSeverity);
-const reportKinds = Object.values(JenisLaporan);
-const reportDecisions = ["DIVERIFIKASI", "DITOLAK"] as const;
+const maxPunishmentDays = 60;
+
+// Kategori Antrean Laporan Kemahasiswaan. Laporan beridentitas (sejak dikirim
+// maupun setelah ditelusuri Kemahasiswaan) langsung menunggu konfirmasi DPA.
+const adminQueueCategories = {
+  PERLU_TINDAKAN: {
+    status: StatusLaporan.DITERIMA,
+    jalur: { not: JalurLaporan.TERIDENTIFIKASI },
+  },
+  MENUNGGU_DPA: {
+    status: StatusLaporan.DITERIMA,
+    jalur: JalurLaporan.TERIDENTIFIKASI,
+  },
+  SELESAI: {
+    status: {
+      in: [StatusLaporan.DIVERIFIKASI, StatusLaporan.DITINDAKLANJUTI, StatusLaporan.SELESAI],
+    },
+  },
+  DITOLAK: { status: StatusLaporan.DITOLAK },
+} satisfies Record<string, Prisma.LaporanWhereInput>;
+type AdminQueueCategory = keyof typeof adminQueueCategories;
 
 function parsePositiveInteger(value: unknown): number | null {
   if (
@@ -174,8 +200,10 @@ function writeAudit(
   });
 }
 
-reportRouter.get("/aturan", async (request, response) => {
-  if (!requireLogin(request, response)) return;
+reportRouter.get(
+  "/aturan",
+  requireRole(["mhs", "dosen", "admin"], "Daftar aturan laporan tidak tersedia untuk Akademik."),
+  async (_request, response) => {
   try {
     const aturan = await database.aturanPelanggaran.findMany({
       where: { aktif: true },
@@ -187,19 +215,16 @@ reportRouter.get("/aturan", async (request, response) => {
     console.error("Gagal memuat aturan pelanggaran:", error);
     response.status(500).json({ message: "Daftar aturan pelanggaran gagal dimuat." });
   }
-});
+  },
+);
 
 reportRouter.post(
   "/laporan",
   createReportLimiter,
-  (request, response, next) => {
-    if (!requireLogin(request, response)) return;
-    next();
-  },
+  requireRole(["mhs", "dosen", "admin"], "Pengiriman laporan tidak tersedia untuk Akademik."),
   upload.single("bukti"),
   async (request, response) => {
     try {
-      const jenis = request.body.jenis as JenisLaporan;
       const pillar = request.body.pillar as DisciplinePillar;
       const aturanId = request.body.aturanId
         ? parsePositiveInteger(request.body.aturanId)
@@ -234,7 +259,7 @@ reportRouter.post(
         request.body.pernyataanBenar === "on";
 
       if (
-        !reportKinds.includes(jenis) ||
+        (request.body.jenis !== undefined && request.body.jenis !== JenisLaporan.TEMUAN) ||
         !pillarValues.includes(pillar) ||
         (modeTerlapor !== "DIKETAHUI" && modeTerlapor !== "TIDAK_DIKETAHUI") ||
         (request.body.aturanId && aturanId === null) ||
@@ -306,7 +331,6 @@ reportRouter.post(
         const laporan = await transaction.laporan.create({
           data: {
             kodeHash: hashTrackingCode(kodePelacakan),
-            jenis,
             pillar,
             aturanId,
             severityUsulan,
@@ -324,7 +348,6 @@ reportRouter.post(
           select: { id: true },
         });
         const texts = buildReportNotificationTexts({
-          jenis,
           pillar,
           tanggalKejadian,
           route,
@@ -541,6 +564,21 @@ reportRouter.get("/mahasiswa/pembinaan", async (request, response) => {
   const session = requireStudent(request, response);
   if (!session) return;
   try {
+    const today = todayInCampusTime();
+    const overdue = await database.pembinaan.findMany({
+      where: {
+        studentId: session.profile.id,
+        status: { in: openPunishmentStatuses },
+        batasWaktu: { lt: today },
+      },
+      select: { id: true },
+    });
+    for (const { id } of overdue) {
+      await database.$transaction(
+        (transaction) => settlePunishmentPenalty(transaction, id, today),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    }
     const pembinaan = await database.pembinaan.findMany({
       where: { studentId: session.profile.id },
       orderBy: { createdAt: "desc" },
@@ -552,6 +590,9 @@ reportRouter.get("/mahasiswa/pembinaan", async (request, response) => {
         isiRefleksi: true,
         buktiUrl: true,
         catatanPemeriksa: true,
+        batasWaktu: true,
+        hariDenda: true,
+        totalDenda: true,
         createdAt: true,
         perubahanPoin: { select: { reason: true, pillar: true, severity: true } },
       },
@@ -575,6 +616,7 @@ reportRouter.post("/pembinaan/:id/bukti", async (request, response) => {
   const { buktiUrl, catatan } = evidence;
   try {
     const submitted = await database.$transaction(async (transaction) => {
+      await settlePunishmentPenalty(transaction, id);
       const training = await transaction.pembinaan.findFirst({
         where: {
           id,
@@ -645,6 +687,7 @@ reportRouter.post("/pembinaan/:id/refleksi", async (request, response) => {
   }
   try {
     const submitted = await database.$transaction(async (transaction) => {
+      await settlePunishmentPenalty(transaction, id);
       const training = await transaction.pembinaan.findFirst({
         where: { id, studentId: session.profile.id, status: StatusPembinaan.DIMINTA },
         include: {
@@ -852,6 +895,71 @@ reportRouter.get("/dosen/laporan", async (request, response) => {
   }
 });
 
+// Riwayat keputusan Dosen PA beserta status punishment dari Kemahasiswaan.
+reportRouter.get("/dosen/laporan/riwayat", async (request, response) => {
+  const session = requireDosen(request, response);
+  if (!session) return;
+  try {
+    const today = todayInCampusTime();
+    const laporan = await database.laporan.findMany({
+      where: {
+        jenis: JenisLaporan.TEMUAN,
+        dikonfirmasiDosenId: session.profile.id,
+      },
+      orderBy: { tanggalKonfirmasiDosen: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        pillar: true,
+        status: true,
+        tanggalKejadian: true,
+        tanggalKonfirmasiDosen: true,
+        catatanUntukPelapor: true,
+        terlapor: { select: { nama: true, nim: true, pointScore: true } },
+        aturan: { select: { nama: true, severity: true } },
+        perubahanPoin: {
+          select: {
+            delta: true,
+            pembinaans: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: {
+                id: true,
+                jenis: true,
+                instruksi: true,
+                status: true,
+                batasWaktu: true,
+                hariDenda: true,
+                totalDenda: true,
+                buktiUrl: true,
+                catatanPemeriksa: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    response.json({
+      riwayat: laporan.map(({ perubahanPoin, ...report }) => {
+        const punishment = perubahanPoin?.pembinaans[0] ?? null;
+        return {
+          ...report,
+          poinDikurangi: Math.abs(perubahanPoin?.delta ?? 0),
+          punishment: punishment && {
+            ...punishment,
+            terlambat: isPunishmentLate(punishment, today),
+          },
+        };
+      }),
+    });
+  } catch (error) {
+    console.error("Gagal memuat riwayat konfirmasi Dosen PA:", error);
+    response.status(500).json({ message: "Riwayat konfirmasi laporan gagal dimuat." });
+  }
+});
+
 reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) => {
   const session = requireDosen(request, response);
   if (!session) return;
@@ -967,8 +1075,8 @@ reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) =>
             peran: PeranPenerima.KEMAHASISWAAN,
             laporanId: id,
             judul: "Laporan terkonfirmasi, perlu tindak lanjut",
-            isi: `Dosen PA telah mengonfirmasi pelanggaran mahasiswa ${report.terlapor.nama} (NIM ${report.terlapor.nim}). Tetapkan tugas edukatif atau coaching.`,
-            tautanTab: "laporan",
+            isi: `Dosen PA telah mengonfirmasi pelanggaran mahasiswa ${report.terlapor.nama} (NIM ${report.terlapor.nim}). Tetapkan punishment beserta batas waktunya.`,
+            tautanTab: "punishment",
           },
         });
         await writeAudit(transaction, session, "LAPORAN_DIKONFIRMASI_DPA", "Laporan", id);
@@ -1094,6 +1202,8 @@ reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
           data: {
             status: keputusan as StatusPembinaan,
             catatanPemeriksa: catatan || null,
+            // Hari selama bukti diperiksa tidak didenda; hitungan berlanjut besok.
+            ...(keputusan === "DITOLAK" ? { dendaDihitungSampai: todayInCampusTime() } : {}),
           },
         });
         if (updatedCount.count === 0) return null;
@@ -1149,8 +1259,16 @@ reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
               ? "Bukti tindak lanjut disetujui"
               : "Bukti tindak lanjut perlu diperbaiki",
             isi: keputusan === "DISETUJUI"
-              ? `Dosen PA menyetujui bukti tindak lanjut. ${restoredPoints} poin telah dipulihkan.${catatan ? ` Catatan: ${catatan}` : ""}`
-              : catatan || "Silakan perbaiki dan kirim kembali bukti tindak lanjut.",
+              ? `Dosen PA menyetujui bukti tindak lanjut. ${restoredPoints} poin telah dipulihkan.${
+                  training.totalDenda > 0
+                    ? ` Potongan sanksi keterlambatan (${training.totalDenda} poin) tidak dipulihkan.`
+                    : ""
+                }${catatan ? ` Catatan: ${catatan}` : ""}`
+              : `${catatan || "Silakan perbaiki dan kirim kembali bukti tindak lanjut."}${
+                  training.batasWaktu && training.batasWaktu < todayInCampusTime()
+                    ? " Batas waktu sudah lewat: poin berkurang 2 per hari sampai bukti perbaikan dikirim."
+                    : ""
+                }`,
             tautanTab: "tindak-lanjut",
           },
         });
@@ -1177,6 +1295,7 @@ reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
 reportRouter.get("/admin/laporan", async (request, response) => {
   if (!requireAdmin(request, response)) return;
   const status = request.query.status;
+  const kategori = request.query.kategori;
   const pillar = request.query.pillar;
   const cursor =
     request.query.cursor === undefined ? null : parsePositiveInteger(request.query.cursor);
@@ -1189,6 +1308,8 @@ reportRouter.get("/admin/laporan", async (request, response) => {
     (pillar !== undefined &&
       (typeof pillar !== "string" ||
         !pillarValues.includes(pillar as DisciplinePillar))) ||
+    (kategori !== undefined &&
+      (typeof kategori !== "string" || !(kategori in adminQueueCategories))) ||
     (request.query.cursor !== undefined && cursor === null) ||
     limit === null ||
     limit > 100
@@ -1196,18 +1317,24 @@ reportRouter.get("/admin/laporan", async (request, response) => {
     response.status(400).json({ message: "Filter laporan tidak valid." });
     return;
   }
+  const pillarFilter = pillar ? { pillar: pillar as DisciplinePillar } : {};
   const where: Prisma.LaporanWhereInput = {
-    ...(status ? { status: status as StatusLaporan } : {}),
-    ...(pillar ? { pillar: pillar as DisciplinePillar } : {}),
+    AND: [
+      pillarFilter,
+      ...(status ? [{ status: status as StatusLaporan }] : []),
+      ...(kategori ? [adminQueueCategories[kategori as AdminQueueCategory]] : []),
+    ],
   };
+  const categoryNames = Object.keys(adminQueueCategories) as AdminQueueCategory[];
   try {
-    const [pendingCount, laporan] = await Promise.all([
-      database.laporan.count({
-        where: {
-          ...(pillar ? { pillar: pillar as DisciplinePillar } : {}),
-          status: { in: [StatusLaporan.DITERIMA, StatusLaporan.DIVERIFIKASI] },
-        },
-      }),
+    const [categoryCounts, laporan] = await Promise.all([
+      Promise.all(
+        categoryNames.map((name) =>
+          database.laporan.count({
+            where: { AND: [pillarFilter, adminQueueCategories[name]] },
+          }),
+        ),
+      ),
       database.laporan.findMany({
       where,
       // Enum Postgres terurut sesuai deklarasi: laporan yang menunggu tampil dulu.
@@ -1232,7 +1359,10 @@ reportRouter.get("/admin/laporan", async (request, response) => {
         status: true,
         catatanUntukPelapor: true,
         tanggalKonfirmasiDosen: true,
-        terlapor: { select: { id: true, nim: true, nama: true } },
+        ditelusuriPada: true,
+        terlapor: {
+          select: { id: true, nim: true, nama: true, dosenPa: { select: { nama: true } } },
+        },
         aturan: { select: { nama: true, severity: true, bobotPoin: true } },
         dikonfirmasiDosen: { select: { nama: true } },
         perubahanPoin: {
@@ -1258,9 +1388,13 @@ reportRouter.get("/admin/laporan", async (request, response) => {
     ]);
     const hasMore = laporan.length > limit;
     const page = hasMore ? laporan.slice(0, limit) : laporan;
+    const kategoriCount = Object.fromEntries(
+      categoryNames.map((name, index) => [name, categoryCounts[index]]),
+    );
     response.json({
       laporan: page,
-      pendingCount,
+      pendingCount: kategoriCount.PERLU_TINDAKAN,
+      kategoriCount,
       nextCursor: hasMore ? page[page.length - 1].id : null,
     });
   } catch (error) {
@@ -1273,11 +1407,13 @@ reportRouter.patch("/admin/laporan/:id/rute", async (request, response) => {
   const session = requireAdmin(request, response);
   if (!session) return;
   const id = parsePositiveInteger(request.params.id);
-  const nim = parsePositiveInteger(
-    typeof request.body?.nim === "string" ? request.body.nim.trim() : "",
-  );
-  if (!id || !nim) {
-    response.status(400).json({ message: "ID laporan dan NIM mahasiswa tidak valid." });
+  const nama =
+    typeof request.body?.nama === "string"
+      ? request.body.nama.trim().replace(/\s+/g, " ")
+      : "";
+  const nim = typeof request.body?.nim === "string" ? request.body.nim.trim() : "";
+  if (!id || !nama || nama.length > 200 || !isValidNimFormat(nim)) {
+    response.status(400).json({ message: "Isi nama lengkap dan NIM yang valid untuk hasil penelusuran." });
     return;
   }
   try {
@@ -1290,11 +1426,15 @@ reportRouter.patch("/admin/laporan/:id/rute", async (request, response) => {
       ) {
         return { kind: "not_pending" as const };
       }
-      const student = await transaction.mahasiswa.findUnique({
-        where: { nim },
-        select: { id: true, nama: true, nim: true, dosenPaId: true },
+      const route = await resolveReportRoute(transaction, {
+        diketahui: true,
+        nama,
+        nim,
       });
-      if (!student) return { kind: "student_not_found" as const };
+      if (route.jalur !== "TERIDENTIFIKASI") {
+        return { kind: "student_not_found" as const };
+      }
+      const { student } = route;
 
       await transaction.laporan.update({
         where: { id },
@@ -1303,11 +1443,10 @@ reportRouter.patch("/admin/laporan/:id/rute", async (request, response) => {
           terlaporNama: student.nama,
           terlaporNim: String(student.nim),
           jalur: "TERIDENTIFIKASI",
+          ditelusuriPada: new Date(),
         },
       });
-      const route = { jalur: "TERIDENTIFIKASI" as const, student };
       const texts = buildReportNotificationTexts({
-        jenis: report.jenis,
         pillar: report.pillar,
         tanggalKejadian: report.tanggalKejadian,
         route,
@@ -1351,7 +1490,9 @@ reportRouter.patch("/admin/laporan/:id/rute", async (request, response) => {
       return;
     }
     if (result.kind === "student_not_found") {
-      response.status(404).json({ message: "Mahasiswa dengan NIM tersebut tidak ditemukan." });
+      response.status(422).json({
+        message: "Nama lengkap dan NIM tidak cocok dengan data mahasiswa. Periksa kembali hasil penelusuran.",
+      });
       return;
     }
     response.json({
@@ -1376,6 +1517,9 @@ reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response)
   const jenis = request.body?.jenis;
   const instruksi =
     typeof request.body?.instruksi === "string" ? request.body.instruksi.trim() : "";
+  const batasWaktu = parseDateOnly(request.body?.batasWaktu);
+  const today = todayInCampusTime();
+  const latestDeadline = new Date(today.getTime() + maxPunishmentDays * 24 * 60 * 60 * 1000);
   if (
     !id ||
     !Object.values(JenisPembinaan).includes(jenis) ||
@@ -1383,6 +1527,12 @@ reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response)
     instruksi.length > 2000
   ) {
     response.status(400).json({ message: "Jenis dan instruksi tindak lanjut wajib diisi (10–2000 karakter)." });
+    return;
+  }
+  if (!batasWaktu || batasWaktu < today || batasWaktu > latestDeadline) {
+    response.status(400).json({
+      message: `Batas waktu punishment wajib diisi, paling cepat hari ini dan paling lambat ${maxPunishmentDays} hari ke depan.`,
+    });
     return;
   }
   try {
@@ -1412,6 +1562,7 @@ reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response)
           studentId: report.terlapor.id,
           jenis,
           instruksi,
+          batasWaktu,
         },
         select: { id: true },
       });
@@ -1422,8 +1573,8 @@ reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response)
       await transaction.pemberitahuan.create({
         data: {
           studentId: report.terlapor.id,
-          judul: "Tindak lanjut edukatif telah ditetapkan",
-          isi: instruksi,
+          judul: "Punishment telah ditetapkan Kemahasiswaan",
+          isi: `${instruksi} Batas waktu: ${batasWaktu.toLocaleDateString("id-ID", { timeZone: "UTC" })}. Poin dipulihkan setelah bukti disetujui Dosen PA; lewat batas waktu, poin berkurang 2 per hari.`,
           tautanTab: "tindak-lanjut",
         },
       });
@@ -1445,32 +1596,92 @@ reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response)
   }
 });
 
+// Menu Punishment Kemahasiswaan: pelanggaran yang sudah dikonfirmasi Dosen PA
+// (poin sudah dikurangi) beserta punishment yang sedang berjalan atau selesai.
+reportRouter.get("/admin/punishment", async (request, response) => {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const today = todayInCampusTime();
+    const [menunggu, punishment] = await Promise.all([
+      database.laporan.findMany({
+        where: {
+          jenis: JenisLaporan.TEMUAN,
+          status: StatusLaporan.DIVERIFIKASI,
+          dikonfirmasiDosenId: { not: null },
+          perubahanPoinId: { not: null },
+        },
+        orderBy: { tanggalKonfirmasiDosen: "asc" },
+        take: 200,
+        select: {
+          id: true,
+          pillar: true,
+          tanggalKejadian: true,
+          tanggalKonfirmasiDosen: true,
+          deskripsi: true,
+          catatanUntukPelapor: true,
+          terlapor: { select: { nama: true, nim: true, jurusan: true, pointScore: true } },
+          aturan: { select: { nama: true, severity: true } },
+          dikonfirmasiDosen: { select: { nama: true } },
+          perubahanPoin: { select: { delta: true } },
+        },
+      }),
+      database.pembinaan.findMany({
+        where: {
+          perubahanPoin: { is: { type: "REPORTED_VIOLATION", laporan: { isNot: null } } },
+        },
+        orderBy: [{ status: "asc" }, { batasWaktu: "asc" }],
+        take: 300,
+        select: {
+          id: true,
+          jenis: true,
+          instruksi: true,
+          status: true,
+          buktiUrl: true,
+          isiRefleksi: true,
+          catatanPemeriksa: true,
+          batasWaktu: true,
+          hariDenda: true,
+          totalDenda: true,
+          createdAt: true,
+          updatedAt: true,
+          student: { select: { nama: true, nim: true, jurusan: true, pointScore: true } },
+          perubahanPoin: {
+            select: {
+              delta: true,
+              reason: true,
+              laporan: { select: { id: true, pillar: true } },
+            },
+          },
+        },
+      }),
+    ]);
+    response.json({
+      menunggu,
+      punishment: punishment.map((item) => ({
+        ...item,
+        terlambat: isPunishmentLate(item, today),
+      })),
+      hariIni: formatDateOnly(today),
+    });
+  } catch (error) {
+    console.error("Gagal memuat daftar punishment:", error);
+    response.status(500).json({ message: "Daftar punishment gagal dimuat." });
+  }
+});
+
+// Semua laporan adalah temuan pelanggaran: konfirmasi dan pengurangan poin
+// hanya oleh Dosen PA. Kemahasiswaan di sini hanya dapat menolak laporan yang
+// belum teridentifikasi.
 reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) => {
   const session = requireAdmin(request, response);
   if (!session) return;
   const id = parsePositiveInteger(request.params.id);
-  const keputusan = request.body?.keputusan;
-  const aturanId = request.body?.aturanId
-    ? Number(request.body.aturanId)
-    : null;
-  const nim =
-    typeof request.body?.nim === "string" ? request.body.nim.trim() : "";
   const catatanUntukPelapor =
     typeof request.body?.catatanUntukPelapor === "string"
       ? request.body.catatanUntukPelapor.trim()
       : "";
-  if (
-    !id ||
-    !reportDecisions.includes(keputusan) ||
-    (aturanId !== null && (!Number.isSafeInteger(aturanId) || aturanId < 1)) ||
-    catatanUntukPelapor.length > 1000
-  ) {
+  if (!id || request.body?.keputusan !== "DITOLAK" || catatanUntukPelapor.length > 1000) {
     response.status(400).json({ message: "Keputusan verifikasi tidak valid." });
-    return;
-  }
-  const parsedNim = parsePositiveInteger(nim);
-  if (keputusan === "DIVERIFIKASI" && !parsedNim) {
-    response.status(400).json({ message: "NIM hasil pencocokan wajib diisi untuk verifikasi." });
     return;
   }
   try {
@@ -1480,157 +1691,19 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
         if (!report || report.status !== StatusLaporan.DITERIMA) {
           return { kind: "not_pending" as const };
         }
-        if (
-          report.jenis === JenisLaporan.TEMUAN &&
-          (keputusan === "DIVERIFIKASI" || report.jalur === "TERIDENTIFIKASI")
-        ) {
+        if (report.jalur === JalurLaporan.TERIDENTIFIKASI) {
           return { kind: "dpa_confirmation_required" as const };
         }
-        if (keputusan === "DITOLAK") {
-          const updated = await transaction.laporan.update({
-            where: { id },
-            data: {
-              status: StatusLaporan.DITOLAK,
-              tanggalVerifikasi: new Date(),
-              catatanUntukPelapor: catatanUntukPelapor || null,
-            },
-            select: { id: true },
-          });
-          await writeAudit(transaction, session, "LAPORAN_DITOLAK", "Laporan", updated.id);
-          return { kind: "decided" as const, status: StatusLaporan.DITOLAK };
-        }
-
-        const student = await transaction.mahasiswa.findUnique({
-          where: { nim: parsedNim! },
-          select: { id: true, nim: true, pointScore: true, nama: true, email: true, jurusan: true },
-        });
-        if (!student) return { kind: "student_not_found" as const };
-
-        let pointChangeId: number | null = null;
-        let needsTraining = false;
-        let emailNotification: {
-          toEmail: string;
-          studentName: string;
-          studentNim: number;
-          prodi: string;
-          pillarName: string;
-          severityName: string;
-          delta: number;
-          scoreAfter: number;
-          reason: string;
-          category: string;
-        } | null = null;
-        if (report.jenis === JenisLaporan.TEMUAN) {
-          if (!aturanId) return { kind: "rule_required" as const };
-          const rule = await transaction.aturanPelanggaran.findFirst({
-            where: { id: aturanId, pillar: report.pillar, aktif: true },
-          });
-          if (!rule || rule.bobotPoin <= 0) return { kind: "invalid_rule" as const };
-
-          const pointChange = calculatePointChangeForDelta(
-            student.pointScore,
-            -rule.bobotPoin,
-          );
-          const metadata = getPointChangeMetadata("REPORTED_VIOLATION", {
-            pillar: rule.pillar,
-            severity: rule.severity,
-          });
-          await transaction.mahasiswa.update({
-            where: { id: student.id },
-            data: { pointScore: pointChange.score },
-          });
-          const savedChange = await transaction.pointChange.create({
-            data: {
-              studentId: student.id,
-              type: "REPORTED_VIOLATION" as PointChangeType,
-              pillar: metadata.pillar,
-              severity: metadata.severity,
-              delta: pointChange.delta,
-              scoreAfter: pointChange.score,
-              reason: `Laporan terverifikasi: ${rule.nama}`,
-              recordedByIdentity: session.profile.identity,
-            },
-            select: { id: true },
-          });
-          pointChangeId = savedChange.id;
-          needsTraining = ["SEDANG", "BERAT", "SANGAT_BERAT"].includes(rule.severity);
-          if (student.email) {
-            emailNotification = {
-              toEmail: student.email,
-              studentName: student.nama,
-              studentNim: student.nim,
-              prodi: student.jurusan,
-              pillarName: disciplinePillarLabels[report.pillar] || report.pillar,
-              severityName: violationSeverityLabels[rule.severity] || rule.severity,
-              delta: pointChange.delta,
-              scoreAfter: pointChange.score,
-              reason: `Laporan terverifikasi: ${rule.nama}`,
-              category: "Pelanggaran Disiplin",
-            };
-          }
-
-          if (needsTraining) {
-            await transaction.pembinaan.create({
-              data: {
-                perubahanPoinId: savedChange.id,
-                studentId: student.id,
-                jenis: JenisPembinaan.REFLEKSI_TERTULIS,
-                instruksi: violationSeverityFollowUps[rule.severity],
-              },
-            });
-          }
-
-          // Mahasiswa sudah dapat email rinci pengurangan poin.
-          if (student.email) skipNotificationEmailFor(student.id);
-          await transaction.pemberitahuan.create({
-            data: {
-              studentId: student.id,
-              judul: "Laporan pelanggaran telah diverifikasi",
-              isi: `Perubahan poin Anda telah dicatat pada pilar ${report.pillar}. Silakan tinjau tindak lanjut dan pembinaan.`,
-              tautanTab: "tindak-lanjut",
-            },
-          });
-        } else {
-          await transaction.pemberitahuan.create({
-            data: {
-              studentId: student.id,
-              judul: "Laporan apresiasi telah diverifikasi",
-              isi: "Laporan apresiasi perilaku positif untuk Anda telah diverifikasi.",
-              tautanTab: "dashboard",
-            },
-          });
-        }
-
-        const updated = await transaction.laporan.update({
+        await transaction.laporan.update({
           where: { id },
           data: {
-            status: needsTraining
-              ? StatusLaporan.DITINDAKLANJUTI
-              : StatusLaporan.DIVERIFIKASI,
-            terlaporNim: String(student.nim),
-            aturanId: report.jenis === JenisLaporan.TEMUAN ? aturanId : report.aturanId,
-            severityUsulan:
-              report.jenis === JenisLaporan.TEMUAN
-                ? (await transaction.aturanPelanggaran.findUniqueOrThrow({
-                    where: { id: aturanId! },
-                    select: { severity: true },
-                  })).severity
-                : report.severityUsulan,
+            status: StatusLaporan.DITOLAK,
             tanggalVerifikasi: new Date(),
             catatanUntukPelapor: catatanUntukPelapor || null,
-            perubahanPoinId: pointChangeId,
           },
-          select: { id: true },
         });
-        await writeAudit(transaction, session, "LAPORAN_DIVERIFIKASI", "Laporan", updated.id);
-        return {
-          kind: "decided" as const,
-          status: needsTraining
-            ? StatusLaporan.DITINDAKLANJUTI
-            : StatusLaporan.DIVERIFIKASI,
-          pointChangeId,
-          emailNotification,
-        };
+        await writeAudit(transaction, session, "LAPORAN_DITOLAK", "Laporan", id);
+        return { kind: "decided" as const, status: StatusLaporan.DITOLAK };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -1638,28 +1711,11 @@ reportRouter.patch("/admin/laporan/:id/verifikasi", async (request, response) =>
       response.status(404).json({ message: "Laporan tidak ditemukan atau sudah diproses." });
       return;
     }
-    if (result.kind === "student_not_found") {
-      response.status(404).json({ message: "Mahasiswa hasil pencocokan tidak ditemukan." });
-      return;
-    }
     if (result.kind === "dpa_confirmation_required") {
       response.status(409).json({
-        message: "Temuan harus dikonfirmasi Dosen PA sebelum Kemahasiswaan menetapkan tindak lanjut.",
+        message: "Laporan beridentitas diputuskan oleh Dosen PA mahasiswa terlapor.",
       });
       return;
-    }
-    if (result.kind === "rule_required") {
-      response.status(400).json({ message: "Pilih aturan pelanggaran untuk memverifikasi temuan." });
-      return;
-    }
-    if (result.kind === "invalid_rule") {
-      response.status(400).json({ message: "Aturan tidak aktif atau tidak sesuai dengan pilar laporan." });
-      return;
-    }
-    if ("emailNotification" in result && result.emailNotification?.toEmail) {
-      sendPointDeductionEmail(result.emailNotification).catch((err) => {
-        console.error("[Mailer] Gagal mengirim email notifikasi pelanggaran:", err);
-      });
     }
     response.json(result);
   } catch (error) {

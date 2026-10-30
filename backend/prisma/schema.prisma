@@ -84,6 +84,7 @@ enum PointChangeType {
   NON_ACADEMIC_ACTIVITY
   REPORTED_VIOLATION
   POINT_RESTORATION
+  PUNISHMENT_PENALTY
 }
 
 enum DisciplinePillar {
@@ -124,9 +125,9 @@ model PointChange {
   @@map("PerubahanPoin")
 }
 
+// Laporan hanya untuk pelanggaran; laporan apresiasi sudah dihapus.
 enum JenisLaporan {
   TEMUAN
-  APRESIASI
 }
 
 enum StatusLaporan {
@@ -183,7 +184,7 @@ model AturanPelanggaran {
 model Laporan {
   id                     Int                 @id @default(autoincrement())
   kodeHash               String              @unique @db.Char(64)
-  jenis                  JenisLaporan
+  jenis                  JenisLaporan        @default(TEMUAN)
   pillar                 DisciplinePillar
   aturanId               Int?
   severityUsulan         ViolationSeverity?
@@ -204,6 +205,9 @@ model Laporan {
   dikonfirmasiDosenId    Int?
   tanggalKonfirmasiDosen DateTime?
   perubahanPoinId        Int?                @unique
+  // Diisi saat Kemahasiswaan melengkapi identitas terlapor, agar laporan tetap
+  // tampil di Antrean Laporan sampai Dosen PA memutuskan.
+  ditelusuriPada         DateTime?
   terlapor               Mahasiswa?          @relation(fields: [terlaporId], references: [id], onDelete: SetNull)
   aturan                 AturanPelanggaran?  @relation(fields: [aturanId], references: [id], onDelete: SetNull)
   diverifikasiOleh       Akademik?           @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
@@ -214,6 +218,7 @@ model Laporan {
   @@index([status, id])
   @@index([terlaporNim, status])
   @@index([terlaporId, status])
+  @@index([ditelusuriPada])
 }
 
 // Foto bukti laporan disimpan di database agar bisa dilihat dari backend
@@ -243,21 +248,29 @@ model Sanggahan {
 }
 
 model Pembinaan {
-  id               Int             @id @default(autoincrement())
-  perubahanPoinId  Int
-  studentId        Int
-  jenis            JenisPembinaan
-  instruksi        String          @db.VarChar(2000)
-  status           StatusPembinaan @default(DIMINTA)
-  isiRefleksi      String?         @db.VarChar(5000)
-  buktiUrl         String?         @db.VarChar(2000)
-  catatanPemeriksa String?         @db.VarChar(1000)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  perubahanPoin    PointChange     @relation(fields: [perubahanPoinId], references: [id], onDelete: Cascade)
-  student          Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                  Int             @id @default(autoincrement())
+  perubahanPoinId     Int
+  studentId           Int
+  jenis               JenisPembinaan
+  instruksi           String          @db.VarChar(2000)
+  status              StatusPembinaan @default(DIMINTA)
+  isiRefleksi         String?         @db.VarChar(5000)
+  buktiUrl            String?         @db.VarChar(2000)
+  catatanPemeriksa    String?         @db.VarChar(1000)
+  // Punishment dari Kemahasiswaan: lewat batas waktu tanpa tindak lanjut,
+  // poin dipotong per hari. dendaDihitungSampai = tanggal terakhir yang
+  // sudah dihitung dendanya (atau dijeda saat bukti sedang diperiksa).
+  batasWaktu          DateTime?       @db.Date
+  dendaDihitungSampai DateTime?       @db.Date
+  hariDenda           Int             @default(0)
+  totalDenda          Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  perubahanPoin       PointChange     @relation(fields: [perubahanPoinId], references: [id], onDelete: Cascade)
+  student             Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId, status, createdAt])
+  @@index([status, batasWaktu])
 }
 
 enum JenisKlaimKegiatan {

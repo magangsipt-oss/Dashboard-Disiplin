@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ClipboardCheck, FileText, MessageSquareText } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
+import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -199,8 +200,8 @@ export default function TindakLanjut({ onAppeal }) {
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800"><ClipboardCheck className="h-5 w-5" /></div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Pembinaan</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Selesaikan tugas edukatif atau coaching dan kirim bukti kepada Dosen PA.</p>
+            <h2 className="text-lg font-bold text-slate-900">Punishment & Pembinaan</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Selesaikan punishment sebelum batas waktu dan kirim bukti kepada Dosen PA agar poin dikembalikan. Lewat batas waktu, poin berkurang 2 setiap hari.</p>
           </div>
         </div>
         {isLoading ? (
@@ -212,10 +213,19 @@ export default function TindakLanjut({ onAppeal }) {
             {training.map((task) => (
               <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-bold text-slate-900">{task.jenis === "REFLEKSI_TERTULIS" ? "Refleksi tertulis" : "Konseling"}</h3>
+                  <h3 className="font-bold text-slate-900">{punishmentTypeLabels[task.jenis] ?? task.jenis}</h3>
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{trainingStatusLabels[task.status] ?? task.status}</span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{task.instruksi}</p>
+                {task.batasWaktu && (
+                  <p className="mt-2 text-xs font-semibold text-slate-700">Batas waktu: {formatDeadline(task.batasWaktu)}</p>
+                )}
+                {task.hariDenda > 0 && (
+                  <p className="mt-2 rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-800">
+                    Terlambat {task.hariDenda} hari · sanksi keterlambatan -{task.totalDenda} poin (tidak dikembalikan).
+                    {["DIMINTA", "DITOLAK"].includes(task.status) && " Poin terus berkurang 2 per hari sampai bukti dikirim."}
+                  </p>
+                )}
                 {task.catatanPemeriksa && <p className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Catatan pemeriksa: {task.catatanPemeriksa}</p>}
                 {task.isiRefleksi && <p className="mt-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">Catatan/bukti terkirim: {task.isiRefleksi}</p>}
                 {task.buktiUrl && <a href={safeHref(task.buktiUrl)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block break-all text-xs font-semibold text-red-800 hover:underline">Tautan bukti yang dikirim</a>}

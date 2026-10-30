@@ -155,30 +155,39 @@ export default function KlaimKegiatan() {
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-slate-50 px-4 py-3">
             <p className="text-xs font-semibold text-slate-500">Total klaim</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">{claims.length}</p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{isLoading ? "…" : error ? "--" : claims.length}</p>
           </div>
           <div className="rounded-xl bg-amber-50 px-4 py-3">
             <p className="text-xs font-semibold text-amber-800">Menunggu verifikasi</p>
-            <p className="mt-1 text-2xl font-extrabold text-amber-900">{pendingCount}</p>
+            <p className="mt-1 text-2xl font-extrabold text-amber-900">{isLoading ? "…" : error ? "--" : pendingCount}</p>
           </div>
           <div className="rounded-xl bg-emerald-50 px-4 py-3">
             <p className="text-xs font-semibold text-emerald-800">Poin dari kegiatan</p>
-            <p className="mt-1 text-2xl font-extrabold text-emerald-900">+{approvedPoints}</p>
+            <p className="mt-1 text-2xl font-extrabold text-emerald-900">{isLoading ? "…" : error ? "--" : `+${approvedPoints}`}</p>
           </div>
         </div>
 
         {submitStatus && <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{submitStatus}</p>}
-        {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
-        {isLoading ? (
-          <p className="mt-5 rounded-xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Memuat klaim kegiatan...</p>
-        ) : claims.length === 0 ? (
-          <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-            <Award className="mx-auto h-8 w-8 text-slate-400" />
-            <p className="mt-2 font-semibold text-slate-700">Belum ada klaim kegiatan</p>
-            <p className="mt-1 text-xs text-slate-500">Ajukan klaim setelah mengikuti lomba atau kegiatan non-akademik.</p>
+        <div className="mt-5">
+          <div className="mb-3">
+            <h3 className="font-bold text-slate-900">Riwayat klaim kegiatan</h3>
+            <p className="mt-1 text-xs text-slate-500">Pantau status verifikasi, poin yang disetujui, dan catatan pemeriksa.</p>
           </div>
-        ) : (
-          <div className="mt-5 overflow-x-auto">
+          {error ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+              <p>{error}</p>
+              <button type="button" onClick={loadClaims} className="mt-2 font-semibold underline hover:no-underline">Coba lagi</button>
+            </div>
+          ) : isLoading ? (
+            <p className="rounded-xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">Memuat klaim kegiatan...</p>
+          ) : claims.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+              <Award className="mx-auto h-8 w-8 text-slate-400" />
+              <p className="mt-2 font-semibold text-slate-700">Belum ada klaim kegiatan</p>
+              <p className="mt-1 text-xs text-slate-500">Ajukan klaim setelah mengikuti lomba atau kegiatan non-akademik.</p>
+            </div>
+          ) : (
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/50 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <tr>
@@ -209,7 +218,7 @@ export default function KlaimKegiatan() {
                         {claimStatus[claim.status]?.label ?? claim.status}
                       </span>
                     </td>
-                    <td className="px-3 py-3 font-bold text-emerald-700">{claim.poinDisetujui ? `+${claim.poinDisetujui}` : "-"}</td>
+                    <td className="px-3 py-3 font-bold text-emerald-700">{claim.poinDisetujui !== null && claim.poinDisetujui !== undefined ? `+${claim.poinDisetujui}` : "-"}</td>
                     <td className="max-w-xs px-3 py-3 text-xs text-slate-600">{claim.catatanPemeriksa ?? "-"}</td>
                     <td className="px-3 py-3 text-right">
                       <a href={`/api/klaim-kegiatan/${claim.id}/bukti`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-red-800 hover:underline">
@@ -221,7 +230,8 @@ export default function KlaimKegiatan() {
               </tbody>
             </table>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       {isModalOpen && (

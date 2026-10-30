@@ -107,7 +107,7 @@ export default function CekLaporan() {
                   Detail laporan
                 </div>
                 <dl className="mt-3 space-y-2 text-sm text-slate-600">
-                  <div className="flex justify-between gap-3"><dt>Jenis</dt><dd className="font-semibold text-slate-900">{report.jenis || "-"}</dd></div>
+                  <div className="flex justify-between gap-3"><dt>Jenis</dt><dd className="font-semibold text-slate-900">Pelanggaran</dd></div>
                   <div className="flex justify-between gap-3"><dt>Pilar</dt><dd className="font-semibold text-slate-900">{report.pillar || "-"}</dd></div>
                   <div className="flex justify-between gap-3"><dt>Lokasi</dt><dd className="font-semibold text-slate-900 text-right">{report.lokasi || "-"}</dd></div>
                   <div className="flex justify-between gap-3"><dt>Waktu</dt><dd className="font-semibold text-slate-900 text-right">{report.createdAt ? new Date(report.createdAt).toLocaleString("id-ID") : "-"}</dd></div>

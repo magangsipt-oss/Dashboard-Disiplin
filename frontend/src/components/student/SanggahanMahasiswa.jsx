@@ -18,6 +18,7 @@ const changeLabels = {
   COMPETITION: "Mengikuti lomba",
   NON_ACADEMIC_ACTIVITY: "Kegiatan non-akademik",
   POINT_RESTORATION: "Pemulihan poin",
+  PUNISHMENT_PENALTY: "Sanksi punishment terlambat",
 };
 
 export default function SanggahanMahasiswa({

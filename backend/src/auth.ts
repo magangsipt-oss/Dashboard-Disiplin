@@ -14,6 +14,7 @@ import {
   type PointChangeAction,
 } from "./points";
 import { verifyPassword } from "./password";
+import { getViolationResolution, todayInCampusTime } from "./punishment";
 import { counselingSchema, loginSchema, parseBody } from "./validation";
 
 
@@ -410,7 +411,8 @@ authRouter.get("/advisor/students", requireRole(["dosen"], "Hanya akun dosen yan
 authRouter.get("/admin/monitoring", requireRole(["admin"], "Hanya admin kemahasiswaan yang dapat melihat monitoring seluruh mahasiswa dan dosen."), async (request, response) => {
 
   try {
-    const [students, lecturers] = await Promise.all([
+    const today = todayInCampusTime();
+    const [students, lecturers, pendingReports, violations] = await Promise.all([
       database.mahasiswa.findMany({
         orderBy: { nama: "asc" },
         select: {
@@ -462,19 +464,117 @@ authRouter.get("/admin/monitoring", requireRole(["admin"], "Hanya admin kemahasi
               counselingRecords: true,
             },
           },
+          // Keputusan DPA: dikonfirmasi (poin dikurangi) atau tidak dikonfirmasi.
+          laporanDikonfirmasi: {
+            orderBy: { tanggalKonfirmasiDosen: "desc" },
+            select: {
+              id: true,
+              status: true,
+              pillar: true,
+              tanggalKonfirmasiDosen: true,
+              terlapor: { select: { nama: true, nim: true } },
+              aturan: { select: { nama: true } },
+            },
+          },
+          counselingRecords: {
+            orderBy: [{ counselingDate: "desc" }, { createdAt: "desc" }],
+            take: 10,
+            select: {
+              id: true,
+              type: true,
+              note: true,
+              counselingDate: true,
+              student: { select: { nama: true, nim: true } },
+            },
+          },
+        },
+      }),
+      // Laporan beridentitas yang masih menunggu keputusan Dosen PA terlapor.
+      database.laporan.findMany({
+        where: {
+          status: "DITERIMA",
+          jalur: "TERIDENTIFIKASI",
+          terlapor: { dosenPaId: { not: null } },
+        },
+        orderBy: { tanggalLapor: "asc" },
+        select: {
+          id: true,
+          pillar: true,
+          tanggalLapor: true,
+          terlapor: { select: { nama: true, nim: true, dosenPaId: true } },
+        },
+      }),
+      // Seluruh pelanggaran (pengurangan poin), tanpa denda keterlambatan
+      // punishment yang tercatat terpisah pada punishment-nya.
+      database.pointChange.findMany({
+        where: {
+          delta: { lt: 0 },
+          type: { in: ["LATE", "UNEXCUSED_ABSENCE", "DISCIPLINE_VIOLATION", "REPORTED_VIOLATION"] },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          studentId: true,
+          type: true,
+          pillar: true,
+          severity: true,
+          delta: true,
+          reason: true,
+          createdAt: true,
+          laporan: {
+            select: { id: true, status: true, tanggalKejadian: true, aturan: { select: { nama: true } } },
+          },
+          pembinaans: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              jenis: true,
+              status: true,
+              batasWaktu: true,
+              hariDenda: true,
+              totalDenda: true,
+              updatedAt: true,
+            },
+          },
+          sanggahans: { where: { status: "DISETUJUI" }, take: 1, select: { id: true } },
         },
       }),
     ]);
+    const violationsByStudent = new Map<number, unknown[]>();
+    for (const { studentId, sanggahans, pembinaans, laporan, ...violation } of violations) {
+      const punishment = pembinaans[0] ?? null;
+      const list = violationsByStudent.get(studentId) ?? [];
+      list.push({
+        ...violation,
+        laporan,
+        punishment,
+        status: getViolationResolution(
+          { type: violation.type, sanggahanDisetujui: sanggahans.length > 0, punishment },
+          today,
+        ),
+      });
+      violationsByStudent.set(studentId, list);
+    }
     response.json({
       students: students.map((student) => ({
         ...student,
+        predikat: getScorePredicate(student.pointScore),
+        pelanggaran: violationsByStudent.get(student.id) ?? [],
         dosenPa: student.dosenPa
           ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk.toString() }
           : null,
       })),
-      lecturers: lecturers.map((lecturer) => ({
+      lecturers: lecturers.map(({ laporanDikonfirmasi, ...lecturer }) => ({
         ...lecturer,
         nuptk: lecturer.nuptk.toString(),
+        laporanBelumDikonfirmasi: pendingReports
+          .filter((report) => report.terlapor?.dosenPaId === lecturer.id)
+          .map(({ terlapor, ...report }) => ({
+            ...report,
+            terlapor: terlapor && { nama: terlapor.nama, nim: terlapor.nim },
+          })),
+        laporanDikonfirmasi: laporanDikonfirmasi.filter((report) => report.status !== "DITOLAK"),
+        laporanTidakDikonfirmasi: laporanDikonfirmasi.filter((report) => report.status === "DITOLAK"),
       })),
     });
   } catch (error) {

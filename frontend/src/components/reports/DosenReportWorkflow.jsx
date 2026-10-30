@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock3, FileCheck2, FileText, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Clock3, FileCheck2, FileText, History, ShieldCheck } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
+import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -16,9 +17,152 @@ function formatDate(value) {
   return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("id-ID");
 }
 
+// Status punishment dilihat dari sisi Dosen PA untuk satu laporan.
+function getPunishmentState(report) {
+  const punishment = report.punishment;
+  if (report.status === "DITOLAK") {
+    return { key: "TIDAK_DIKONFIRMASI", label: "Tidak dikonfirmasi", badge: "bg-slate-100 text-slate-700" };
+  }
+  if (!punishment) {
+    return { key: "BELUM", label: "Belum diberi punishment", badge: "bg-amber-100 text-amber-900" };
+  }
+  if (punishment.status === "DISETUJUI") {
+    return { key: "SELESAI", label: "Punishment selesai · poin dipulihkan", badge: "bg-emerald-100 text-emerald-900" };
+  }
+  if (punishment.status === "DIKIRIM") {
+    return { key: "BERJALAN", label: "Bukti menunggu pemeriksaan Anda", badge: "bg-blue-100 text-blue-900" };
+  }
+  if (punishment.terlambat) {
+    return { key: "BERJALAN", label: "Belum diselesaikan · terlambat", badge: "bg-red-700 text-white" };
+  }
+  return {
+    key: "BERJALAN",
+    label: punishment.status === "DITOLAK" ? "Belum diselesaikan · perlu perbaikan" : "Belum diselesaikan",
+    badge: "bg-orange-100 text-orange-900",
+  };
+}
+
+const historyFilters = [
+  { id: "SEMUA", label: "Semua" },
+  { id: "BELUM", label: "Belum diberi punishment" },
+  { id: "BERJALAN", label: "Belum diselesaikan" },
+  { id: "SELESAI", label: "Selesai" },
+  { id: "TIDAK_DIKONFIRMASI", label: "Tidak dikonfirmasi" },
+];
+
+function ConfirmationHistory({ history, isLoading }) {
+  const [filter, setFilter] = useState("SEMUA");
+  const withState = history.map((report) => ({ report, state: getPunishmentState(report) }));
+  const counts = withState.reduce(
+    (total, { state }) => ({ ...total, [state.key]: (total[state.key] ?? 0) + 1 }),
+    { SEMUA: withState.length },
+  );
+  const visible = filter === "SEMUA" ? withState : withState.filter(({ state }) => state.key === filter);
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-2">
+        <History className="h-5 w-5 text-slate-700" />
+        <h3 className="text-lg font-bold text-slate-900">Riwayat laporan yang sudah Anda putuskan</h3>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {historyFilters.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setFilter(item.id)}
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${
+              filter === item.id
+                ? "bg-red-800 text-white"
+                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {item.label} ({counts[item.id] ?? 0})
+          </button>
+        ))}
+      </div>
+      {isLoading ? (
+        <p className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Memuat riwayat...</p>
+      ) : visible.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
+          Belum ada riwayat laporan pada kategori ini.
+        </p>
+      ) : (
+        <div className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {visible.map(({ report, state }) => {
+            const punishment = report.punishment;
+            return (
+              <details key={report.id} className="group">
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900">
+                      {report.terlapor?.nama ?? "-"} · NIM {report.terlapor?.nim ?? "-"}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-slate-600">
+                      Laporan #{report.id} · {pillarLabels[report.pillar] ?? report.pillar}
+                      {report.tanggalKonfirmasiDosen && ` · diputuskan ${new Date(report.tanggalKonfirmasiDosen).toLocaleDateString("id-ID")}`}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${state.badge}`}>{state.label}</span>
+                </summary>
+                <div className="space-y-3 border-t border-slate-100 p-4 text-sm">
+                  <dl className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">Pelanggaran</dt>
+                      <dd className="mt-1 text-slate-800">{report.aturan?.nama ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">Poin dikurangi</dt>
+                      <dd className="mt-1 text-slate-800">{report.status === "DITOLAK" ? "Tidak ada" : `-${report.poinDikurangi}`}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">Skor mahasiswa saat ini</dt>
+                      <dd className="mt-1 text-slate-800">{report.terlapor?.pointScore ?? "-"}</dd>
+                    </div>
+                  </dl>
+                  {report.catatanUntukPelapor && (
+                    <p className="text-slate-600">Catatan Anda: {report.catatanUntukPelapor}</p>
+                  )}
+                  {report.status !== "DITOLAK" && !punishment && (
+                    <p className="rounded-xl bg-amber-50 p-3 text-amber-900">Kemahasiswaan belum menetapkan punishment untuk laporan ini.</p>
+                  )}
+                  {punishment && (
+                    <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="font-semibold text-slate-900">
+                        Punishment: {punishmentTypeLabels[punishment.jenis] ?? punishment.jenis}
+                      </p>
+                      <p className="whitespace-pre-wrap text-slate-700">{punishment.instruksi}</p>
+                      <p className="text-xs text-slate-600">
+                        Ditetapkan {new Date(punishment.createdAt).toLocaleDateString("id-ID")} · Batas waktu {formatDeadline(punishment.batasWaktu)}
+                        {punishment.status === "DISETUJUI" && ` · Diselesaikan ${new Date(punishment.updatedAt).toLocaleDateString("id-ID")}`}
+                      </p>
+                      {punishment.hariDenda > 0 && (
+                        <p className="text-xs font-semibold text-red-800">
+                          Terlambat {punishment.hariDenda} hari · sanksi keterlambatan -{punishment.totalDenda} poin
+                        </p>
+                      )}
+                      {punishment.buktiUrl && (
+                        <a href={safeHref(punishment.buktiUrl)} target="_blank" rel="noopener noreferrer" className="inline-block break-all text-xs font-semibold text-red-800 hover:underline">
+                          Lihat bukti penyelesaian
+                        </a>
+                      )}
+                      {punishment.catatanPemeriksa && <p className="text-xs text-slate-600">Catatan pemeriksaan: {punishment.catatanPemeriksa}</p>}
+                    </div>
+                  )}
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function DosenReportWorkflow() {
   const [reports, setReports] = useState([]);
   const [evidence, setEvidence] = useState([]);
+  const [history, setHistory] = useState([]);
   const [rules, setRules] = useState([]);
   const [selectedRules, setSelectedRules] = useState({});
   const [notes, setNotes] = useState({});
@@ -32,13 +176,15 @@ export default function DosenReportWorkflow() {
       studentApi("/api/dosen/laporan"),
       studentApi("/api/dosen/pembinaan"),
       studentApi("/api/aturan"),
+      studentApi("/api/dosen/laporan/riwayat"),
     ]);
   }
 
-  function applyQueue([reportData, evidenceData, ruleData]) {
+  function applyQueue([reportData, evidenceData, ruleData, historyData]) {
     setReports(reportData.laporan ?? []);
     setEvidence(evidenceData.pembinaan ?? []);
     setRules(ruleData.aturan ?? []);
+    setHistory(historyData.riwayat ?? []);
   }
 
   async function loadQueue(showLoading = true) {
@@ -287,6 +433,8 @@ export default function DosenReportWorkflow() {
           </article>
         ))}
       </section>
+
+      <ConfirmationHistory history={history} isLoading={isLoading} />
 
       <p className="text-xs text-slate-500">
         <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />

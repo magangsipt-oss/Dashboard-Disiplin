@@ -12,7 +12,6 @@ import {
 } from "../src/report-routing";
 
 const reportDetails = {
-  jenis: "TEMUAN" as const,
   pillar: "WAKTU" as const,
   tanggalKejadian: new Date("2026-10-21T00:00:00.000Z"),
 };
@@ -178,11 +177,4 @@ test("laporan yang tidak terdaftar atau tidak diketahui hanya memberi notifikasi
     assert.equal(calls[0].data.peran, "KEMAHASISWAAN");
     assert.match(texts.kemahasiswaan?.isi ?? "", /Perlu ditelusuri/);
   }
-});
-
-test("notifikasi apresiasi memakai nada positif", async () => {
-  const route: ReportRoute = { jalur: "TERIDENTIFIKASI", student: makeStudent() };
-  const texts = makeTexts(route, { jenis: "APRESIASI" });
-  assert.match(texts.student?.isi ?? "", /Anda menerima laporan apresiasi/);
-  assert.equal(texts.student?.tautanTab, "dashboard");
 });

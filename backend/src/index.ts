@@ -3,6 +3,7 @@ import express from "express";
 import { authDatabases, authRouter, loadSession } from "./auth";
 import multer from "multer";
 import { evidenceRouter, reportRouter } from "./discipline";
+import { startPunishmentPenaltyJob } from "./punishment";
 import { academicRouter } from "./routes/academic";
 
 const app = express();
@@ -82,6 +83,7 @@ app.listen(port, async () => {
   } catch (error) {
     console.error("Gagal terhubung ke satu atau lebih database:", error);
   }
+  startPunishmentPenaltyJob();
   console.log(`Server Express berjalan di http://localhost:${port}`);
 });
 

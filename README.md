@@ -99,8 +99,11 @@ npm.cmd run prisma:generate
 ```
 
 Setelah memperbarui skema, terapkan perubahan tabel dengan
-`npm.cmd run prisma:push` sebelum menjalankan fitur konseling. Perintah ini
-menyesuaikan database yang terkonfigurasi dengan `schema.prisma`.
+`npm.cmd run prisma:push` sebelum menjalankan fitur konseling atau klaim
+kegiatan. Untuk database yang menerapkan migrasi, gunakan
+`npm.cmd run prisma:migrate:deploy` agar migrasi riwayat klaim dan bukti
+kegiatan diterapkan. Setelah skema berubah, jalankan
+`npm.cmd run prisma:generate` untuk memperbarui Prisma Client.
 
 Gunakan `npm.cmd run prisma:setup` hanya saat perlu membuat database baru dan
 mengimpor file ekspor data.

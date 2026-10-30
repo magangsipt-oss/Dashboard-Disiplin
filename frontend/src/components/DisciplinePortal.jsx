@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LaporSatgas from './student/LaporSatgas';
 import CekLaporan from './student/CekLaporan';
@@ -10,6 +10,9 @@ import KlaimKegiatan from './student/KlaimKegiatan';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
 import AdminClaimQueue from './reports/AdminClaimQueue';
+import AdminPunishment from './reports/AdminPunishment';
+import AdminStudentMonitoring from './reports/AdminStudentMonitoring';
+import AdminLecturerMonitoring from './reports/AdminLecturerMonitoring';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
 import FilePreviewModal from './modals/FilePreviewModal';
 import TemplatePreviewModal from './modals/TemplatePreviewModal';
@@ -37,7 +40,6 @@ import {
   Mail,
   Phone,
   X,
-  Search,
   Users,
   Eye,
   Download,
@@ -76,6 +78,7 @@ const pointChangeTypeLabels = {
   NON_ACADEMIC_ACTIVITY: 'Kegiatan non-akademik',
   REPORTED_VIOLATION: 'Pelanggaran terverifikasi',
   POINT_RESTORATION: 'Pemulihan poin',
+  PUNISHMENT_PENALTY: 'Sanksi punishment terlambat',
 };
 
 // Konstanta statis: dibuat sekali, bukan tiap render.
@@ -110,13 +113,12 @@ const navigationByRole = {
     { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
     { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
     { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan' },
-    { id: 'monitoring', label: 'Monitoring Mahasiswa & Dosen PA' },
-    { id: 'pengurangan-poin', label: 'Pengurangan Poin' },
+    { id: 'punishment', label: 'Punishment' },
+    { id: 'monitoring-mahasiswa', label: 'Monitoring Mahasiswa' },
+    { id: 'monitoring-dpa', label: 'Monitoring DPA' },
     { id: 'cek-laporan', label: 'Cek Laporan' },
   ],
   akademik: [
-    { id: 'lapor', label: 'Lapor Satgas' },
-    { id: 'cek-laporan', label: 'Cek Laporan' },
     { id: 'upload-absensi', label: 'Upload Absensi' },
     { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
     { id: 'upload-dosen', label: 'Upload Data Dosen' },
@@ -188,9 +190,6 @@ export default function App({ hasSessionCookie = false }) {
   const [adminMonitoring, setAdminMonitoring] = useState({ students: [], lecturers: [] });
   const [isLoadingAdminMonitoring, setIsLoadingAdminMonitoring] = useState(false);
   const [adminMonitoringError, setAdminMonitoringError] = useState('');
-  const [adminMonitoringSearch, setAdminMonitoringSearch] = useState('');
-  const [adminMonitoringPage, setAdminMonitoringPage] = useState(1);
-  const [adminCoachingFilter, setAdminCoachingFilter] = useState('ALL');
   const [academicAttendanceFile, setAcademicAttendanceFile] = useState(null);
   const [academicAttendanceResult, setAcademicAttendanceResult] = useState(null);
   const [academicAttendanceError, setAcademicAttendanceError] = useState('');
@@ -237,32 +236,6 @@ export default function App({ hasSessionCookie = false }) {
   );
   const selectedCounselingStudent = appealingStudents.find(
     (student) => String(student.id) === selectedCounselingStudentId,
-  );
-  const deferredMonitoringSearch = useDeferredValue(adminMonitoringSearch);
-  const filteredAdminMonitoringStudents = useMemo(() => {
-    const search = deferredMonitoringSearch.trim().toLowerCase();
-    return adminMonitoring.students.filter((student) => {
-    const matchesSearch = !search || [
-      student.nama,
-      String(student.nim),
-      student.jurusan,
-      student.dosenPa?.nama,
-      student.dosenPa?.nuptk,
-    ].some((value) => String(value ?? '').toLowerCase().includes(search));
-    const matchesFilter =
-      adminCoachingFilter === 'ALL' ||
-      (adminCoachingFilter === 'COACHED' && hasViolation(student) && hasCoachingForLatestViolation(student)) ||
-      (adminCoachingFilter === 'NEEDS_COACHING' && student.dosenPa && hasViolation(student) && !hasCoachingForLatestViolation(student)) ||
-      (adminCoachingFilter === 'NO_ADVISOR' && !student.dosenPa);
-    return matchesSearch && matchesFilter;
-    });
-  }, [adminMonitoring.students, deferredMonitoringSearch, adminCoachingFilter]);
-  const MONITORING_PAGE_SIZE = 50;
-  const monitoringPageCount = Math.max(1, Math.ceil(filteredAdminMonitoringStudents.length / MONITORING_PAGE_SIZE));
-  const currentMonitoringPage = Math.min(adminMonitoringPage, monitoringPageCount);
-  const pagedAdminMonitoringStudents = filteredAdminMonitoringStudents.slice(
-    (currentMonitoringPage - 1) * MONITORING_PAGE_SIZE,
-    currentMonitoringPage * MONITORING_PAGE_SIZE,
   );
 
   useEffect(() => {
@@ -477,7 +450,7 @@ export default function App({ hasSessionCookie = false }) {
     if (
       authenticatedUser?.role !== 'admin' ||
       activePage !== 'dashboard' ||
-      !['dashboard', 'monitoring'].includes(activeTab)
+      !['dashboard', 'monitoring-mahasiswa', 'monitoring-dpa'].includes(activeTab)
     ) {
       return undefined;
     }
@@ -1295,13 +1268,13 @@ export default function App({ hasSessionCookie = false }) {
               </div>
             </header>
 
-            {activeTab === 'lapor' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+            {activeTab === 'lapor' && ['mhs', 'dosen', 'admin'].includes(authenticatedUser?.role) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
                 <LaporSatgas />
               </main>
             )}
 
-            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'admin'].includes(authenticatedUser?.role) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
                 <CekLaporan />
               </main>
@@ -1317,6 +1290,10 @@ export default function App({ hasSessionCookie = false }) {
 
             {authenticatedUser?.role === 'admin' && activeTab === 'klaim-kemahasiswaan' && (
               <AdminClaimQueue />
+            )}
+
+            {authenticatedUser?.role === 'admin' && activeTab === 'punishment' && (
+              <AdminPunishment />
             )}
 
             {authenticatedUser?.role === 'mhs' && activeTab !== 'lapor' && (
@@ -1766,10 +1743,7 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Absensi</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xls, .xlsx) sesuai template dengan kolom <strong>NO, Matakuliah, Kelas, NIM, Nama Mahasiswa, Jumlah Kehadiran</strong>, serta Kehadiran, Sakit, Ijin, dan Alpa. Poin dipotong otomatis berdasarkan kolom Alpa.
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Baris absensi yang sama untuk mata kuliah, kelas, dan NIM yang sudah tersimpan akan dilewati.
+                        Menu ini digunakan untuk mencatat kehadiran mahasiswa agar presensi dan poin kedisiplinan dapat diperbarui.
                       </p>
                       <button
                         type="button"
@@ -1950,10 +1924,7 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Data Mahasiswa Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file Excel (.xls atau .xlsx) sesuai template dengan kolom wajib <strong>NIM, Nama Lengkap, Program Studi, Email, No Handphone, dan Kata Sandi</strong>. Kolom No., Angkatan, dan Nama SMTA bersifat opsional.
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Baris dengan NIM yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
+                        Menu ini digunakan untuk menambahkan data dan akun mahasiswa baru ke dalam sistem.
                       </p>
                       <button
                         type="button"
@@ -2009,13 +1980,7 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Upload Data Dosen Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file Excel (.xls atau .xlsx) sesuai template dengan kolom wajib <strong>Nama Dosen, Email, NUPTK, dan Password</strong>. Kolom No dan PRODI bersifat opsional. Email digunakan dosen untuk login.
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Baris dengan NUPTK atau Email yang sudah terdaftar akan dilewati. File tidak disimpan; kata sandi di-hash sebelum masuk database.
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Atur kolom NUPTK sebagai teks di Excel agar seluruh digit tetap terjaga.
+                        Menu ini digunakan untuk menambahkan data dan akun dosen agar dapat menggunakan layanan dosen di sistem.
                       </p>
                       <button
                         type="button"
@@ -2071,13 +2036,7 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="mb-6">
                       <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                        Unggah file CSV atau Excel (.xls, .xlsx) sesuai template dengan kolom wajib <strong>NIM, Program Studi</strong>, dan <strong>DPA</strong> atau <strong>NUPTK</strong>. Kolom No., Nama Lengkap, dan Angkatan bersifat opsional. NIM dan Program Studi wajib sesuai dengan data mahasiswa; nama DPA harus sesuai dengan nama dosen yang terdaftar.
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Format file mendukung nama lengkap DPA dengan atau tanpa gelar akademik.
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-amber-800">
-                        Pembagian ini otomatis tersinkronisasi ke Dashboard Mahasiswa, Mahasiswa Bimbingan Dosen PA, dan Monitoring Kemahasiswaan.
+                        Menu ini digunakan untuk menetapkan dosen pembimbing akademik bagi mahasiswa agar data bimbingan dan pemantauan mahasiswa tersinkronisasi.
                       </p>
                       <button
                         type="button"
@@ -2590,7 +2549,7 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan'].includes(activeTab) && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
@@ -2612,27 +2571,31 @@ export default function App({ hasSessionCookie = false }) {
                       label: 'Total mahasiswa',
                       value: adminMonitoring.students.length,
                       icon: GraduationCap,
+                      tab: 'monitoring-mahasiswa',
                     },
                     {
                       label: 'Total dosen PA',
                       value: adminMonitoring.lecturers.length,
                       icon: Users,
+                      tab: 'monitoring-dpa',
                     },
                     {
                       label: 'Pelanggaran sudah di-coaching',
                       value: adminMonitoring.students.filter((student) => hasViolation(student) && hasCoachingForLatestViolation(student)).length,
                       icon: CheckCircle2,
+                      tab: 'monitoring-mahasiswa',
                     },
                     {
                       label: 'Perlu dipantau',
                       value: adminMonitoring.students.filter((student) => student.dosenPa && hasViolation(student) && !hasCoachingForLatestViolation(student)).length,
                       icon: Clock,
+                      tab: 'monitoring-mahasiswa',
                     },
-                  ].map(({ label, value, icon: Icon }) => (
+                  ].map(({ label, value, icon: Icon, tab }) => (
                     <button
                       type="button"
                       key={label}
-                      onClick={() => setActiveTab('monitoring')}
+                      onClick={() => setActiveTab(tab)}
                       data-scroll-reveal
                       className="rounded-2xl border border-slate-200 bg-white/95 p-5 text-left shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
                     >
@@ -2654,217 +2617,18 @@ export default function App({ hasSessionCookie = false }) {
                   </p>
                 )}
 
-                {activeTab === 'monitoring' && (
-                  <>
-                    <section data-scroll-reveal className="overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-lg">
-                      <div className="border-b border-slate-100 p-5 sm:p-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                          <div>
-                            <h3 className="text-lg font-extrabold text-slate-900">Monitoring Mahasiswa & Coaching DPA</h3>
-                            <p className="mt-1 text-sm text-slate-500">
-                              Seluruh mahasiswa, dosen PA, pelanggaran terbaru, serta status coaching setelah pelanggaran tercatat.
-                            </p>
-                          </div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="relative block">
-                              <span className="sr-only">Cari mahasiswa atau dosen PA</span>
-                              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                              <input
-                                type="search"
-                                value={adminMonitoringSearch}
-                                onChange={(event) => {
-                                  setAdminMonitoringSearch(event.target.value);
-                                  setAdminMonitoringPage(1);
-                                }}
-                                placeholder="Cari nama, NIM, prodi, atau NUPTK"
-                                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                              />
-                            </label>
-                            <label>
-                              <span className="sr-only">Filter status coaching</span>
-                              <select
-                                value={adminCoachingFilter}
-                                onChange={(event) => {
-                                  setAdminCoachingFilter(event.target.value);
-                                  setAdminMonitoringPage(1);
-                                }}
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                              >
-                                <option value="ALL">Semua status coaching</option>
-                                <option value="NEEDS_COACHING">Pelanggaran belum di-coaching</option>
-                                <option value="COACHED">Pelanggaran sudah di-coaching</option>
-                                <option value="NO_ADVISOR">Belum memiliki dosen PA</option>
-                              </select>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                      {isLoadingAdminMonitoring ? (
-                        <p className="px-6 py-10 text-center text-sm text-slate-500">Memuat data mahasiswa dan dosen…</p>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-slate-200 text-sm">
-                            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                              <tr>
-                                <th className="px-5 py-3 font-bold">Mahasiswa</th>
-                                <th className="px-5 py-3 font-bold">Program studi</th>
-                                <th className="px-5 py-3 font-bold">Dosen PA</th>
-                                <th className="px-5 py-3 font-bold">Poin</th>
-                                <th className="px-5 py-3 font-bold">Pelanggaran terakhir</th>
-                                <th className="px-5 py-3 font-bold">Coaching</th>
-                                <th className="px-5 py-3 font-bold">Catatan terakhir</th>
-                                <th className="px-5 py-3 font-bold">Tindakan</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {pagedAdminMonitoringStudents.map((student) => {
-                                const latestCoaching = student.counselingRecords?.[0];
-                                const latestViolation = getLatestViolation(student);
-                                const coachedAfterViolation = hasCoachingForLatestViolation(student);
-                                return (
-                                  <tr key={student.id} className="align-top hover:bg-slate-50/80">
-                                    <td className="px-5 py-4">
-                                      <p className="font-bold text-slate-900">{student.nama}</p>
-                                      <p className="mt-1 text-xs text-slate-500">NIM {student.nim}</p>
-                                    </td>
-                                    <td className="px-5 py-4 text-slate-700">{student.jurusan}</td>
-                                    <td className="px-5 py-4">
-                                      {student.dosenPa ? (
-                                        <>
-                                          <p className="font-semibold text-slate-800">{student.dosenPa.nama}</p>
-                                          <p className="mt-1 text-xs text-slate-500">NUPTK {String(student.dosenPa.nuptk)}</p>
-                                        </>
-                                      ) : <span className="text-slate-400">Belum ditetapkan</span>}
-                                    </td>
-                                    <td className="px-5 py-4 font-extrabold text-slate-900">{student.pointScore}/100</td>
-                                    <td className="max-w-sm px-5 py-4">
-                                      {latestViolation ? (
-                                        <>
-                                          <p className="font-semibold text-slate-800">
-                                            {latestViolation.severity ?? 'Pelanggaran'}
-                                            {' · '}−{Math.abs(latestViolation.delta)} poin
-                                          </p>
-                                          <p className="mt-1 text-xs text-slate-500">
-                                            {disciplinePillars.find((item) => item.pillar === latestViolation.pillar)?.label ?? latestViolation.pillar}
-                                            {' · '}{new Date(latestViolation.createdAt).toLocaleDateString('id-ID')}
-                                          </p>
-                                          <p className="mt-1 line-clamp-2 text-xs text-slate-600">{latestViolation.reason}</p>
-                                        </>
-                                      ) : <span className="text-slate-400">Belum ada pelanggaran tercatat</span>}
-                                    </td>
-                                    <td className="px-5 py-4">
-                                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-                                        !student.dosenPa
-                                          ? 'bg-slate-100 text-slate-700'
-                                          : !latestViolation || coachedAfterViolation
-                                            ? 'bg-emerald-100 text-emerald-800'
-                                            : 'bg-amber-100 text-amber-800'
-                                      }`}>
-                                        {!student.dosenPa
-                                          ? 'Belum ada DPA'
-                                          : !latestViolation
-                                            ? 'Tidak ada pelanggaran'
-                                            : coachedAfterViolation
-                                              ? 'Sudah coaching'
-                                              : 'Perlu coaching'}
-                                      </span>
-                                    </td>
-                                    <td className="max-w-sm px-5 py-4">
-                                      {latestCoaching ? (
-                                        <>
-                                          <p className="line-clamp-2 text-slate-700">{latestCoaching.note}</p>
-                                          <p className="mt-1 text-xs text-slate-500">
-                                            {new Date(latestCoaching.counselingDate).toLocaleDateString('id-ID')} • {latestCoaching.dosen?.nama}
-                                          </p>
-                                        </>
-                                      ) : <span className="text-slate-400">Belum ada catatan coaching</span>}
-                                    </td>
-                                    <td className="px-5 py-4">
-                                      <button
-                                        type="button"
-                                        onClick={() => setActiveTab('laporan-kemahasiswaan')}
-                                        className="whitespace-nowrap rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-800 transition hover:bg-red-50"
-                                      >
-                                        Buka antrean laporan
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {filteredAdminMonitoringStudents.length === 0 && (
-                                <tr>
-                                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-500">
-                                    {adminMonitoring.students.length === 0 ? 'Belum ada data mahasiswa.' : 'Tidak ada mahasiswa yang cocok dengan pencarian atau filter.'}
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                          {monitoringPageCount > 1 && (
-                            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm">
-                              <span className="text-slate-500">
-                                Halaman {currentMonitoringPage} dari {monitoringPageCount} · {filteredAdminMonitoringStudents.length} mahasiswa
-                              </span>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setAdminMonitoringPage(currentMonitoringPage - 1)}
-                                  disabled={currentMonitoringPage <= 1}
-                                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                >
-                                  Sebelumnya
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setAdminMonitoringPage(currentMonitoringPage + 1)}
-                                  disabled={currentMonitoringPage >= monitoringPageCount}
-                                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                                >
-                                  Berikutnya
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </section>
-
-                    <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
-                      <h3 className="text-lg font-extrabold text-slate-900">Database Dosen PA</h3>
-                      <p className="mt-1 text-sm text-slate-500">Ringkasan jumlah mahasiswa bimbingan dan catatan coaching per dosen.</p>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {adminMonitoring.lecturers.map((lecturer) => (
-                          <article key={lecturer.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="font-bold text-slate-900">{lecturer.nama}</p>
-                            <p className="mt-1 text-xs text-slate-500">NUPTK {String(lecturer.nuptk)}</p>
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-                              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-blue-800">{lecturer._count.mahasiswaBimbingan} mahasiswa</span>
-                              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">{lecturer._count.counselingRecords} catatan coaching</span>
-                            </div>
-                          </article>
-                        ))}
-                        {adminMonitoring.lecturers.length === 0 && (
-                          <p className="text-sm text-slate-500">Belum ada data dosen.</p>
-                        )}
-                      </div>
-                    </section>
-                  </>
+                {activeTab === 'monitoring-mahasiswa' && (
+                  <AdminStudentMonitoring
+                    students={adminMonitoring.students}
+                    isLoading={isLoadingAdminMonitoring}
+                  />
                 )}
 
-                {activeTab === 'pengurangan-poin' && (
-                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-                    <h3 className="text-lg font-extrabold text-slate-900">Pengurangan poin melalui konfirmasi laporan</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                      Kemahasiswaan tidak lagi mengurangi poin secara manual. Pengurangan hanya dicatat setelah Dosen PA mengonfirmasi laporan teridentifikasi; gunakan antrean laporan untuk menetapkan tindak lanjut edukatif.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('laporan-kemahasiswaan')}
-                      className="mt-4 rounded-xl bg-red-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-900"
-                    >
-                      Buka antrean laporan
-                    </button>
-                  </section>
+                {activeTab === 'monitoring-dpa' && (
+                  <AdminLecturerMonitoring
+                    lecturers={adminMonitoring.lecturers}
+                    isLoading={isLoadingAdminMonitoring}
+                  />
                 )}
               </main>
             )}

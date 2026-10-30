@@ -26,7 +26,6 @@ const severities = [
 ];
 
 const initialForm = {
-  jenis: "TEMUAN",
   pillar: "",
   severityUsulan: "",
   modeTerlapor: "DIKETAHUI",
@@ -185,13 +184,6 @@ export default function LaporSatgas() {
             <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{submitError}</p>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-semibold text-slate-700">
-              Jenis laporan
-              <select name="jenis" value={form.jenis} onChange={updateField} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
-                <option value="TEMUAN">Temuan ketidaksesuaian</option>
-                <option value="APRESIASI">Apresiasi perilaku positif</option>
-              </select>
-            </label>
             <label className="text-sm font-semibold text-slate-700">
               Pilar
               <select required name="pillar" value={form.pillar} onChange={updateField} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">

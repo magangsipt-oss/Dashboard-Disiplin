@@ -10,7 +10,8 @@ export type PointChangeAction = keyof typeof pointChangeRules;
 export type PointChangeType =
   | (typeof pointChangeRules)[PointChangeAction]["type"]
   | "REPORTED_VIOLATION"
-  | "POINT_RESTORATION";
+  | "POINT_RESTORATION"
+  | "PUNISHMENT_PENALTY";
 export type DisciplinePillar =
   | "WAKTU"
   | "AKADEMIK"
@@ -75,7 +76,7 @@ export function getPointChangeMetadata(
   if (type === "REPORTED_VIOLATION") {
     return selectedMetadata ?? { pillar: null, severity: null };
   }
-  if (type === "POINT_RESTORATION") {
+  if (type === "POINT_RESTORATION" || type === "PUNISHMENT_PENALTY") {
     return { pillar: null, severity: null };
   }
 
@@ -116,4 +117,20 @@ export function calculatePointChange(
     currentScore,
     pointChangeRules[action].delta,
   );
+}
+
+// Sanksi punishment yang tidak ditindaklanjuti: 2 poin per hari lewat batas.
+export const punishmentPenaltyPerDay = 2;
+const dayInMilliseconds = 24 * 60 * 60 * 1000;
+
+// Semua tanggal berupa tanggal kalender (UTC tengah malam, kolom @db.Date).
+// Hari batas waktu masih boleh dikerjakan; denda mulai hari berikutnya.
+// countedUntil adalah tanggal terakhir yang sudah dihitung atau dijeda.
+export function countPunishmentPenaltyDays(
+  deadline: Date,
+  countedUntil: Date | null,
+  today: Date,
+): number {
+  const start = Math.max(deadline.getTime(), countedUntil?.getTime() ?? 0);
+  return Math.max(0, Math.floor((today.getTime() - start) / dayInMilliseconds));
 }

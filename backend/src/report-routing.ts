@@ -2,7 +2,6 @@ import {
   PeranPenerima,
   Prisma,
   type DisciplinePillar,
-  type JenisLaporan,
 } from "@prisma/client";
 
 const pillarLabels: Record<DisciplinePillar, string> = {
@@ -66,7 +65,6 @@ export async function resolveReportRoute(
 }
 
 type BuildReportNotificationTextsInput = {
-  jenis: JenisLaporan;
   pillar: DisciplinePillar;
   tanggalKejadian: Date;
   route: ReportRoute;
@@ -83,7 +81,6 @@ export type ReportNotificationTexts = {
 };
 
 export function buildReportNotificationTexts({
-  jenis,
   pillar,
   tanggalKejadian,
   route,
@@ -96,9 +93,7 @@ export function buildReportNotificationTexts({
     year: "numeric",
     timeZone: "UTC",
   });
-  const jenisLabel = jenis === "APRESIASI" ? "Apresiasi" : "Temuan";
-  const detailKejadian = `${jenisLabel} · ${pillarLabels[pillar]} · ${date}`;
-  const isApresiasi = jenis === "APRESIASI";
+  const detailKejadian = `Pelanggaran · ${pillarLabels[pillar]} · ${date}`;
   let kemahasiswaanIsi: string;
 
   if (route.jalur === "TERIDENTIFIKASI") {
@@ -114,22 +109,20 @@ export function buildReportNotificationTexts({
   return {
     student: route.jalur === "TERIDENTIFIKASI"
       ? {
-          judul: isApresiasi ? "Laporan apresiasi diterima" : "Ada laporan yang melibatkan Anda",
-          isi: isApresiasi
-            ? `Anda menerima laporan apresiasi. ${detailKejadian}`
-            : `Ada laporan yang melibatkan Anda. Dosen PA akan meninjau laporan; poin belum berubah sebelum konfirmasi. ${detailKejadian}`,
-          tautanTab: isApresiasi ? "dashboard" : "tindak-lanjut",
+          judul: "Ada laporan yang melibatkan Anda",
+          isi: `Ada laporan yang melibatkan Anda. Dosen PA akan meninjau laporan; poin belum berubah sebelum konfirmasi. ${detailKejadian}`,
+          tautanTab: "tindak-lanjut",
         }
       : null,
     dosen: route.jalur === "TERIDENTIFIKASI" && route.student.dosenPaId !== null
       ? {
           judul: "Laporan terkait mahasiswa bimbingan",
-          isi: `Ada ${jenisLabel.toLowerCase()} terkait mahasiswa bimbingan Anda. ${detailKejadian}`,
+          isi: `Ada laporan pelanggaran terkait mahasiswa bimbingan Anda. ${detailKejadian}`,
           tautanTab: "laporan",
         }
       : null,
     kemahasiswaan: {
-      judul: isApresiasi ? "Laporan apresiasi baru" : "Laporan baru perlu ditinjau",
+      judul: "Laporan baru perlu ditinjau",
       isi: kemahasiswaanIsi,
       tautanTab: "laporan",
     },

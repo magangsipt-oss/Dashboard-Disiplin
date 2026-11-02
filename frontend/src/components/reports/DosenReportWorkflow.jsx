@@ -60,9 +60,11 @@ function ConfirmationHistory({ history, isLoading }) {
   const visible = filter === "SEMUA" ? withState : withState.filter(({ state }) => state.key === filter);
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2">
-        <History className="h-5 w-5 text-slate-700" />
+    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100">
+          <History className="h-5 w-5 text-red-800" />
+        </div>
         <h3 className="text-lg font-bold text-slate-900">Riwayat laporan yang sudah Anda putuskan</h3>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -82,9 +84,9 @@ function ConfirmationHistory({ history, isLoading }) {
         ))}
       </div>
       {isLoading ? (
-        <p className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Memuat riwayat...</p>
+        <p className="rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat riwayat...</p>
       ) : visible.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
+        <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
           Belum ada riwayat laporan pada kategori ini.
         </p>
       ) : (
@@ -288,8 +290,8 @@ export default function DosenReportWorkflow() {
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
       <header className="rounded-3xl bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#991b1b] p-6 text-white shadow-xl sm:p-8">
-        <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Dosen Pembimbing Akademik</p>
-        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Konfirmasi Laporan & Bukti Tindak Lanjut</h2>
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Dosen</p>
+        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Konfirmasi Laporan</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-red-100">
           Tinjau laporan mahasiswa bimbingan Anda. Poin baru dikurangi setelah pelanggaran dikonfirmasi. Setelah mahasiswa menyelesaikan tugas dari Kemahasiswaan, periksa buktinya untuk memulihkan poin.
         </p>
@@ -298,21 +300,23 @@ export default function DosenReportWorkflow() {
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
       {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p>}
 
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Clock3 className="h-5 w-5 text-amber-700" />
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+            <Clock3 className="h-5 w-5 text-amber-700" />
+          </div>
           <h3 className="text-lg font-bold text-slate-900">Menunggu konfirmasi pelanggaran</h3>
         </div>
         {isLoading ? (
-          <p className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Memuat laporan...</p>
+          <p className="rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat laporan...</p>
         ) : reports.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
+          <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
             Tidak ada laporan teridentifikasi yang menunggu konfirmasi Anda.
           </p>
         ) : reports.map((report) => {
           const matchingRules = rules.filter((rule) => rule.pillar === report.pillar);
           return (
-            <article key={report.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <article key={report.id} className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Laporan #{report.id}</p>
@@ -378,19 +382,21 @@ export default function DosenReportWorkflow() {
         })}
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <FileCheck2 className="h-5 w-5 text-emerald-700" />
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+            <FileCheck2 className="h-5 w-5 text-emerald-700" />
+          </div>
           <h3 className="text-lg font-bold text-slate-900">Bukti tindak lanjut menunggu persetujuan</h3>
         </div>
         {isLoading ? (
-          <p className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Memuat bukti...</p>
+          <p className="rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat bukti...</p>
         ) : evidence.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
+          <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
             Belum ada bukti penyelesaian yang perlu diperiksa.
           </p>
         ) : evidence.map((task) => (
-          <article key={task.id} className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
+          <article key={task.id} className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
                 {task.student.nama} · NIM {task.student.nim} · Laporan #{task.perubahanPoin.laporan?.id}
@@ -436,13 +442,15 @@ export default function DosenReportWorkflow() {
 
       <ConfirmationHistory history={history} isLoading={isLoading} />
 
-      <p className="text-xs text-slate-500">
-        <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
-        Identitas pelapor anonim tidak ditampilkan kepada Dosen PA maupun mahasiswa.
-      </p>
-      <button type="button" onClick={() => loadQueue()} className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-        Muat ulang antrean
-      </button>
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+        <p className="flex items-center gap-2 text-sm text-slate-600">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700" />
+          Identitas pelapor anonim tidak ditampilkan kepada Dosen PA maupun mahasiswa.
+        </p>
+        <button type="button" onClick={() => loadQueue()} className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:self-auto">
+          Muat ulang antrean
+        </button>
+      </div>
     </section>
   );
 }

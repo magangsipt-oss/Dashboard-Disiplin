@@ -45,7 +45,7 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
     response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
       message:
         error.code === "LIMIT_FILE_SIZE"
-          ? "Ukuran foto bukti maksimal 2 MB."
+          ? "Ukuran file bukti melebihi batas."
           : "Bukti foto tidak valid.",
     });
     return;

@@ -349,7 +349,7 @@ export default function AdminPunishment() {
     <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-6 py-8">
       <header className="rounded-3xl bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#991b1b] p-6 text-white shadow-xl sm:p-8">
         <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Kemahasiswaan</p>
-        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Punishment Mahasiswa</h2>
+        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Punishment</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-red-100">
           Tentukan bentuk dan jangka waktu punishment untuk pelanggaran yang sudah dikonfirmasi Dosen PA. Punishment berjalan sampai bukti penyelesaian disetujui Dosen PA, lalu poin pelanggaran dikembalikan. Bila jangka waktu lewat tanpa penyelesaian, punishment masuk bagian Terlambat dan poin mahasiswa berkurang 2 setiap hari.
         </p>

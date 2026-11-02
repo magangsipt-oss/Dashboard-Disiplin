@@ -213,7 +213,7 @@ export default function AdminClaimQueue() {
     <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-6 py-8">
       <header className="rounded-3xl bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#991b1b] p-6 text-white shadow-xl sm:p-8">
         <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Kemahasiswaan</p>
-        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Verifikasi Klaim Kegiatan</h2>
+        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Klaim Kegiatan</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-red-100">
           Periksa sertifikat atau dokumentasi lomba dan kegiatan non-akademik dari mahasiswa. Poin tambahan langsung tercatat setelah klaim disetujui.
         </p>

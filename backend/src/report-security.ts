@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 
 export function createTrackingCode(): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -21,4 +21,14 @@ export function createTrackingCode(): string {
 
 export function hashTrackingCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
+}
+
+// Pelapor disimpan sebagai HMAC agar laporan bisa ditampilkan ke pelapornya
+// sendiri tanpa menyimpan identitas yang bisa dibaca Dosen/Admin.
+export function hashReporter(role: string, id: number): string {
+  const secret = process.env.REPORTER_HASH_SECRET;
+  if (!secret) {
+    throw new Error("REPORTER_HASH_SECRET belum diatur.");
+  }
+  return createHmac("sha256", secret).update(`${role}:${id}`).digest("hex");
 }

@@ -96,37 +96,52 @@ const heroImages = [
 ];
 const navigationByRole = {
   mhs: [
-    { id: 'dashboard', label: 'Aktivitas' },
-    { id: 'sanggah', label: 'Sanggah Pelanggaran' },
-    { id: 'lapor', label: 'Lapor Satgas' },
-    { id: 'cek-laporan', label: 'Cek Laporan' },
-    { id: 'tindak-lanjut', label: 'Tindak Lanjut' },
-    { id: 'klaim', label: 'Klaim Kegiatan' },
+    { id: 'dashboard', label: 'Aktivitas', description: 'Ringkasan skor kedisiplinan, presensi, dan riwayat perubahan poin Anda.' },
+    { id: 'sanggah', label: 'Sanggah Pelanggaran', description: 'Ajukan keberatan atas pengurangan poin yang menurut Anda tidak sesuai, lengkap dengan alasan dan bukti.' },
+    { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
+    { id: 'tindak-lanjut', label: 'Tindak Lanjut', description: 'Lihat tugas pembinaan dari pelanggaran yang dikonfirmasi dan unggah bukti penyelesaian untuk memulihkan poin.' },
+    { id: 'klaim', label: 'Klaim Kegiatan', description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
   ],
   dosen: [
-    { id: 'bimbingan', label: 'Mahasiswa Bimbingan' },
-    { id: 'laporan-dpa', label: 'Konfirmasi Laporan' },
-    { id: 'konseling', label: 'Catatan & Konseling' },
-    { id: 'lapor', label: 'Lapor Satgas' },
-    { id: 'cek-laporan', label: 'Cek Laporan' },
+    { id: 'bimbingan', label: 'Mahasiswa Bimbingan', description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
+    { id: 'laporan-dpa', label: 'Konfirmasi Laporan', description: 'Tinjau laporan pelanggaran mahasiswa bimbingan Anda, lalu konfirmasi atau tolak.' },
+    { id: 'konseling', label: 'Catatan & Konseling', description: 'Catat pembinaan dan jadwalkan panggilan konseling untuk mahasiswa bimbingan.' },
+    { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
   admin: [
-    { id: 'dashboard', label: 'Dashboard Kemahasiswaan' },
-    { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
-    { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan' },
-    { id: 'punishment', label: 'Punishment' },
-    { id: 'pengaturan-poin', label: 'Pengaturan Poin' },
-    { id: 'data-poin', label: 'Monitoring Mahasiswa' },
-    { id: 'monitoring-dpa', label: 'Monitoring DPA' },
-    { id: 'cek-laporan', label: 'Cek Laporan' },
+    { id: 'dashboard', label: 'Dashboard Kemahasiswaan', description: 'Ringkasan pemantauan kedisiplinan seluruh mahasiswa.' },
+    { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan', description: 'Telusuri laporan satgas yang masuk dan teruskan ke Dosen PA untuk dikonfirmasi.' },
+    { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan', description: 'Verifikasi klaim poin kegiatan yang diajukan mahasiswa.' },
+    { id: 'punishment', label: 'Punishment', description: 'Tetapkan tindak lanjut edukatif untuk pelanggaran yang sudah dikonfirmasi.' },
+    { id: 'pengaturan-poin', label: 'Pengaturan Poin', description: 'Atur aturan poin kedisiplinan mahasiswa.' },
+    { id: 'data-poin', label: 'Monitoring Mahasiswa', description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
+    { id: 'monitoring-dpa', label: 'Monitoring DPA', description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
   akademik: [
-    { id: 'upload-absensi', label: 'Upload Absensi' },
-    { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa' },
-    { id: 'upload-dosen', label: 'Upload Data Dosen' },
-    { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan' },
+    { id: 'upload-absensi', label: 'Upload Absensi', description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },
+    { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa', description: 'Unggah data mahasiswa agar akun dan profil tersinkron dengan sistem.' },
+    { id: 'upload-dosen', label: 'Upload Data Dosen', description: 'Unggah data dosen agar akun dan profil tersinkron dengan sistem.' },
+    { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan', description: 'Tetapkan dosen pembimbing akademik untuk setiap mahasiswa.' },
+    { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
 };
+
+function MenuHeader({ item, roleLabel }) {
+  if (!item) return null;
+  return (
+    <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
+      <p className="text-xs font-bold uppercase tracking-wider text-amber-300">{roleLabel}</p>
+      <h2 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">{item.label}</h2>
+      {item.description && (
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">{item.description}</p>
+      )}
+    </section>
+  );
+}
 
 const getLatestViolation = (student) => student.pointChanges?.[0];
 const hasViolation = (student) => Boolean(getLatestViolation(student));
@@ -220,6 +235,8 @@ export default function App({ hasSessionCookie = false }) {
 
   const dashboardNavigation =
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
+  const homeTab = dashboardNavigation[0].id;
+  const activeMenu = dashboardNavigation.find((item) => item.id === activeTab);
   const filteredAdvisorStudents = advisorStudents.filter((student) => {
     if (studentRiskFilter === 'UNDISCIPLINED') {
       return student.pointScore <= 50;
@@ -1270,14 +1287,16 @@ export default function App({ hasSessionCookie = false }) {
               </div>
             </header>
 
-            {activeTab === 'lapor' && ['mhs', 'dosen', 'admin'].includes(authenticatedUser?.role) && (
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
-                <LaporSatgas />
+            {activeTab === 'lapor' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
+                <LaporSatgas onCheckReports={() => setActiveTab('cek-laporan')} />
               </main>
             )}
 
-            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'admin'].includes(authenticatedUser?.role) && (
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8">
+            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
                 <CekLaporan />
               </main>
             )}
@@ -1306,8 +1325,9 @@ export default function App({ hasSessionCookie = false }) {
               <AdminPointData />
             )}
 
-            {authenticatedUser?.role === 'mhs' && activeTab !== 'lapor' && (
+            {authenticatedUser?.role === 'mhs' && !['lapor', 'cek-laporan'].includes(activeTab) && (
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
+              {activeTab === homeTab ? (
               <div data-scroll-reveal className="bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-red-600/30">
                 <div className="space-y-2 z-10">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-900/40 rounded-full text-amber-300 text-xs font-semibold border border-red-500/30">
@@ -1339,11 +1359,14 @@ export default function App({ hasSessionCookie = false }) {
                   </div>
                 </div>
               </div>
+              ) : (
+                <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
+              )}
 
               {activeTab === 'dashboard' && (
                 <>
                   <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
-                    Skor kedisiplinan dimulai dari 100 poin dan dipengaruhi oleh 5 pilar: Disiplin Waktu, Disiplin Akademik, Disiplin Tata Tertib dan Etika, Disiplin Prosedur dan Keselamatan (K3), serta Disiplin Lingkungan. Poin juga dapat bertambah dari lomba atau kegiatan non-akademik yang telah diverifikasi, dengan skor maksimal 200 poin.
+                    Setiap mahasiswa memulai dengan 100 poin. Poin akan berkurang jika ada pelanggaran pada 5 pilar disiplin: Waktu, Akademik, Tata Tertib dan Etika, Prosedur dan Keselamatan (K3), serta Lingkungan. Poin bisa bertambah dari lomba atau kegiatan non-akademik yang sudah diverifikasi, hingga maksimal 200 poin.
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1360,7 +1383,7 @@ export default function App({ hasSessionCookie = false }) {
                   </div>
                   <div className="mt-3 space-y-1.5">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-500">Predikat</span>
+                      <span className="text-slate-500">Kategori</span>
                       <span className={`font-semibold ${
                         studentPoints?.score >= 90
                           ? 'text-emerald-700'
@@ -1384,20 +1407,20 @@ export default function App({ hasSessionCookie = false }) {
                           <dd className="font-semibold text-slate-700">100</dd>
                         </div>
                         <div className="flex justify-between">
-                          <dt className="text-slate-500">Pengurangan pelanggaran</dt>
+                          <dt className="text-slate-500">Poin berkurang karena pelanggaran</dt>
                           <dd className="font-semibold text-red-700">−{studentPoints.pointsDeducted ?? 0}</dd>
                         </div>
                         <div className="flex justify-between">
                           <dt className="text-slate-500">
-                            Penambahan poin
-                            {studentPoints.verifiedActivityCount > 0 && ` (${studentPoints.verifiedActivityCount} lomba/kegiatan)`}
+                            Poin bertambah
+                            {studentPoints.verifiedActivityCount > 0 && ` (dari ${studentPoints.verifiedActivityCount} lomba/kegiatan)`}
                           </dt>
                           <dd className="font-semibold text-emerald-700">+{studentPoints.pointsAdded ?? 0}</dd>
                         </div>
                       </dl>
                     )}
                     <p className="text-[10px] leading-relaxed text-slate-500">
-                      Disiplin 90–200 · Kurang disiplin 51–89 · Tidak disiplin 0–50
+                      Kategori: Disiplin 90–200 · Kurang Disiplin 51–89 · Tidak Disiplin 0–50
                     </p>
                     {studentPointsError && (
                       <p className="text-xs text-red-700" role="alert">{studentPointsError}</p>
@@ -1415,24 +1438,24 @@ export default function App({ hasSessionCookie = false }) {
                   </div>
                   <div className="mt-3 space-y-1">
                     <div className="flex justify-between text-xs text-slate-600">
-                      <span>Sumber data: unggahan Excel/CSV tim akademik</span>
+                      <span>Dihitung dari data presensi yang diunggah bagian akademik</span>
                     </div>
                   </div>
                 </div>
 
                 <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status Bimbingan PA</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Dosen Pembimbing Akademik</span>
                     <MessageSquare className="w-5 h-5 text-purple-600" />
                   </div>
                   <div>
                     <span className="text-base font-bold text-slate-900 leading-snug block">
-                      {advisor?.nama ?? 'Belum ditetapkan oleh bagian akademik'}
+                      {advisor?.nama ?? 'Belum ditentukan'}
                     </span>
                     <p className="text-xs text-slate-500 mt-1">
                       {advisor
-                        ? 'Dosen pembimbing akademik Anda.'
-                        : 'Nama Dosen PA akan tampil setelah ditetapkan oleh bagian akademik.'}
+                        ? 'Hubungi Dosen PA Anda jika memerlukan bimbingan.'
+                        : 'Nama Dosen PA akan muncul setelah ditentukan oleh bagian akademik.'}
                     </p>
                     {advisorError && (
                       <p className="mt-2 text-xs text-red-700" role="alert">{advisorError}</p>
@@ -1443,8 +1466,8 @@ export default function App({ hasSessionCookie = false }) {
 
                   <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
                     <div className="mb-4">
-                      <h3 className="text-lg font-bold text-slate-900">Profil Disiplin per Pilar</h3>
-                      <p className="mt-1 text-sm text-slate-500">Ringkasan pelanggaran dan poin yang terpotong pada setiap pilar.</p>
+                      <h3 className="text-lg font-bold text-slate-900">Rincian per Pilar Disiplin</h3>
+                      <p className="mt-1 text-sm text-slate-500">Jumlah pelanggaran dan poin yang berkurang di setiap pilar.</p>
                     </div>
                     {isLoadingStudentPoints ? (
                       <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Memuat profil disiplin...</p>
@@ -1481,7 +1504,7 @@ export default function App({ hasSessionCookie = false }) {
                                   <dd className="font-bold text-slate-900">{pillar.violationCount}</dd>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 border-t border-slate-200/70 pt-2">
-                                  <dt className="text-slate-600">Poin terpotong</dt>
+                                  <dt className="text-slate-600">Poin berkurang</dt>
                                   <dd className="font-bold text-slate-900">{pillar.pointsDeducted}</dd>
                                 </div>
                               </dl>
@@ -1714,8 +1737,9 @@ export default function App({ hasSessionCookie = false }) {
             </main>
             )}
 
-            {authenticatedUser?.role === 'akademik' && activeTab !== 'lapor' && (
+            {authenticatedUser?.role === 'akademik' && !['lapor', 'cek-laporan'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                {activeTab === homeTab ? (
                 <section className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
                     Portal Akademik
@@ -1727,6 +1751,9 @@ export default function App({ hasSessionCookie = false }) {
                     Login Akademik berhasil. Akun Anda terhubung sebagai petugas Akademik.
                   </p>
                 </section>
+                ) : (
+                  <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
+                )}
 
                 {activeTab === 'dashboard' && (
                   <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
@@ -2194,8 +2221,9 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'dosen' && !['lapor', 'laporan-dpa'].includes(activeTab) && (
+            {authenticatedUser?.role === 'dosen' && !['lapor', 'cek-laporan', 'laporan-dpa'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                {activeTab === homeTab ? (
                 <section data-scroll-reveal className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl md:flex-row md:items-center sm:p-8">
                   <div className="z-10 space-y-2">
                     <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-900/40 px-3 py-1 text-xs font-semibold text-amber-300">
@@ -2229,6 +2257,9 @@ export default function App({ hasSessionCookie = false }) {
                     </div>
                   </div>
                 </section>
+                ) : (
+                  <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
+                )}
 
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
                   Data presensi akan tersedia setelah tim akademik mengunggah file Excel/CSV melalui Akses Akademik.
@@ -2381,6 +2412,16 @@ export default function App({ hasSessionCookie = false }) {
                                           <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${statusClass}`}>{statusLabel}</span>
                                         </div>
                                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{appeal.alasan}</p>
+                                        {appeal.buktiFileName && (
+                                          <a
+                                            href={`/api/sanggahan/${appeal.id}/bukti`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-red-800 hover:underline"
+                                          >
+                                            <FileText className="h-4 w-4" /> Lihat bukti tambahan
+                                          </a>
+                                        )}
                                         {appeal.status === 'DIAJUKAN' ? (
                                           <div className="mt-3 space-y-2">
                                             <textarea
@@ -2559,8 +2600,9 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin'].includes(activeTab) && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'cek-laporan', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+                {activeTab === homeTab ? (
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
                   <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
@@ -2570,6 +2612,9 @@ export default function App({ hasSessionCookie = false }) {
                     Pantau data mahasiswa dan dosen PA, telusuri laporan anonim, dan tetapkan tindak lanjut edukatif setelah laporan dikonfirmasi Dosen PA.
                   </p>
                 </section>
+                ) : (
+                  <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
+                )}
 
                 <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow">
                   Poin berkurang setelah Dosen PA mengonfirmasi pelanggaran. Kemahasiswaan menetapkan tindak lanjut; poin dipulihkan oleh sistem setelah bukti mahasiswa disetujui Dosen PA.

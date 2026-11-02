@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
-import { jsonRequest, studentApi } from "@/lib/api";
+import { FileText, Paperclip, X } from "lucide-react";
+import { studentApi } from "@/lib/api";
 
 const appealStatus = {
   DIAJUKAN: "Diajukan",
   DISETUJUI: "Disetujui",
   DITOLAK: "Ditolak",
 };
+
+const acceptedTypes = ["image/jpeg", "image/png", "application/pdf"];
+const maxFileSize = 5 * 1024 * 1024;
 
 const changeLabels = {
   LATE: "Terlambat",
@@ -32,6 +35,7 @@ export default function SanggahanMahasiswa({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [changeId, setChangeId] = useState(initialChangeId ? String(initialChangeId) : "");
   const [reason, setReason] = useState("");
+  const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitStatus, setSubmitStatus] = useState("");
@@ -74,18 +78,35 @@ export default function SanggahanMahasiswa({
     if (initialChangeId) onInitialChangeHandled();
   }, [initialChangeId, onInitialChangeHandled]);
 
+  function selectFile(event) {
+    const selected = event.target.files?.[0] ?? null;
+    setSubmitError("");
+    event.target.value = "";
+    if (selected && !acceptedTypes.includes(selected.type)) {
+      setSubmitError("File bukti harus berupa JPEG, PNG, atau PDF.");
+      return;
+    }
+    if (selected && selected.size > maxFileSize) {
+      setSubmitError("Ukuran file bukti maksimal 5 MB.");
+      return;
+    }
+    setFile(selected);
+  }
+
   async function submitAppeal(event) {
     event.preventDefault();
     setIsSubmitting(true);
     setSubmitError("");
     setSubmitStatus("");
     try {
-      await studentApi(
-        "/api/sanggahan",
-        jsonRequest("POST", { perubahanPoinId: Number(changeId), alasan: reason }),
-      );
+      const body = new FormData();
+      body.append("perubahanPoinId", changeId);
+      body.append("alasan", reason);
+      if (file) body.append("bukti", file);
+      await studentApi("/api/sanggahan", { method: "POST", body });
       setSubmitStatus("Sanggahan berhasil diajukan.");
       setReason("");
+      setFile(null);
       setIsModalOpen(false);
       await loadAppeals();
     } catch (submitFailure) {
@@ -117,7 +138,7 @@ export default function SanggahanMahasiswa({
           <div className="mt-5 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/50 text-xs font-bold uppercase tracking-wider text-slate-500">
-                <tr><th className="px-3 py-3">Tanggal</th><th className="px-3 py-3">Perubahan poin</th><th className="px-3 py-3">Alasan</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Catatan pemeriksa</th></tr>
+                <tr><th className="px-3 py-3">Tanggal</th><th className="px-3 py-3">Perubahan poin</th><th className="px-3 py-3">Alasan</th><th className="px-3 py-3">Bukti</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Catatan pemeriksa</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {appeals.map((appeal) => (
@@ -125,6 +146,15 @@ export default function SanggahanMahasiswa({
                     <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-500">{new Date(appeal.createdAt).toLocaleDateString("id-ID")}</td>
                     <td className="px-3 py-3 text-slate-700">{changeLabels[appeal.perubahanPoin.type] ?? appeal.perubahanPoin.type} ({appeal.perubahanPoin.delta})</td>
                     <td className="max-w-xs px-3 py-3 text-xs text-slate-600">{appeal.alasan}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-xs">
+                      {appeal.buktiFileName ? (
+                        <a href={`/api/sanggahan/${appeal.id}/bukti`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-red-800 hover:underline">
+                          <Paperclip className="h-3.5 w-3.5" /> Lihat
+                        </a>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
                     <td className="px-3 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${appeal.status === "DISETUJUI" ? "bg-emerald-100 text-emerald-800" : appeal.status === "DITOLAK" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>{appealStatus[appeal.status] ?? appeal.status}</span></td>
                     <td className="px-3 py-3 text-xs text-slate-600">{appeal.catatanPemeriksa ?? "-"}</td>
                   </tr>
@@ -163,9 +193,27 @@ export default function SanggahanMahasiswa({
               Alasan dan kronologi (minimal 20 karakter)
               <textarea required minLength={20} maxLength={2000} rows={5} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </label>
+            <div className="text-sm font-semibold text-slate-700">
+              Bukti tambahan (opsional)
+              {file ? (
+                <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-normal text-slate-700">
+                  <Paperclip className="h-4 w-4 flex-shrink-0" />
+                  <span className="flex-1 truncate">{file.name}</span>
+                  <button type="button" onClick={() => setFile(null)} aria-label="Hapus file" className="rounded-lg p-1 text-slate-500 hover:bg-slate-200">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-600 hover:bg-slate-50">
+                  <Paperclip className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">Pilih foto atau dokumen JPEG, PNG, atau PDF (maks. 5 MB)</span>
+                  <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={selectFile} className="sr-only" />
+                </label>
+              )}
+            </div>
             {submitError && <p className="text-sm text-red-700" role="alert">{submitError}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700">Batal</button>
+              <button type="button" onClick={() => { setIsModalOpen(false); setFile(null); }} className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700">Batal</button>
               <button type="submit" disabled={isSubmitting || !changeId || reason.trim().length < 20} className="rounded-xl bg-red-800 px-4 py-2 text-sm font-bold text-white hover:bg-red-900 disabled:opacity-60">{isSubmitting ? "Mengirim..." : "Kirim Sanggahan"}</button>
             </div>
           </form>

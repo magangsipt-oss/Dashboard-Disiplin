@@ -28,7 +28,7 @@ import { recordPointChange } from "./point-ledger";
 import { sendPointDeductionEmail } from "./mailer";
 import { skipNotificationEmailFor } from "./notification-email";
 import { database, getSessionForRequest, requireRole, type Session } from "./auth";
-import { createTrackingCode, hashTrackingCode } from "./report-security";
+import { createTrackingCode, hashReporter, hashTrackingCode } from "./report-security";
 import {
   isPunishmentLate,
   openPunishmentStatuses,
@@ -61,6 +61,26 @@ const upload = multer({
     callback(null, true);
   },
 });
+// Bukti tambahan sanggahan bersifat opsional: foto atau PDF, maks. 5 MB.
+const appealUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+
+// Foto dinormalisasi ulang lewat sharp; PDF dicek tanda tangannya.
+async function normalizeDocumentFile(
+  file: Express.Multer.File,
+): Promise<{ data: Buffer; extension: string } | null> {
+  if (file.mimetype === "application/pdf") {
+    if (file.buffer.subarray(0, 5).toString("latin1") !== "%PDF-") return null;
+    return { data: file.buffer, extension: "pdf" };
+  }
+  if (file.mimetype !== "image/jpeg" && file.mimetype !== "image/png") return null;
+  const isJpeg = file.mimetype === "image/jpeg";
+  const data = await sharp(file.buffer).rotate()[isJpeg ? "jpeg" : "png"]().toBuffer();
+  return { data, extension: isJpeg ? "jpg" : "png" };
+}
+
 // Hanya untuk membaca foto lama yang belum dipindah ke tabel BuktiFoto.
 const evidenceDirectory = resolve(process.cwd(), "uploads", "evidence");
 const pillarValues = Object.values(DisciplinePillar);
@@ -219,7 +239,7 @@ reportRouter.get(
 reportRouter.post(
   "/laporan",
   createReportLimiter,
-  requireRole(["mhs", "dosen", "admin"], "Pengiriman laporan tidak tersedia untuk Akademik."),
+  requireRole(["mhs", "dosen", "admin", "akademik"], "Pengiriman laporan memerlukan akun yang terdaftar."),
   upload.single("bukti"),
   async (request, response) => {
     try {
@@ -329,6 +349,7 @@ reportRouter.post(
         const laporan = await transaction.laporan.create({
           data: {
             kodeHash: hashTrackingCode(kodePelacakan),
+            pelaporHash: hashReporter(session.profile.role, session.profile.id),
             pillar,
             aturanId,
             severityUsulan,
@@ -358,13 +379,48 @@ reportRouter.post(
           texts,
         });
       });
-      response.status(201).json({ kodePelacakan });
+      response.status(201).json({ message: "Laporan berhasil dikirim." });
     } catch (error) {
       console.error("Gagal menyimpan laporan:", error);
       response.status(500).json({ message: "Laporan gagal dikirim. Silakan coba kembali." });
     }
   },
 );
+
+reportRouter.get("/laporan/saya", async (request, response) => {
+  const session = requireLogin(request, response);
+  if (!session) return;
+  try {
+    const reports = await database.laporan.findMany({
+      where: { pelaporHash: hashReporter(session.profile.role, session.profile.id) },
+      orderBy: { id: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        pillar: true,
+        terlaporNama: true,
+        terlaporNim: true,
+        terlaporKeterangan: true,
+        lokasi: true,
+        tanggalKejadian: true,
+        tanggalLapor: true,
+        deskripsi: true,
+        status: true,
+        catatanUntukPelapor: true,
+      },
+    });
+    response.json({
+      laporan: reports.map((report) => ({
+        ...report,
+        tanggalKejadian: formatDateOnly(report.tanggalKejadian),
+        tanggalLapor: formatDateOnly(report.tanggalLapor),
+      })),
+    });
+  } catch (error) {
+    console.error("Gagal memuat laporan pelapor:", error);
+    response.status(500).json({ message: "Daftar laporan gagal dimuat." });
+  }
+});
 
 reportRouter.get("/laporan/status", checkReportLimiter, async (request, response) => {
   const code = typeof request.query.kode === "string" ? request.query.kode.trim().toUpperCase() : "";
@@ -479,6 +535,7 @@ reportRouter.get("/mahasiswa/sanggahan", async (request, response) => {
       select: {
         id: true,
         alasan: true,
+        buktiFileName: true,
         status: true,
         catatanPemeriksa: true,
         createdAt: true,
@@ -494,7 +551,7 @@ reportRouter.get("/mahasiswa/sanggahan", async (request, response) => {
   }
 });
 
-reportRouter.post("/sanggahan", async (request, response) => {
+reportRouter.post("/sanggahan", appealUpload.single("bukti"), async (request, response) => {
   const session = requireStudent(request, response);
   if (!session) return;
   const appeal = parseBody(appealSchema, request.body);
@@ -504,6 +561,14 @@ reportRouter.post("/sanggahan", async (request, response) => {
   }
   const { perubahanPoinId, alasan } = appeal;
   try {
+    const document = request.file ? await normalizeDocumentFile(request.file) : null;
+    if (request.file && !document) {
+      response.status(400).json({ message: "Bukti tambahan harus berupa foto JPEG/PNG atau file PDF." });
+      return;
+    }
+    const buktiFileName = document
+      ? `${randomBytes(18).toString("hex")}.${document.extension}`
+      : null;
     const result = await database.$transaction(
       async (transaction) => {
         const change = await transaction.pointChange.findFirst({
@@ -520,8 +585,13 @@ reportRouter.post("/sanggahan", async (request, response) => {
           select: { id: true },
         });
         if (activeAppeal) return { kind: "duplicate" as const };
+        if (document && buktiFileName) {
+          await transaction.buktiFoto.create({
+            data: { fileName: buktiFileName, mimeType: request.file!.mimetype, data: document.data },
+          });
+        }
         const sanggahan = await transaction.sanggahan.create({
-          data: { perubahanPoinId, studentId: session.profile.id, alasan },
+          data: { perubahanPoinId, studentId: session.profile.id, alasan, buktiFileName },
           select: { id: true, status: true, createdAt: true },
         });
         if (change.student.dosenPaId) {
@@ -2099,6 +2169,52 @@ reportRouter.patch("/admin/klaim-kegiatan/:id", async (request, response) => {
     }
     console.error("Gagal memutuskan klaim kegiatan:", error);
     response.status(500).json({ message: "Putusan klaim gagal disimpan." });
+  }
+});
+
+// Bukti sanggahan untuk mahasiswa pemilik, Dosen PA-nya, dan admin.
+reportRouter.get("/sanggahan/:id/bukti", async (request, response) => {
+  const session = requireLogin(request, response);
+  if (!session) return;
+  const id = parsePositiveInteger(request.params.id);
+  const { role, id: userId } = session.profile;
+  if (role === "akademik") {
+    response.status(403).json({ message: "Anda tidak berhak melihat bukti ini." });
+    return;
+  }
+  if (!id) {
+    response.status(404).json({ message: "Bukti tidak ditemukan." });
+    return;
+  }
+  try {
+    const appeal = await database.sanggahan.findFirst({
+      where: {
+        id,
+        ...(role === "mhs" ? { studentId: userId } : {}),
+        ...(role === "dosen" ? { student: { dosenPaId: userId } } : {}),
+      },
+      select: { buktiFileName: true },
+    });
+    const file = appeal?.buktiFileName
+      ? await database.buktiFoto.findUnique({
+          where: { fileName: appeal.buktiFileName },
+          select: { mimeType: true, data: true },
+        })
+      : null;
+    if (!file) {
+      response.status(404).json({ message: "Bukti tidak ditemukan." });
+      return;
+    }
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; img-src 'self'; object-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'",
+    );
+    response.setHeader("Content-Disposition", `inline; filename="bukti-sanggahan-${id}.${appeal!.buktiFileName!.split(".").pop()}"`);
+    response.type(file.mimeType).send(Buffer.from(file.data));
+  } catch (error) {
+    console.error("Gagal memuat bukti sanggahan:", error);
+    response.status(500).json({ message: "Bukti gagal dimuat." });
   }
 });
 

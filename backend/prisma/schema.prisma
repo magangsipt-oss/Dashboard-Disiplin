@@ -250,6 +250,7 @@ model AturanPelanggaran {
 model Laporan {
   id                     Int                 @id @default(autoincrement())
   kodeHash               String              @unique @db.Char(64)
+  pelaporHash            String?             @db.Char(64)
   jenis                  JenisLaporan        @default(TEMUAN)
   pillar                 DisciplinePillar
   aturanId               Int?
@@ -283,6 +284,7 @@ model Laporan {
   pemberitahuanStaf      PemberitahuanStaf[]
 
   @@index([status, id])
+  @@index([pelaporHash, id])
   @@index([terlaporNim, status])
   @@index([terlaporId, status])
   @@index([ditelusuriPada])
@@ -303,6 +305,7 @@ model Sanggahan {
   perubahanPoinId  Int
   studentId        Int
   alasan           String          @db.VarChar(2000)
+  buktiFileName    String?         @db.VarChar(64)
   status           StatusSanggahan @default(DIAJUKAN)
   catatanPemeriksa String?         @db.VarChar(1000)
   createdAt        DateTime        @default(now())

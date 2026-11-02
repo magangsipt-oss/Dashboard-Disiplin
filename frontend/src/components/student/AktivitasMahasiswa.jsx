@@ -86,7 +86,7 @@ export default function AktivitasMahasiswa({ onNavigate }) {
 
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-2">
-      <section className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
+      <section className="flex flex-col rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-800"><Bell className="h-5 w-5" /></div>
           <div>
@@ -100,7 +100,7 @@ export default function AktivitasMahasiswa({ onNavigate }) {
         ) : notifications.length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada pemberitahuan.</p>
         ) : (
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 max-h-96 space-y-2 overflow-y-auto pr-1 lg:h-0 lg:max-h-none lg:min-h-48 lg:grow">
             {notifications.map((notification) => (
               <button
                 type="button"

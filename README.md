@@ -103,7 +103,9 @@ Setelah memperbarui skema, terapkan perubahan tabel dengan
 kegiatan. Untuk database yang menerapkan migrasi, gunakan
 `npm.cmd run prisma:migrate:deploy` agar migrasi riwayat klaim dan bukti
 kegiatan diterapkan. Setelah skema berubah, jalankan
-`npm.cmd run prisma:generate` untuk memperbarui Prisma Client.
+`npm.cmd run prisma:generate` untuk memperbarui Prisma Client. Perintah
+`npm.cmd run dev` dan `npm.cmd run build` di backend juga menjalankan
+generasi Prisma Client secara otomatis sebelum proses dimulai.
 
 Gunakan `npm.cmd run prisma:setup` hanya saat perlu membuat database baru dan
 mengimpor file ekspor data.

@@ -4,7 +4,9 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "predev": "npm run prisma:generate",
     "dev": "tsx watch src/index.ts",
+    "prebuild": "npm run prisma:generate",
     "build": "tsc",
     "test": "tsx --test tests/points.test.ts tests/point-ledger.test.ts tests/discipline.test.ts tests/report-routing.test.ts tests/academic-import.test.ts tests/security.test.ts",
     "start": "node dist/index.js",

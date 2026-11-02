@@ -3,7 +3,6 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { Prisma } from "@prisma/client";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import {
-  calculatePointChange,
   disciplinePillarLabels,
   getPointChangeMetadata,
   getScorePredicate,
@@ -14,7 +13,8 @@ import {
   type PointChangeAction,
 } from "./points";
 import { verifyPassword } from "./password";
-import { getViolationResolution, todayInCampusTime } from "./punishment";
+import { recordPointChange } from "./point-ledger";
+import { listViolationsWithResolution, todayInCampusTime } from "./punishment";
 import { counselingSchema, loginSchema, parseBody } from "./validation";
 
 
@@ -504,62 +504,13 @@ authRouter.get("/admin/monitoring", requireRole(["admin"], "Hanya admin kemahasi
           terlapor: { select: { nama: true, nim: true, dosenPaId: true } },
         },
       }),
-      // Seluruh pelanggaran (pengurangan poin), tanpa denda keterlambatan
-      // punishment yang tercatat terpisah pada punishment-nya.
-      database.pointChange.findMany({
-        where: {
-          delta: { lt: 0 },
-          type: { in: ["LATE", "UNEXCUSED_ABSENCE", "DISCIPLINE_VIOLATION", "REPORTED_VIOLATION"] },
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          studentId: true,
-          type: true,
-          pillar: true,
-          severity: true,
-          delta: true,
-          reason: true,
-          createdAt: true,
-          laporan: {
-            select: { id: true, status: true, tanggalKejadian: true, aturan: { select: { nama: true } } },
-          },
-          pembinaans: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            select: {
-              jenis: true,
-              status: true,
-              batasWaktu: true,
-              hariDenda: true,
-              totalDenda: true,
-              updatedAt: true,
-            },
-          },
-          sanggahans: { where: { status: "DISETUJUI" }, take: 1, select: { id: true } },
-        },
-      }),
+      listViolationsWithResolution(database, undefined, today),
     ]);
-    const violationsByStudent = new Map<number, unknown[]>();
-    for (const { studentId, sanggahans, pembinaans, laporan, ...violation } of violations) {
-      const punishment = pembinaans[0] ?? null;
-      const list = violationsByStudent.get(studentId) ?? [];
-      list.push({
-        ...violation,
-        laporan,
-        punishment,
-        status: getViolationResolution(
-          { type: violation.type, sanggahanDisetujui: sanggahans.length > 0, punishment },
-          today,
-        ),
-      });
-      violationsByStudent.set(studentId, list);
-    }
     response.json({
       students: students.map((student) => ({
         ...student,
         predikat: getScorePredicate(student.pointScore),
-        pelanggaran: violationsByStudent.get(student.id) ?? [],
+        pelanggaran: violations.get(student.id) ?? [],
         dosenPa: student.dosenPa
           ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk.toString() }
           : null,
@@ -851,31 +802,23 @@ authRouter.post("/points/adjust", requireRole(["admin"], "Hanya admin kemahasisw
       async (transaction) => {
         const student = await transaction.mahasiswa.findUnique({
           where: { nim: Number(nim) },
-          select: { id: true, nim: true, nama: true, pointScore: true },
+          select: { id: true, nim: true, nama: true },
         });
         if (!student) {
           return null;
         }
 
-        const { score, delta: appliedDelta } = calculatePointChange(student.pointScore, action);
-        await transaction.mahasiswa.update({
-          where: { id: student.id },
-          data: { pointScore: score },
-        });
-        await transaction.pointChange.create({
-          data: {
-            studentId: student.id,
-            type: changeType,
-            pillar: metadata.pillar,
-            severity: metadata.severity,
-            delta: appliedDelta,
-            scoreAfter: score,
-            reason: reason.trim(),
-            recordedByIdentity: session.profile.identity,
-          },
+        const change = await recordPointChange(transaction, {
+          studentId: student.id,
+          type: changeType,
+          pillar: metadata.pillar,
+          severity: metadata.severity,
+          delta: pointChangeRules[action].delta,
+          reason: reason.trim(),
+          recordedByIdentity: session.profile.identity,
         });
 
-        return { student, score, appliedDelta };
+        return { student, score: change.scoreAfter, appliedDelta: change.appliedDelta };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

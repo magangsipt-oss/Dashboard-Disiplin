@@ -1,11 +1,10 @@
 import { Prisma, StatusPembinaan } from "@prisma/client";
 import { database } from "./db";
 import {
-  calculatePointChangeForDelta,
   countPunishmentPenaltyDays,
   punishmentPenaltyPerDay,
-  type PointChangeType,
 } from "./points";
+import { recordPointChanges } from "./point-ledger";
 
 // Kampus berada di Berau (WITA, UTC+8): pergantian hari denda mengikuti WITA.
 const campusUtcOffsetMs = 8 * 60 * 60 * 1000;
@@ -60,6 +59,71 @@ export function getViolationResolution(
   return isPunishmentLate(violation.punishment, today) ? "TERLAMBAT" : "BERJALAN";
 }
 
+export const unresolvedViolationStatuses: ViolationResolution[] = ["BELUM_PUNISHMENT", "BERJALAN", "TERLAMBAT"];
+
+// Seluruh pelanggaran (pengurangan poin) per mahasiswa beserta status
+// penyelesaiannya, tanpa denda keterlambatan punishment yang tercatat
+// terpisah pada punishment-nya. Tanpa studentIds = semua mahasiswa.
+export async function listViolationsWithResolution(
+  client: Prisma.TransactionClient,
+  studentIds?: number[],
+  today = todayInCampusTime(),
+) {
+  const violations = await client.pointChange.findMany({
+    where: {
+      ...(studentIds ? { studentId: { in: studentIds } } : {}),
+      delta: { lt: 0 },
+      type: { in: ["LATE", "UNEXCUSED_ABSENCE", "DISCIPLINE_VIOLATION", "REPORTED_VIOLATION"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      studentId: true,
+      type: true,
+      pillar: true,
+      severity: true,
+      delta: true,
+      reason: true,
+      createdAt: true,
+      laporan: {
+        select: { id: true, status: true, tanggalKejadian: true, aturan: { select: { nama: true } } },
+      },
+      pembinaans: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          jenis: true,
+          status: true,
+          batasWaktu: true,
+          hariDenda: true,
+          totalDenda: true,
+          updatedAt: true,
+        },
+      },
+      sanggahans: { where: { status: "DISETUJUI" }, take: 1, select: { id: true } },
+    },
+  });
+  const byStudent = new Map<number, Array<Omit<(typeof violations)[number], "studentId" | "sanggahans" | "pembinaans"> & {
+    punishment: (typeof violations)[number]["pembinaans"][number] | null;
+    status: ViolationResolution;
+  }>>();
+  for (const { studentId, sanggahans, pembinaans, laporan, ...violation } of violations) {
+    const punishment = pembinaans[0] ?? null;
+    const list = byStudent.get(studentId) ?? [];
+    list.push({
+      ...violation,
+      laporan,
+      punishment,
+      status: getViolationResolution(
+        { type: violation.type, sanggahanDisetujui: sanggahans.length > 0, punishment },
+        today,
+      ),
+    });
+    byStudent.set(studentId, list);
+  }
+  return byStudent;
+}
+
 // Menghitung dan mencatat denda yang belum dibebankan untuk satu punishment.
 // Dipanggil oleh job berkala dan sebelum mahasiswa mengirim bukti, agar hari
 // yang sudah lewat tetap terhitung walau job belum berjalan.
@@ -75,7 +139,6 @@ export async function settlePunishmentPenalty(
       batasWaktu: { lt: today },
     },
     include: {
-      student: { select: { pointScore: true } },
       perubahanPoin: { select: { laporan: { select: { id: true } } } },
     },
   });
@@ -88,39 +151,35 @@ export async function settlePunishmentPenalty(
   );
   if (days === 0) return 0;
 
-  const change = calculatePointChangeForDelta(
-    training.student.pointScore,
-    -days * punishmentPenaltyPerDay,
+  const laporanId = training.perubahanPoin.laporan?.id ?? null;
+  const [change] = await recordPointChanges(
+    transaction,
+    [
+      {
+        studentId: training.studentId,
+        type: "PUNISHMENT_PENALTY",
+        delta: -days * punishmentPenaltyPerDay,
+        referensiLaporanId: laporanId,
+        reason: `Sanksi punishment laporan #${laporanId ?? training.id} belum ditindaklanjuti: ${days} hari × ${punishmentPenaltyPerDay} poin`,
+        recordedByIdentity: "SISTEM",
+      },
+    ],
+    { skipUnchanged: true },
   );
+  const appliedDelta = change.appliedDelta;
   await transaction.pembinaan.update({
     where: { id: training.id },
     data: {
       dendaDihitungSampai: today,
       hariDenda: { increment: days },
-      totalDenda: { increment: Math.abs(change.delta) },
+      totalDenda: { increment: Math.abs(appliedDelta) },
     },
   });
-  if (change.delta !== 0) {
-    await transaction.mahasiswa.update({
-      where: { id: training.studentId },
-      data: { pointScore: change.score },
-    });
-    await transaction.pointChange.create({
-      data: {
-        studentId: training.studentId,
-        type: "PUNISHMENT_PENALTY" as PointChangeType,
-        delta: change.delta,
-        scoreAfter: change.score,
-        reason: `Sanksi punishment laporan #${training.perubahanPoin.laporan?.id ?? training.id} belum ditindaklanjuti: ${days} hari × ${punishmentPenaltyPerDay} poin`,
-        recordedByIdentity: "SISTEM",
-      },
-    });
-  }
   await transaction.pemberitahuan.create({
     data: {
       studentId: training.studentId,
       judul: "Poin dipotong: punishment belum ditindaklanjuti",
-      isi: `Batas waktu punishment telah lewat ${training.hariDenda + days} hari. Poin berkurang ${Math.abs(change.delta)} hari ini dan terus berkurang ${punishmentPenaltyPerDay} poin per hari sampai bukti penyelesaian dikirim.`,
+      isi: `Batas waktu punishment telah lewat ${training.hariDenda + days} hari. Poin berkurang ${Math.abs(appliedDelta)} hari ini dan terus berkurang ${punishmentPenaltyPerDay} poin per hari sampai bukti penyelesaian dikirim.`,
       tautanTab: "tindak-lanjut",
     },
   });

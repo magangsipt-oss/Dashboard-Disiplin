@@ -11,7 +11,8 @@ import AktivitasMahasiswa from './student/AktivitasMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
 import AdminClaimQueue from './reports/AdminClaimQueue';
 import AdminPunishment from './reports/AdminPunishment';
-import AdminStudentMonitoring from './reports/AdminStudentMonitoring';
+import AdminPointRules from './reports/AdminPointRules';
+import AdminPointData from './reports/AdminPointData';
 import AdminLecturerMonitoring from './reports/AdminLecturerMonitoring';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
 import FilePreviewModal from './modals/FilePreviewModal';
@@ -114,7 +115,8 @@ const navigationByRole = {
     { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan' },
     { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan' },
     { id: 'punishment', label: 'Punishment' },
-    { id: 'monitoring-mahasiswa', label: 'Monitoring Mahasiswa' },
+    { id: 'pengaturan-poin', label: 'Pengaturan Poin' },
+    { id: 'data-poin', label: 'Monitoring Mahasiswa' },
     { id: 'monitoring-dpa', label: 'Monitoring DPA' },
     { id: 'cek-laporan', label: 'Cek Laporan' },
   ],
@@ -450,7 +452,7 @@ export default function App({ hasSessionCookie = false }) {
     if (
       authenticatedUser?.role !== 'admin' ||
       activePage !== 'dashboard' ||
-      !['dashboard', 'monitoring-mahasiswa', 'monitoring-dpa'].includes(activeTab)
+      !['dashboard', 'monitoring-dpa'].includes(activeTab)
     ) {
       return undefined;
     }
@@ -792,7 +794,7 @@ export default function App({ hasSessionCookie = false }) {
                   </div>
                   <div>
                     <p className="font-bold text-slate-900">Humas & Layanan</p>
-                    <p className="text-[11px] text-slate-500">humas@polteksimasberau.ac.id</p>
+                    <p className="text-[11px] text-slate-500">kemahasiswaan@polteksimasberau.ac.id</p>
                   </div>
                 </div>
               </div>
@@ -837,13 +839,13 @@ export default function App({ hasSessionCookie = false }) {
             />
             <div className="max-w-7xl mx-auto relative z-10">
               <span data-scroll-reveal data-reveal="text" className="bg-amber-400 text-red-950 font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider shadow-sm">
-                Sistem Poin Kedisiplinan & Track Record Vokasi
+                Budaya Disiplin · Siap Industri
               </span>
               <h2 data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-3xl sm:text-4xl font-extrabold mt-3 leading-tight">
-                Portal Kedisiplinan & Integrasi SKPI Mahasiswa
+                Disiplin Hari Ini, Profesional di Dunia Industri
               </h2>
               <p data-scroll-reveal data-reveal="text" data-reveal-delay="160" className="mt-2 text-slate-100 max-w-2xl text-sm sm:text-base leading-relaxed">
-                Selamat datang di portal pemantauan kedisiplinan Politeknik Sinar Mas Berau Coal. Sistem ini menyajikan rekam jejak presensi yang diunggah tim akademik melalui file Excel/CSV serta poin kegiatan non-akademik.
+                SIGMA adalah sistem pemantauan kedisiplinan dan rekam jejak karakter mahasiswa Politeknik Sinar Mas Berau Coal. Dibangun atas lima nilai budaya disiplin, SIGMA membantu mahasiswa tumbuh menjadi tenaga vokasi yang tepat waktu, patuh K3, dan bertanggung jawab.
               </p>
             </div>
           </div>
@@ -1294,6 +1296,14 @@ export default function App({ hasSessionCookie = false }) {
 
             {authenticatedUser?.role === 'admin' && activeTab === 'punishment' && (
               <AdminPunishment />
+            )}
+
+            {authenticatedUser?.role === 'admin' && activeTab === 'pengaturan-poin' && (
+              <AdminPointRules />
+            )}
+
+            {authenticatedUser?.role === 'admin' && activeTab === 'data-poin' && (
+              <AdminPointData />
             )}
 
             {authenticatedUser?.role === 'mhs' && activeTab !== 'lapor' && (
@@ -2549,7 +2559,7 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment'].includes(activeTab) && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
@@ -2571,7 +2581,7 @@ export default function App({ hasSessionCookie = false }) {
                       label: 'Total mahasiswa',
                       value: adminMonitoring.students.length,
                       icon: GraduationCap,
-                      tab: 'monitoring-mahasiswa',
+                      tab: 'data-poin',
                     },
                     {
                       label: 'Total dosen PA',
@@ -2583,13 +2593,13 @@ export default function App({ hasSessionCookie = false }) {
                       label: 'Pelanggaran sudah di-coaching',
                       value: adminMonitoring.students.filter((student) => hasViolation(student) && hasCoachingForLatestViolation(student)).length,
                       icon: CheckCircle2,
-                      tab: 'monitoring-mahasiswa',
+                      tab: 'data-poin',
                     },
                     {
                       label: 'Perlu dipantau',
                       value: adminMonitoring.students.filter((student) => student.dosenPa && hasViolation(student) && !hasCoachingForLatestViolation(student)).length,
                       icon: Clock,
-                      tab: 'monitoring-mahasiswa',
+                      tab: 'data-poin',
                     },
                   ].map(({ label, value, icon: Icon, tab }) => (
                     <button
@@ -2615,13 +2625,6 @@ export default function App({ hasSessionCookie = false }) {
                   <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                     {adminMonitoringError}
                   </p>
-                )}
-
-                {activeTab === 'monitoring-mahasiswa' && (
-                  <AdminStudentMonitoring
-                    students={adminMonitoring.students}
-                    isLoading={isLoadingAdminMonitoring}
-                  />
                 )}
 
                 {activeTab === 'monitoring-dpa' && (

@@ -18,7 +18,11 @@ model Mahasiswa {
   angkatan          Int?               @map("Angkatan")
   namaSmta          String?            @map("Nama_SMTA") @db.VarChar(255)
   dosenPaId         Int?               @map("DPA_ID")
+  // Cache saldo poin; hanya ditulis oleh src/point-ledger.ts
+  // (poin awal + jumlah PerubahanPoin, dibatasi minimal/maksimal).
   pointScore        Int                @default(100) @map("Poin")
+  // Diisi oleh perhitungan clearance kelulusan (fase berikutnya).
+  statusClearance   StatusClearance?   @map("Status_Clearance")
   timestamp         DateTime           @default(now()) @map("Timestamp")
   pointChanges      PointChange[]
   dosenPa           Dosen?             @relation(fields: [dosenPaId], references: [id], onDelete: SetNull)
@@ -85,6 +89,23 @@ enum PointChangeType {
   REPORTED_VIOLATION
   POINT_RESTORATION
   PUNISHMENT_PENALTY
+  // Pengurangan tambahan pelanggaran berulang dari Kemahasiswaan.
+  REPEAT_VIOLATION_PENALTY
+  // Koreksi poin manual oleh Kemahasiswaan.
+  MANUAL_ADJUSTMENT
+}
+
+enum StatusClearance {
+  CLEAR
+  PENDING
+  BELUM_CLEAR
+}
+
+enum StatusPoin {
+  SANGAT_BAIK
+  BAIK
+  PERLU_PEMBINAAN
+  TINDAK_LANJUT_KHUSUS
 }
 
 enum DisciplinePillar {
@@ -110,10 +131,17 @@ model PointChange {
   severity           ViolationSeverity?
   delta              Int
   scoreAfter         Int
+  // Bobot TingkatPelanggaran saat pelanggaran dikonfirmasi (sebelum dibatasi
+  // poin minimal), agar perubahan bobot tidak mengubah riwayat.
+  bobotSnapshot      Int?
+  // Laporan rujukan untuk baris selain pengurangan utama laporan itu sendiri
+  // (mis. tambahan pelanggaran berulang).
+  referensiLaporanId Int?
   reason             String             @db.VarChar(500)
   recordedByIdentity String             @db.VarChar(100)
   createdAt          DateTime           @default(now())
   student            Mahasiswa          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  referensiLaporan   Laporan?           @relation("PerubahanPoinReferensiLaporan", fields: [referensiLaporanId], references: [id], onDelete: SetNull)
   sanggahans         Sanggahan[]
   pembinaans         Pembinaan[]
   laporan            Laporan?
@@ -122,6 +150,7 @@ model PointChange {
   @@index([studentId, createdAt])
   @@index([studentId, pillar])
   @@index([studentId, type])
+  @@index([referensiLaporanId])
   @@map("PerubahanPoin")
 }
 
@@ -168,6 +197,43 @@ enum StatusPembinaan {
   DITOLAK
 }
 
+// Bobot standar per kategori × tingkat (angka negatif), dapat diubah
+// Kemahasiswaan. Dipakai potongan absensi Akademik dan sebagai bobot awal
+// jenis pelanggaran baru. Tingkat dinonaktifkan, bukan dihapus.
+model TingkatPelanggaran {
+  id        Int               @id @default(autoincrement())
+  pillar    DisciplinePillar
+  severity  ViolationSeverity
+  bobotPoin Int
+  aktif     Boolean           @default(true)
+  updatedAt DateTime          @default(now()) @updatedAt
+
+  @@unique([pillar, severity])
+}
+
+// Satu baris (id = 1). Potongan berulang disimpan sebagai besaran positif:
+// tambahan pelanggaran berulang = -potonganBerulangMin s.d. -potonganBerulangMaks.
+model PengaturanPoin {
+  id                   Int      @id @default(1)
+  poinAwal             Int      @default(100)
+  poinMinimal          Int      @default(0)
+  poinMaksimal         Int      @default(200)
+  potonganBerulangMin  Int      @default(5)
+  potonganBerulangMaks Int      @default(10)
+  updatedAt            DateTime @default(now()) @updatedAt
+}
+
+// Batas bawah tiap status poin; batas atas = batas bawah status berikutnya - 1.
+model BatasStatusPoin {
+  kode       StatusPoin @id
+  label      String     @db.VarChar(100)
+  batasBawah Int
+  updatedAt  DateTime   @default(now()) @updatedAt
+}
+
+// Jenis pelanggaran yang dipilih DPA saat konfirmasi, diatur Kemahasiswaan.
+// bobotPoin = besar pengurangan (positif; -bobotPoin dicatat di ledger).
+// Jenis yang sudah dipakai laporan dinonaktifkan, bukan dihapus.
 model AturanPelanggaran {
   id        Int               @id @default(autoincrement())
   pillar    DisciplinePillar
@@ -213,6 +279,7 @@ model Laporan {
   diverifikasiOleh       Akademik?           @relation(fields: [diverifikasiOlehId], references: [id], onDelete: SetNull)
   dikonfirmasiDosen      Dosen?              @relation("LaporanDosenKonfirmasi", fields: [dikonfirmasiDosenId], references: [id], onDelete: SetNull)
   perubahanPoin          PointChange?        @relation(fields: [perubahanPoinId], references: [id], onDelete: SetNull)
+  perubahanPoinTerkait   PointChange[]       @relation("PerubahanPoinReferensiLaporan")
   pemberitahuanStaf      PemberitahuanStaf[]
 
   @@index([status, id])
@@ -354,6 +421,9 @@ model LogAudit {
   aksi       String   @db.VarChar(100)
   entitas    String   @db.VarChar(100)
   entitasId  Int
+  nilaiLama  Json?
+  nilaiBaru  Json?
+  alasan     String?  @db.VarChar(1000)
   createdAt  DateTime @default(now())
 
   @@index([aktorId, createdAt])

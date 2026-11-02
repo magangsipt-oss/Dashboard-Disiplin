@@ -20,13 +20,11 @@ import {
   ViolationSeverity,
 } from "@prisma/client";
 import {
-  calculatePointChangeForDelta,
-  getPointChangeMetadata,
   disciplinePillarLabels,
   violationSeverityLabels,
   violationSeverityFollowUps,
-  type PointChangeType,
 } from "./points";
+import { recordPointChange } from "./point-ledger";
 import { sendPointDeductionEmail } from "./mailer";
 import { skipNotificationEmailFor } from "./notification-email";
 import { database, getSessionForRequest, requireRole, type Session } from "./auth";
@@ -1026,28 +1024,21 @@ reportRouter.patch("/dosen/laporan/:id/konfirmasi", async (request, response) =>
           where: { id: aturanId!, pillar: report.pillar, aktif: true },
         });
         if (!rule || rule.bobotPoin <= 0) return { kind: "invalid_rule" as const };
+        // Bobot jenis pelanggaran saat ini (diatur Kemahasiswaan) disimpan
+        // sebagai snapshot agar perubahan bobot berikutnya tidak mengubah riwayat.
+        const weight = -rule.bobotPoin;
 
-        const pointChange = calculatePointChangeForDelta(
-          report.terlapor.pointScore,
-          -rule.bobotPoin,
-        );
-        const savedChange = await transaction.pointChange.create({
-          data: {
-            studentId: report.terlapor.id,
-            type: "REPORTED_VIOLATION" as PointChangeType,
-            pillar: rule.pillar,
-            severity: rule.severity,
-            delta: pointChange.delta,
-            scoreAfter: pointChange.score,
-            reason: `Pelanggaran dikonfirmasi Dosen PA: ${rule.nama}`,
-            recordedByIdentity: session.profile.identity,
-          },
-          select: { id: true },
+        const savedChange = await recordPointChange(transaction, {
+          studentId: report.terlapor.id,
+          type: "REPORTED_VIOLATION",
+          pillar: rule.pillar,
+          severity: rule.severity,
+          delta: weight,
+          bobotSnapshot: weight,
+          reason: `Pelanggaran dikonfirmasi Dosen PA: ${rule.nama}`,
+          recordedByIdentity: session.profile.identity,
         });
-        await transaction.mahasiswa.update({
-          where: { id: report.terlapor.id },
-          data: { pointScore: pointChange.score },
-        });
+        const pointChange = { delta: savedChange.appliedDelta, score: savedChange.scoreAfter };
         await transaction.laporan.update({
           where: { id },
           data: {
@@ -1210,31 +1201,17 @@ reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
 
         let restoredPoints = 0;
         if (keputusan === "DISETUJUI") {
-          const student = await transaction.mahasiswa.findUniqueOrThrow({
-            where: { id: training.studentId },
-            select: { pointScore: true },
+          const restored = await recordPointChange(transaction, {
+            studentId: training.studentId,
+            type: "POINT_RESTORATION",
+            pillar: training.perubahanPoin.pillar,
+            severity: training.perubahanPoin.severity,
+            delta: Math.abs(training.perubahanPoin.delta),
+            referensiLaporanId: training.perubahanPoin.laporan?.id ?? null,
+            reason: `Pemulihan poin setelah bukti tindak lanjut laporan #${training.perubahanPoin.laporan?.id ?? training.id} disetujui Dosen PA`,
+            recordedByIdentity: session.profile.identity,
           });
-          const restored = calculatePointChangeForDelta(
-            student.pointScore,
-            Math.abs(training.perubahanPoin.delta),
-          );
-          restoredPoints = Math.abs(restored.delta);
-          await transaction.mahasiswa.update({
-            where: { id: training.studentId },
-            data: { pointScore: restored.score },
-          });
-          await transaction.pointChange.create({
-            data: {
-              studentId: training.studentId,
-              type: "POINT_RESTORATION",
-              pillar: training.perubahanPoin.pillar,
-              severity: training.perubahanPoin.severity,
-              delta: restored.delta,
-              scoreAfter: restored.score,
-              reason: `Pemulihan poin setelah bukti tindak lanjut laporan #${training.perubahanPoin.laporan?.id ?? training.id} disetujui Dosen PA`,
-              recordedByIdentity: session.profile.identity,
-            },
-          });
+          restoredPoints = Math.abs(restored.appliedDelta);
           if (training.perubahanPoin.laporan) {
             await transaction.laporan.update({
               where: { id: training.perubahanPoin.laporan.id },
@@ -1780,29 +1757,12 @@ async function decideAppeal(
           select: { id: true, studentId: true, status: true },
         });
         if (decision === "DISETUJUI") {
-          const student = await transaction.mahasiswa.findUniqueOrThrow({
-            where: { id: appeal.studentId },
-            select: { pointScore: true },
-          });
-          const restored = calculatePointChangeForDelta(
-            student.pointScore,
-            Math.abs(appeal.perubahanPoin.delta),
-          );
-          await transaction.mahasiswa.update({
-            where: { id: appeal.studentId },
-            data: { pointScore: restored.score },
-          });
-          await transaction.pointChange.create({
-            data: {
-              studentId: appeal.studentId,
-              type: "POINT_RESTORATION",
-              pillar: null,
-              severity: null,
-              delta: restored.delta,
-              scoreAfter: restored.score,
-              reason: `Pemulihan poin dari sanggahan #${appeal.id}`,
-              recordedByIdentity: session.profile.identity,
-            },
+          await recordPointChange(transaction, {
+            studentId: appeal.studentId,
+            type: "POINT_RESTORATION",
+            delta: Math.abs(appeal.perubahanPoin.delta),
+            reason: `Pemulihan poin dari sanggahan #${appeal.id}`,
+            recordedByIdentity: session.profile.identity,
           });
         }
         await transaction.pemberitahuan.create({
@@ -2091,30 +2051,15 @@ reportRouter.patch("/admin/klaim-kegiatan/:id", async (request, response) => {
         let perubahanPoinId: number | null = null;
         let awarded: number | null = null;
         if (decision.keputusan === "DISETUJUI") {
-          const student = await transaction.mahasiswa.findUniqueOrThrow({
-            where: { id: claim.studentId },
-            select: { pointScore: true },
-          });
-          const added = calculatePointChangeForDelta(student.pointScore, decision.poin);
-          await transaction.mahasiswa.update({
-            where: { id: claim.studentId },
-            data: { pointScore: added.score },
-          });
-          const change = await transaction.pointChange.create({
-            data: {
-              studentId: claim.studentId,
-              type: claim.jenis === "LOMBA" ? "COMPETITION" : "NON_ACADEMIC_ACTIVITY",
-              pillar: null,
-              severity: null,
-              delta: added.delta,
-              scoreAfter: added.score,
-              reason: `${claimTypeLabels[claim.jenis]}: ${claim.namaKegiatan}`.slice(0, 500),
-              recordedByIdentity: session.profile.identity,
-            },
-            select: { id: true },
+          const change = await recordPointChange(transaction, {
+            studentId: claim.studentId,
+            type: claim.jenis === "LOMBA" ? "COMPETITION" : "NON_ACADEMIC_ACTIVITY",
+            delta: decision.poin,
+            reason: `${claimTypeLabels[claim.jenis]}: ${claim.namaKegiatan}`,
+            recordedByIdentity: session.profile.identity,
           });
           perubahanPoinId = change.id;
-          awarded = added.delta;
+          awarded = change.appliedDelta;
         }
         const updated = await transaction.klaimKegiatan.update({
           where: { id },

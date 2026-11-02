@@ -15,7 +15,14 @@ import {
   parseAdvisorAssignmentFile,
 } from "../academic-import";
 import { academicTemplates, buildTemplateWorkbook, type AcademicTemplate } from "../academic-templates";
-import { calculatePointChangeForDelta, type ViolationSeverity } from "../points";
+import { type ViolationSeverity } from "../points";
+import {
+  calculateAttendanceDeduction,
+  getActiveViolationWeights,
+  getPointSettings,
+  recordPointChanges,
+  type PointChangeInput,
+} from "../point-ledger";
 import { sendPointDeductionEmail } from "../mailer";
 import { skipNotificationEmailFor } from "../notification-email";
 import { hashImportedPasswords } from "../password";
@@ -242,7 +249,7 @@ academicRouter.post(
       const nims = [...new Set(rows.map((row) => row.nim))];
       const students = await database.mahasiswa.findMany({
         where: { nim: { in: nims } },
-        select: { id: true, nim: true, pointScore: true, nama: true, email: true, jurusan: true },
+        select: { id: true, nim: true, nama: true, email: true, jurusan: true },
       });
       const studentMap = new Map(students.map((student) => [student.nim, student]));
       const unknownNims = nims.filter((nim) => !studentMap.has(nim));
@@ -302,17 +309,17 @@ academicRouter.post(
           reason: string;
         }> = [];
 
-        // Kunci baris mahasiswa terkait dan baca skor terbaru di dalam transaksi.
         const studentIds = students.map((student) => student.id);
-        const lockedScores = studentIds.length === 0
-          ? []
-          : await transaction.$queryRaw<Array<{ id: number; poin: number }>>`
-              SELECT "ID" AS id, "Poin" AS poin FROM "Mahasiswa"
-              WHERE "ID" IN (${Prisma.join(studentIds)})
-              FOR UPDATE`;
-        const currentStudentScores = new Map(
-          lockedScores.map((row) => [row.id, row.poin]),
-        );
+        // Bobot mengikuti Pengaturan Poin (Disiplin Waktu Sedang/Berat dan
+        // rentang tambahan berulang). Tingkat yang dinonaktifkan tidak memotong poin.
+        const [settings, weights] = await Promise.all([
+          getPointSettings(transaction),
+          getActiveViolationWeights(transaction),
+        ]);
+        const attendanceWeights = {
+          sedang: weights.get("WAKTU:SEDANG") ?? null,
+          berat: weights.get("WAKTU:BERAT") ?? null,
+        };
 
         // Ambil semua potongan absensi lama sekali jalan (bukan per baris).
         const existingDeductions = await transaction.pointChange.findMany({
@@ -329,8 +336,8 @@ academicRouter.post(
           existingReasonsByStudent.set(deduction.studentId, reasons);
         }
 
-        const pointChangeRows: Prisma.PointChangeCreateManyInput[] = [];
-        const notificationRows: Prisma.PemberitahuanCreateManyInput[] = [];
+        const pointChangeInputs: PointChangeInput[] = [];
+        const deductedRows: Array<{ row: (typeof rowsWithAlpa)[number]; student: (typeof students)[number] }> = [];
 
         for (const row of rowsWithAlpa) {
           const student = studentMap.get(row.nim);
@@ -342,51 +349,46 @@ academicRouter.post(
             continue;
           }
 
-          let delta: number;
-          let severity: ViolationSeverity;
-          let reasonText: string;
-          if (row.alpa === 1) {
-            delta = -10;
-            severity = "SEDANG";
-            reasonText = `Tidak hadir tanpa izin ${reasonIdentifier}: 1 Alpa`;
-          } else if (row.alpa === 2) {
-            delta = -15;
-            severity = "BERAT";
-            reasonText = `Alpa berulang ${reasonIdentifier}: 2 Alpa`;
-          } else {
-            const extra = Math.min(10, (row.alpa - 2) * 5);
-            delta = -15 - extra;
-            severity = "BERAT";
-            reasonText = `Alpa berulang ${reasonIdentifier}: ${row.alpa} Alpa (dikenai sanksi tambahan)`;
-          }
+          const deduction = calculateAttendanceDeduction(row.alpa, attendanceWeights, settings);
+          if (!deduction) continue;
+          const reasonText =
+            row.alpa === 1
+              ? `Tidak hadir tanpa izin ${reasonIdentifier}: 1 Alpa`
+              : row.alpa === 2
+                ? `Alpa berulang ${reasonIdentifier}: 2 Alpa`
+                : `Alpa berulang ${reasonIdentifier}: ${row.alpa} Alpa (dikenai sanksi tambahan)`;
 
-          const currentScore = currentStudentScores.get(student.id) ?? student.pointScore;
-          const { score: newScore, delta: actualDelta } = calculatePointChangeForDelta(currentScore, delta);
-          currentStudentScores.set(student.id, newScore);
           // Cegah potongan ganda bila baris yang sama muncul dua kali di file.
           studentReasons.push(reasonText);
           existingReasonsByStudent.set(student.id, studentReasons);
 
-          pointChangeRows.push({
+          pointChangeInputs.push({
             studentId: student.id,
             type: "UNEXCUSED_ABSENCE",
             pillar: "WAKTU",
-            severity,
-            delta: actualDelta,
-            scoreAfter: newScore,
+            severity: deduction.severity,
+            delta: deduction.delta,
+            bobotSnapshot: deduction.bobot,
             reason: reasonText,
             recordedByIdentity: "Sistem Akademik (Upload Presensi)",
           });
+          deductedRows.push({ row, student });
+        }
+
+        const savedChanges = await recordPointChanges(transaction, pointChangeInputs);
+        const notificationRows: Prisma.PemberitahuanCreateManyInput[] = [];
+        savedChanges.forEach((change, index) => {
+          const { row, student } = deductedRows[index];
           notificationRows.push({
             studentId: student.id,
             judul: "Pengurangan Poin Disiplin Waktu (Ketidakhadiran)",
-            isi: `Poin Anda berkurang ${Math.abs(actualDelta)} poin karena ketidakhadiran (${row.alpa} Alpa) pada mata kuliah ${row.mataKuliah} (${row.kelas}). Saldo poin Anda: ${newScore}.`,
+            isi: `Poin Anda berkurang ${Math.abs(change.appliedDelta)} poin karena ketidakhadiran (${row.alpa} Alpa) pada mata kuliah ${row.mataKuliah} (${row.kelas}). Saldo poin Anda: ${change.scoreAfter}.`,
             tautanTab: "dashboard",
             dibaca: false,
           });
 
           deductionCount++;
-          totalPointsDeducted += Math.abs(actualDelta);
+          totalPointsDeducted += Math.abs(change.appliedDelta);
           deductedStudents.push({
             nim: student.nim,
             nama: student.nama,
@@ -394,22 +396,14 @@ academicRouter.post(
             prodi: student.jurusan,
             mataKuliah: row.mataKuliah,
             alpa: row.alpa,
-            delta: actualDelta,
-            scoreAfter: newScore,
-            severity,
-            reason: reasonText,
+            delta: change.appliedDelta,
+            scoreAfter: change.scoreAfter,
+            severity: change.severity as ViolationSeverity,
+            reason: change.reason,
           });
-        }
+        });
 
-        if (pointChangeRows.length > 0) {
-          const changedScores = [
-            ...new Set(pointChangeRows.map((change) => change.studentId)),
-          ].map((id) => Prisma.sql`(${id}::int, ${currentStudentScores.get(id)!}::int)`);
-          await transaction.$executeRaw`
-            UPDATE "Mahasiswa" AS m SET "Poin" = v.poin
-            FROM (VALUES ${Prisma.join(changedScores)}) AS v(id, poin)
-            WHERE m."ID" = v.id`;
-          await transaction.pointChange.createMany({ data: pointChangeRows });
+        if (notificationRows.length > 0) {
           await transaction.pemberitahuan.createMany({ data: notificationRows });
           // Mahasiswa sudah dapat email rinci ketidakhadiran di bawah.
           for (const item of deductedStudents) {

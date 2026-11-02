@@ -67,6 +67,42 @@ export const activityClaimDecisionSchema = z.discriminatedUnion("keputusan", [
   }),
 ]);
 
+const disciplinePillarSchema = z.enum(["WAKTU", "AKADEMIK", "TATA_TERTIB", "PROSEDUR_K3", "LINGKUNGAN"]);
+// Sangat Berat tidak dipakai kebijakan kampus.
+const policySeveritySchema = z.enum(["RINGAN", "SEDANG", "BERAT"]);
+// Bobot pengurangan ditulis sebagai angka negatif, mis. -25.
+const deductionWeightSchema = z.coerce.number().int().min(-100).max(-1);
+const changeReasonSchema = z.string().trim().min(5).max(1000);
+
+export const violationRuleCreateSchema = z.object({
+  pillar: disciplinePillarSchema,
+  nama: z.string().trim().min(3).max(200),
+  severity: policySeveritySchema,
+  bobotPoin: deductionWeightSchema,
+  alasan: changeReasonSchema,
+});
+
+export const violationRuleUpdateSchema = z
+  .object({
+    nama: z.string().trim().min(3).max(200).optional(),
+    severity: policySeveritySchema.optional(),
+    bobotPoin: deductionWeightSchema.optional(),
+    aktif: z.boolean().optional(),
+    alasan: changeReasonSchema,
+  })
+  .refine(
+    ({ nama, severity, bobotPoin, aktif }) =>
+      [nama, severity, bobotPoin, aktif].some((value) => value !== undefined),
+  );
+
+export const violationLevelUpdateSchema = z
+  .object({
+    bobotPoin: deductionWeightSchema.optional(),
+    aktif: z.boolean().optional(),
+    alasan: changeReasonSchema,
+  })
+  .refine(({ bobotPoin, aktif }) => bobotPoin !== undefined || aktif !== undefined);
+
 export function parseBody<T extends z.ZodTypeAny>(
   schema: T,
   body: unknown,

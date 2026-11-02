@@ -5,6 +5,7 @@ import multer from "multer";
 import { evidenceRouter, reportRouter } from "./discipline";
 import { startPunishmentPenaltyJob } from "./punishment";
 import { academicRouter } from "./routes/academic";
+import { kemahasiswaanRouter } from "./routes/kemahasiswaan";
 
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
@@ -35,6 +36,7 @@ app.use(loadSession);
 app.use("/api/auth", authRouter);
 app.use("/api/auth", academicRouter);
 app.use("/api", reportRouter);
+app.use("/api", kemahasiswaanRouter);
 // Folder uploads tidak lagi publik; bukti dilayani lewat route ber-otorisasi.
 app.use("/uploads/evidence", evidenceRouter);
 

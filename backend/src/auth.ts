@@ -641,6 +641,7 @@ authRouter.get("/counseling", requireRole(["mhs", "dosen"], "Catatan konseling h
           select: {
             id: true,
             alasan: true,
+            buktiFileName: true,
             status: true,
             catatanPemeriksa: true,
             createdAt: true,

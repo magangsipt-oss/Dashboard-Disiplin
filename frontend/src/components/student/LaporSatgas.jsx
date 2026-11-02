@@ -3,13 +3,11 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   CheckCircle2,
-  ClipboardCopy,
   FileText,
   ShieldCheck,
   Upload,
 } from "lucide-react";
 import { studentApi } from "@/lib/api";
-import { saveStoredReport, normalizeTrackingCode } from "@/lib/reportTracking";
 
 const pillars = [
   { value: "WAKTU", label: "Disiplin Waktu" },
@@ -38,13 +36,12 @@ const initialForm = {
   pernyataanBenar: false,
 };
 
-export default function LaporSatgas() {
+export default function LaporSatgas({ onCheckReports }) {
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [trackingCode, setTrackingCode] = useState("");
-  const [copyStatus, setCopyStatus] = useState("");
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const photoPreview = useMemo(() => (photo ? URL.createObjectURL(photo) : ""), [photo]);
   useEffect(() => () => {
@@ -89,20 +86,12 @@ export default function LaporSatgas() {
       if (form.pernyataanBenar) body.set("pernyataanBenar", "true");
       if (photo) body.append("bukti", photo);
 
-      const result = await studentApi("/api/laporan", {
+      await studentApi("/api/laporan", {
         method: "POST",
         body,
       });
 
-      const kodePelacakan = normalizeTrackingCode(result?.kodePelacakan || `SATGAS-${Date.now().toString().slice(-8)}`);
-      saveStoredReport({
-        ...form,
-        kodePelacakan,
-        status: "Diterima",
-        createdAt: new Date().toISOString(),
-      });
-
-      setTrackingCode(kodePelacakan);
+      setIsSubmitted(true);
       setForm(initialForm);
       setPhoto(null);
     } catch (error) {
@@ -116,15 +105,6 @@ export default function LaporSatgas() {
     }
   }
 
-  async function copyTrackingCode() {
-    try {
-      await navigator.clipboard.writeText(trackingCode);
-      setCopyStatus("Kode berhasil disalin.");
-    } catch {
-      setCopyStatus("Gagal menyalin kode. Silakan salin kode secara manual.");
-    }
-  }
-
   return (
     <section data-scroll-reveal className="space-y-5">
       <article className="rounded-2xl border border-amber-200 bg-amber-50/95 p-5 shadow-lg sm:p-6">
@@ -133,45 +113,37 @@ export default function LaporSatgas() {
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="font-bold text-amber-950">Lapor Satgas</h2>
+            <h2 className="font-bold text-amber-950">Kerahasiaan Pelapor</h2>
             <p className="mt-1 text-sm leading-relaxed text-amber-900">
-              Semua civitas kampus dapat menjadi satgas. Identitas pelapor dirahasiakan dan tidak disimpan. Laporan diverifikasi sebelum berdampak pada poin siapa pun. Laporan palsu dapat merugikan orang lain.
+              Semua civitas kampus dapat menjadi satgas. Identitas pelapor dirahasiakan dan tidak ditampilkan kepada Dosen PA maupun Kemahasiswaan. Laporan diverifikasi sebelum berdampak pada poin siapa pun. Laporan palsu dapat merugikan orang lain.
             </p>
           </div>
         </div>
       </article>
 
-      {trackingCode ? (
+      {isSubmitted ? (
         <article className="rounded-2xl border border-emerald-200 bg-white/95 p-6 shadow-lg">
           <CheckCircle2 className="h-8 w-8 text-emerald-700" />
           <h2 className="mt-3 text-lg font-bold text-slate-900">Laporan berhasil diterima</h2>
-          <p className="mt-1 text-sm text-slate-600">Laporan Anda sudah diteruskan dan akan diproses sesuai alur yang berlaku. Kode pelacakan Anda hanya ditampilkan sekali.</p>
+          <p className="mt-1 text-sm text-slate-600">Laporan Anda sudah diteruskan dan akan diproses sesuai alur yang berlaku. Pantau perkembangannya di menu Cek Laporan.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <code className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-lg font-bold tracking-wider text-slate-900">
-              {trackingCode}
-            </code>
+            {onCheckReports && (
+              <button
+                type="button"
+                onClick={onCheckReports}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-3 text-sm font-bold text-white hover:bg-red-900"
+              >
+                <FileText className="h-4 w-4" /> Lihat laporan saya
+              </button>
+            )}
             <button
               type="button"
-              onClick={copyTrackingCode}
-              className="inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-3 text-sm font-bold text-white hover:bg-red-900"
+              onClick={() => setIsSubmitted(false)}
+              className="text-sm font-bold text-red-800 hover:underline"
             >
-              <ClipboardCopy className="h-4 w-4" /> Salin kode
+              Kirim laporan lain
             </button>
           </div>
-          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-            Simpan kode ini. Kami tidak dapat memulihkannya.
-          </p>
-          {copyStatus && <p className="mt-2 text-xs text-slate-600" role="status">{copyStatus}</p>}
-          <button
-            type="button"
-            onClick={() => {
-              setTrackingCode("");
-              setCopyStatus("");
-            }}
-            className="mt-4 text-sm font-bold text-red-800 hover:underline"
-          >
-            Kembali ke formulir
-          </button>
         </article>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">

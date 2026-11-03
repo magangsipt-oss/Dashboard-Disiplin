@@ -6,6 +6,7 @@ import { evidenceRouter, reportRouter } from "./discipline";
 import { startPunishmentPenaltyJob } from "./punishment";
 import { academicRouter } from "./routes/academic";
 import { kemahasiswaanRouter } from "./routes/kemahasiswaan";
+import { drcRouter } from "./routes/drc";
 
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
@@ -37,6 +38,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/auth", academicRouter);
 app.use("/api", reportRouter);
 app.use("/api", kemahasiswaanRouter);
+app.use("/api", drcRouter);
 // Folder uploads tidak lagi publik; bukti dilayani lewat route ber-otorisasi.
 app.use("/uploads/evidence", evidenceRouter);
 

@@ -8,12 +8,14 @@ import TindakLanjut from './student/TindakLanjut';
 import SanggahanMahasiswa from './student/SanggahanMahasiswa';
 import KlaimKegiatan from './student/KlaimKegiatan';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
+import DrcMahasiswa from './student/DrcMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
 import AdminClaimQueue from './reports/AdminClaimQueue';
 import AdminPunishment from './reports/AdminPunishment';
 import AdminPointRules from './reports/AdminPointRules';
 import AdminPointData from './reports/AdminPointData';
 import AdminLecturerMonitoring from './reports/AdminLecturerMonitoring';
+import AdminDrc from './reports/AdminDrc';
 import AdminDashboardSummary from './reports/AdminDashboardSummary';
 import DosenDashboardSummary from './reports/DosenDashboardSummary';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
@@ -100,6 +102,7 @@ const navigationByRole = {
     { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
     { id: 'tindak-lanjut', label: 'Tindak Lanjut', description: 'Lihat tugas pembinaan dari pelanggaran yang dikonfirmasi dan unggah bukti penyelesaian untuk memulihkan poin.' },
     { id: 'klaim', label: 'Klaim Kegiatan', description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
+    { id: 'drc', label: 'DRC', description: 'Lihat jadwal Disiplin Refresh Competency (DRC) yang wajib diikuti setiap awal semester.' },
   ],
   dosen: [
     { id: 'bimbingan', label: 'Ringkasan', description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
@@ -116,6 +119,7 @@ const navigationByRole = {
     { id: 'pengaturan-poin', label: 'Pengaturan Poin', description: 'Atur aturan poin kedisiplinan mahasiswa.' },
     { id: 'data-poin', label: 'Monitoring Mahasiswa', description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
     { id: 'monitoring-dpa', label: 'Monitoring DPA', description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
+    { id: 'drc', label: 'DRC', description: 'Umumkan seminar atau kegiatan Disiplin Refresh Competency (DRC) yang wajib diikuti mahasiswa setiap awal semester.' },
   ],
   akademik: [
     { id: 'upload-absensi', label: 'Upload Absensi', description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },
@@ -1311,6 +1315,10 @@ export default function App({ hasSessionCookie = false }) {
               <AdminPointData />
             )}
 
+            {authenticatedUser?.role === 'admin' && activeTab === 'drc' && (
+              <AdminDrc />
+            )}
+
             {authenticatedUser?.role === 'mhs' && !['lapor', 'cek-laporan'].includes(activeTab) && (
             <main className="max-w-7xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
               {activeTab === homeTab ? (
@@ -1557,10 +1565,13 @@ export default function App({ hasSessionCookie = false }) {
 
               {activeTab === 'klaim' && authenticatedUser?.role === 'mhs' && <KlaimKegiatan />}
 
+              {activeTab === 'drc' && authenticatedUser?.role === 'mhs' && <DrcMahasiswa />}
+
               {activeTab !== 'konseling' &&
                 activeTab !== 'lapor' &&
                 activeTab !== 'tindak-lanjut' &&
                 activeTab !== 'klaim' &&
+                activeTab !== 'drc' &&
                 !(activeTab === 'sanggah' && authenticatedUser?.role === 'mhs') && (
                 <>
               <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
@@ -2482,7 +2493,7 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && !['lapor', 'cek-laporan', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin'].includes(activeTab) && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'cek-laporan', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin', 'drc'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 {activeTab === homeTab ? (
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">

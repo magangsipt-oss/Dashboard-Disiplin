@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { drcProdiOptions } from "./drc";
 
 // Tanggal format YYYY-MM-DD yang benar-benar ada di kalender.
 export const dateOnlySchema = z
@@ -107,6 +108,44 @@ export const violationLevelUpdateSchema = z
     alasan: changeReasonSchema,
   })
   .refine(({ bobotPoin, aktif }) => bobotPoin !== undefined || aktif !== undefined);
+
+const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+const drcActivityFields = z.object({
+  judul: z.string().trim().min(3).max(200),
+  jenis: z.enum(["SEMINAR", "KEGIATAN_LAIN"]),
+  semester: z.string().trim().min(3).max(50),
+  tanggal: dateOnlySchema,
+  jamMulai: clockTimeSchema,
+  jamSelesai: clockTimeSchema,
+  lokasi: z.string().trim().min(3).max(200),
+  tema: z
+    .array(z.enum(["WAKTU", "AKADEMIK", "TATA_TERTIB", "PROSEDUR_K3", "LINGKUNGAN"]))
+    .min(1)
+    .max(5)
+    .transform((values) => [...new Set(values)]),
+  deskripsi: z.string().trim().max(2000).optional().transform((value) => value || null),
+  // Kosong = semua prodi / semua angkatan.
+  targetProdi: z
+    .array(z.enum(drcProdiOptions))
+    .max(drcProdiOptions.length)
+    .default([])
+    .transform((values) => [...new Set(values)]),
+  targetAngkatan: z
+    .array(z.number().int().min(2000).max(2100))
+    .max(20)
+    .default([])
+    .transform((values) => [...new Set(values)].sort((a, b) => a - b)),
+});
+
+// Format HH:MM sama panjang, jadi perbandingan string = perbandingan waktu.
+export const drcActivitySchema = drcActivityFields.refine(
+  ({ jamMulai, jamSelesai }) => jamMulai < jamSelesai,
+);
+
+export const drcActivityUpdateSchema = drcActivityFields
+  .extend({ beritahuMahasiswa: z.boolean().default(true) })
+  .refine(({ jamMulai, jamSelesai }) => jamMulai < jamSelesai);
 
 export function parseBody<T extends z.ZodTypeAny>(
   schema: T,

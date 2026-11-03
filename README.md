@@ -49,6 +49,16 @@ npm.cmd run dev
 Backend berjalan di `http://localhost:5000`. Endpoint pemeriksaan:
 `http://localhost:5000/api/health`.
 
+### Setelah `git pull`
+
+`npm run dev`, `npm run build`, dan `npm start` (backend dan frontend) otomatis
+menjalankan `scripts/ensure-deps.cjs`, yang memasang paket yang belum ada atau
+berbeda versi dengan `package-lock.json`. Backend juga selalu menjalankan
+`prisma generate`. Jika rekan mengubah `backend/prisma/schema.prisma`, sinkronkan
+database dengan `npm.cmd run prisma:push` di folder `backend`.
+
+Jika menambah paket, selalu commit `package.json` **dan** `package-lock.json`.
+
 ### Login dan profil dashboard
 
 Frontend mengirim login ke backend. Pilih peran di halaman awal, lalu masuk
@@ -66,6 +76,24 @@ Statistik poin, presensi, SKPI, dan aktivitas pada dashboard masih data demo
 sampai tabel dan API untuk data tersebut dibuat. Catatan konseling disimpan
 oleh Dosen PA dan ditampilkan sebagai riwayat baca-saja pada dashboard
 mahasiswa.
+
+### Menu DRC (Disiplin Refresh Competency)
+
+DRC adalah kegiatan wajib mahasiswa setiap awal semester yang membahas 5 tema
+disiplin (Waktu, Akademik, Tata Tertib dan Etika, Prosedur & Keselamatan,
+Lingkungan). Kemahasiswaan menambah, mengubah, atau menghapus seminar/kegiatan
+DRC dari menu **DRC** dan memilih peserta wajibnya per program studi (Teknologi
+Rekayasa Logistik, Survei dan Pemetaan, Perawatan Mesin) dan angkatan; tanpa
+pilihan berarti semua. Setiap kegiatan baru (dan perubahan atau pembatalan)
+dikirim hanya ke mahasiswa peserta sebagai pemberitahuan portal sekaligus email
+(email memakai pengaturan `SMTP_*`, tanpa SMTP hanya dicatat di log). Prodi
+dicocokkan dengan kolom `PRODI` mahasiswa tanpa membedakan huruf besar/kecil,
+jadi pastikan nama prodi di file upload sama dengan ketiga nama di atas.
+Mahasiswa hanya melihat kegiatan yang ditujukan untuknya di menu **DRC**.
+
+Tabel `KegiatanDrc` dibuat oleh migrasi `20261103000000_add_drc_activities` dan
+`20261103010000_add_drc_targets`; terapkan dengan
+`npm.cmd run prisma:migrate:deploy` dari folder `backend`.
 
 ### Alur laporan anonim dan tindak lanjut
 

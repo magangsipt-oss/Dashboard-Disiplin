@@ -4,11 +4,11 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "predev": "npm run prisma:generate",
+    "predev": "node scripts/ensure-deps.cjs && npm run prisma:generate",
     "dev": "tsx watch src/index.ts",
-    "prebuild": "npm run prisma:generate",
+    "prebuild": "node scripts/ensure-deps.cjs && npm run prisma:generate",
     "build": "tsc",
-    "test": "tsx --test tests/points.test.ts tests/point-ledger.test.ts tests/discipline.test.ts tests/report-routing.test.ts tests/academic-import.test.ts tests/security.test.ts",
+    "test": "tsx --test tests/points.test.ts tests/point-ledger.test.ts tests/discipline.test.ts tests/report-routing.test.ts tests/academic-import.test.ts tests/security.test.ts tests/drc.test.ts tests/student-export.test.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
@@ -26,7 +26,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:baseline": "prisma migrate resolve --applied 0_init",
     "prisma:fix-constraints": "tsx prisma/fix-staff-constraint-names.ts",
-    "prisma:migrate:evidence-to-db": "tsx prisma/migrate-evidence-to-db.ts"
+    "prisma:migrate:evidence-to-db": "tsx prisma/migrate-evidence-to-db.ts",
+    "prestart": "node scripts/ensure-deps.cjs"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

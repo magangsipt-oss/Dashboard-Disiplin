@@ -13,9 +13,9 @@ import {
   type PointChangeAction,
 } from "./points";
 import { verifyPassword } from "./password";
-import { recordPointChange } from "./point-ledger";
+import { classifyPointStatus, getPointSettings, recordPointChange } from "./point-ledger";
 import { listViolationsWithResolution, todayInCampusTime } from "./punishment";
-import { counselingSchema, loginSchema, parseBody } from "./validation";
+import { counselingSchema, impersonateSchema, loginSchema, parseBody } from "./validation";
 
 
 import { database } from "./db";
@@ -37,6 +37,8 @@ type UserProfile = {
   identityLabel: string;
   details: Array<{ label: string; value: string }>;
   createdAt: string;
+  // Terisi saat akun Kemahasiswaan sedang masuk sebagai mahasiswa/dosen PA.
+  impersonator?: UserProfile;
 };
 
 type Account = {
@@ -75,6 +77,13 @@ async function createSession(profile: UserProfile): Promise<string> {
     },
   });
   return token;
+}
+
+async function updateSessionProfile(token: string, profile: UserProfile): Promise<void> {
+  await database.sesi.update({
+    where: { tokenHash: hashSessionToken(token) },
+    data: { profile: profile as unknown as Prisma.InputJsonValue },
+  });
 }
 
 async function deleteSession(token: string): Promise<void> {
@@ -390,18 +399,26 @@ authRouter.get("/advisor/students", requireRole(["dosen"], "Hanya akun dosen yan
   const session = currentSession(response);
 
   try {
-    const students = await database.mahasiswa.findMany({
-      where: { dosenPaId: session.profile.id },
-      orderBy: { nama: "asc" },
-      select: {
-        id: true,
-        nim: true,
-        nama: true,
-        jurusan: true,
-        pointScore: true,
-      },
+    const [students, settings] = await Promise.all([
+      database.mahasiswa.findMany({
+        where: { dosenPaId: session.profile.id },
+        orderBy: { nama: "asc" },
+        select: {
+          id: true,
+          nim: true,
+          nama: true,
+          jurusan: true,
+          pointScore: true,
+        },
+      }),
+      getPointSettings(database),
+    ]);
+    response.json({
+      students: students.map((student) => {
+        const status = classifyPointStatus(student.pointScore, settings.batasStatus);
+        return { ...student, status: status.kode, statusLabel: status.label };
+      }),
     });
-    response.json({ students });
   } catch (error) {
     console.error("Gagal memuat daftar mahasiswa bimbingan:", error);
     response.status(500).json({ message: "Daftar mahasiswa bimbingan gagal dimuat." });
@@ -847,6 +864,177 @@ authRouter.post("/points/adjust", requireRole(["admin"], "Hanya admin kemahasisw
     }
     console.error("Gagal mencatat perubahan poin mahasiswa:", error);
     response.status(500).json({ message: "Perubahan poin gagal disimpan." });
+  }
+});
+
+// Akun Kemahasiswaan asli dari sesi, baik saat di halamannya sendiri maupun
+// saat sedang masuk sebagai mahasiswa/dosen PA.
+function kemahasiswaanProfileOf(session: Session | null): UserProfile | null {
+  if (!session) return null;
+  if (session.profile.role === "admin") return session.profile;
+  return session.profile.impersonator?.role === "admin" ? session.profile.impersonator : null;
+}
+
+type ImpersonationAccount = { id: number; name: string; identity: string };
+
+async function listImpersonationAccounts(role: "mhs" | "dosen"): Promise<ImpersonationAccount[]> {
+  if (role === "mhs") {
+    const students = await database.mahasiswa.findMany({
+      orderBy: [{ nama: "asc" }, { nim: "asc" }],
+      select: { id: true, nama: true, nim: true },
+    });
+    return students.map((student) => ({
+      id: student.id,
+      name: student.nama,
+      identity: String(student.nim),
+    }));
+  }
+  const lecturers = await database.dosen.findMany({
+    orderBy: [{ nama: "asc" }, { id: "asc" }],
+    select: { id: true, nama: true, email: true, nuptk: true },
+  });
+  return lecturers.map((lecturer) => ({
+    id: lecturer.id,
+    name: lecturer.nama,
+    identity: lecturer.email?.trim() || String(lecturer.nuptk),
+  }));
+}
+
+async function findImpersonationProfile(
+  role: "mhs" | "dosen",
+  accountId: number,
+): Promise<UserProfile | null> {
+  if (role === "mhs") {
+    const student = await database.mahasiswa.findUnique({ where: { id: accountId } });
+    if (!student) return null;
+    return {
+      id: student.id,
+      role,
+      roleLabel: "Mahasiswa",
+      name: student.nama,
+      identity: String(student.nim),
+      identityLabel: "NIM",
+      details: [{ label: "Jurusan", value: student.jurusan }],
+      createdAt: student.timestamp.toISOString(),
+    };
+  }
+  const lecturer = await database.dosen.findUnique({ where: { id: accountId } });
+  if (!lecturer) return null;
+  const email = lecturer.email?.trim();
+  return {
+    id: lecturer.id,
+    role,
+    roleLabel: "Dosen",
+    name: lecturer.nama,
+    identity: email || String(lecturer.nuptk),
+    identityLabel: email ? "Email" : "NUPTK",
+    details: [email ? { label: "Email", value: email } : { label: "NUPTK", value: String(lecturer.nuptk) }],
+    createdAt: lecturer.timestamp.toISOString(),
+  };
+}
+
+const IMPERSONATION_FORBIDDEN_MESSAGE =
+  "Pilihan masuk sebagai akun lain hanya tersedia untuk akun Kemahasiswaan.";
+
+authRouter.get("/impersonation/accounts", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  if (!session) {
+    response.status(401).json({ message: SESSION_MISSING_MESSAGE });
+    return;
+  }
+  if (!kemahasiswaanProfileOf(session)) {
+    response.status(403).json({ message: IMPERSONATION_FORBIDDEN_MESSAGE });
+    return;
+  }
+  const role = request.query.role;
+  if (role !== "mhs" && role !== "dosen") {
+    response.status(400).json({ message: "Peran akun tidak valid." });
+    return;
+  }
+
+  try {
+    response.json({ accounts: await listImpersonationAccounts(role) });
+  } catch (error) {
+    console.error("Gagal memuat daftar akun untuk Kemahasiswaan:", error);
+    response.status(500).json({ message: "Daftar akun gagal dimuat." });
+  }
+});
+
+// Tanpa accountId, sistem memakai akun pertama pada daftar.
+authRouter.post("/impersonation", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  const token = readSessionToken(request);
+  if (!session || !token) {
+    response.status(401).json({ message: SESSION_MISSING_MESSAGE });
+    return;
+  }
+  const kemahasiswaan = kemahasiswaanProfileOf(session);
+  if (!kemahasiswaan) {
+    response.status(403).json({ message: IMPERSONATION_FORBIDDEN_MESSAGE });
+    return;
+  }
+  const body = parseBody(impersonateSchema, request.body);
+  if (!body) {
+    response.status(400).json({ message: "Peran atau akun tujuan tidak valid." });
+    return;
+  }
+
+  try {
+    const accountId =
+      body.accountId ?? (await listImpersonationAccounts(body.role))[0]?.id;
+    const target = accountId ? await findImpersonationProfile(body.role, accountId) : null;
+    if (!target) {
+      response.status(404).json({
+        message: body.accountId
+          ? "Akun tujuan tidak ditemukan."
+          : `Belum ada akun ${body.role === "mhs" ? "mahasiswa" : "dosen PA"} yang terdaftar.`,
+      });
+      return;
+    }
+
+    const profile: UserProfile = { ...target, impersonator: kemahasiswaan };
+    await database.$transaction([
+      database.sesi.update({
+        where: { tokenHash: hashSessionToken(token) },
+        data: { profile: profile as unknown as Prisma.InputJsonValue },
+      }),
+      database.logAudit.create({
+        data: {
+          aktorId: kemahasiswaan.id,
+          aktorPeran: "admin",
+          aksi: "MASUK_SEBAGAI_AKUN",
+          entitas: body.role === "mhs" ? "Mahasiswa" : "Dosen",
+          entitasId: target.id,
+          nilaiBaru: { identity: target.identity, name: target.name },
+        },
+      }),
+    ]);
+    response.json({ profile });
+  } catch (error) {
+    console.error("Gagal masuk sebagai akun lain:", error);
+    response.status(500).json({ message: "Gagal beralih ke akun tujuan." });
+  }
+});
+
+authRouter.delete("/impersonation", async (request, response) => {
+  const session = getSessionForRequest(request, response);
+  const token = readSessionToken(request);
+  if (!session || !token) {
+    response.status(401).json({ message: SESSION_MISSING_MESSAGE });
+    return;
+  }
+  const kemahasiswaan = kemahasiswaanProfileOf(session);
+  if (!kemahasiswaan) {
+    response.status(403).json({ message: IMPERSONATION_FORBIDDEN_MESSAGE });
+    return;
+  }
+
+  try {
+    await updateSessionProfile(token, kemahasiswaan);
+    response.json({ profile: kemahasiswaan });
+  } catch (error) {
+    console.error("Gagal kembali ke akun Kemahasiswaan:", error);
+    response.status(500).json({ message: "Gagal kembali ke akun Kemahasiswaan." });
   }
 });
 

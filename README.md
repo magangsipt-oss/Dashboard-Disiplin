@@ -120,15 +120,19 @@ dijalankan dari folder lain. Halaman login dapat dibuka langsung melalui
 `/login?role=mhs`, `/login?role=dosen`, `/login?role=admin`, atau
 `/login?role=akademik`.
 
-Setelah login Akademik, menu **Upload Absensi** menerima CSV/XLSX dengan kolom
-`Mata_Kuliah`, `Kelas`, `NIM`, `Nama_Mahasiswa`, dan `Jumlah_Kehadiran`.
-Baris dengan kombinasi mata kuliah, kelas, dan NIM yang sudah ada akan dilewati.
-Menu **Upload Data Mahasiswa** menerima Excel dengan kolom wajib `NIM`,
-`Nama Lengkap`, `PRODI`, dan `Kata Sandi`. Menu **Upload Data Dosen** menerima
-`NUPTK`, `Nama`, `Email`, dan `Kata Sandi`; NUPTK dan email yang sudah terdaftar
-dilewati.
-Menu **Pembagian Mahasiswa Bimbingan** menerima CSV/Excel dengan kolom `NIM`,
-`Program Studi`, dan `DPA` atau `NUPTK`.
+Setelah login Akademik, setiap menu upload hanya menerima file yang memuat
+**semua** kolom template-nya, dan setiap kolom wajib diisi:
+
+- **Upload Absensi**: `NO`, `Matakuliah`, `Kelas`, `NIM`, `Nama Mahasiswa`,
+  `Jumlah Kehadiran`, `Kehadiran`, `Sakit`, `Ijin`, `Alpa`. Baris dengan
+  kombinasi mata kuliah, kelas, dan NIM yang sudah ada akan dilewati.
+- **Upload Data Mahasiswa**: `No.`, `NIM`, `Nama Lengkap`, `Program Studi`,
+  `Angkatan`, `Nama SMTA`, `Email`, `No Handphone`, `Kata Sandi`.
+- **Upload Data Dosen**: `No`, `Nama Dosen`, `Email`, `NUPTK`, `PRODI`,
+  `Password`; NUPTK dan email yang sudah terdaftar dilewati.
+- **Pembagian Mahasiswa Bimbingan**: `No.`, `NIM`, `Nama Lengkap`,
+  `Program Studi`, `Angkatan`, `DPA`. Kolom `NUPTK` boleh ditambahkan untuk
+  mencocokkan dosen lebih pasti.
 
 Untuk menyiapkan tabel penyimpanan absensi pada database yang dikonfigurasi,
 jalankan `npm.cmd run prisma:push` dari folder `backend`.

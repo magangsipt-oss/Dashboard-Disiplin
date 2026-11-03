@@ -2098,6 +2098,82 @@ reportRouter.get("/admin/klaim-kegiatan", async (request, response) => {
   }
 });
 
+// Ringkasan angka setiap menu Kemahasiswaan untuk halaman dashboard.
+reportRouter.get("/admin/ringkasan", async (request, response) => {
+  if (!requireAdmin(request, response)) return;
+  const today = todayInCampusTime();
+  const punishmentWhere: Prisma.PembinaanWhereInput = {
+    perubahanPoin: { is: { type: "REPORTED_VIOLATION", laporan: { isNot: null } } },
+  };
+  const categoryNames = Object.keys(adminQueueCategories) as AdminQueueCategory[];
+  try {
+    const [
+      laporanCounts,
+      klaimCounts,
+      menungguPunishment,
+      punishmentBerjalan,
+      punishmentDiperiksa,
+      punishmentTerlambat,
+      punishmentSelesai,
+      aturanAktif,
+      aturanNonaktif,
+    ] = await Promise.all([
+      Promise.all(
+        categoryNames.map((name) => database.laporan.count({ where: adminQueueCategories[name] })),
+      ),
+      database.klaimKegiatan.groupBy({ by: ["status"], _count: { _all: true } }),
+      database.laporan.count({
+        where: {
+          jenis: JenisLaporan.TEMUAN,
+          status: StatusLaporan.DIVERIFIKASI,
+          dikonfirmasiDosenId: { not: null },
+          perubahanPoinId: { not: null },
+        },
+      }),
+      database.pembinaan.count({
+        where: { ...punishmentWhere, status: { in: openPunishmentStatuses } },
+      }),
+      database.pembinaan.count({
+        where: { ...punishmentWhere, status: StatusPembinaan.DIKIRIM },
+      }),
+      // Sama dengan isPunishmentLate: lewat batas waktu atau pernah didenda.
+      database.pembinaan.count({
+        where: {
+          ...punishmentWhere,
+          OR: [
+            { hariDenda: { gt: 0 } },
+            { status: { in: openPunishmentStatuses }, batasWaktu: { lt: today } },
+          ],
+        },
+      }),
+      database.pembinaan.count({
+        where: { ...punishmentWhere, status: StatusPembinaan.DISETUJUI },
+      }),
+      database.aturanPelanggaran.count({ where: { aktif: true } }),
+      database.aturanPelanggaran.count({ where: { aktif: false } }),
+    ]);
+    const countByStatus = (rows: Array<{ status: string; _count: { _all: number } }>) =>
+      Object.fromEntries(rows.map((row) => [row.status, row._count._all]));
+    response.json({
+      laporan: Object.fromEntries(
+        categoryNames.map((name, index) => [name, laporanCounts[index]]),
+      ),
+      klaim: countByStatus(klaimCounts),
+      punishment: {
+        menunggu: menungguPunishment,
+        berjalan: punishmentBerjalan,
+        diperiksa: punishmentDiperiksa,
+        terlambat: punishmentTerlambat,
+        selesai: punishmentSelesai,
+      },
+      aturan: { aktif: aturanAktif, nonaktif: aturanNonaktif },
+    });
+  } catch (error) {
+    console.error("Gagal memuat ringkasan Kemahasiswaan:", error);
+    response.status(500).json({ message: "Ringkasan dashboard gagal dimuat." });
+  }
+});
+
 reportRouter.patch("/admin/klaim-kegiatan/:id", async (request, response) => {
   const session = requireAdmin(request, response);
   if (!session) return;

@@ -24,12 +24,13 @@ function makeWorkbookBuffer(rows: unknown[][]): Buffer {
 test("attendance import reads the supplied CSV columns", () => {
   const csv = Buffer.from(
     [
-      "No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran",
-      '1,"Pemrograman, Dasar",TI-1,12345,"Budi Santoso",14',
+      "No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran,Kehadiran,Sakit,Ijin,Alpa",
+      '1,"Pemrograman, Dasar",TI-1,12345,"Budi Santoso",14,12,1,0,1',
     ].join("\n"),
   );
 
-  assert.deepEqual(parseAcademicAttendanceFile(csv, "absensi.csv"), [
+  const rows = parseAcademicAttendanceFile(csv, "absensi.csv");
+  assert.deepEqual(rows, [
     {
       mataKuliah: "Pemrograman, Dasar",
       kelas: "TI-1",
@@ -38,6 +39,7 @@ test("attendance import reads the supplied CSV columns", () => {
       jumlahKehadiran: 14,
     },
   ]);
+  assert.equal(rows[0].alpa, 1);
 });
 
 test("attendance import reads the official Tamplate Absensi layout", () => {
@@ -146,9 +148,9 @@ test("attendance preview skips rows that only contain placeholders or incomplete
 test("attendance import rejects conflicting names for the same NIM", () => {
   const csv = Buffer.from(
     [
-      "No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran",
-      '1,"Pemrograman Dasar",TI-1,12345,"Budi Santoso",14',
-      '2,"Pemrograman Dasar",TI-1,12345,"Budi Santoso Jr.",13',
+      "No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran,Kehadiran,Sakit,Ijin,Alpa",
+      '1,"Pemrograman Dasar",TI-1,12345,"Budi Santoso",14,14,0,0,0',
+      '2,"Pemrograman Dasar",TI-1,12345,"Budi Santoso Jr.",13,13,0,0,0',
     ].join("\n"),
   );
 
@@ -160,10 +162,10 @@ test("attendance import rejects conflicting names for the same NIM", () => {
   );
 });
 
-test("advisor assignment import reads NIM, Program Studi, and NUPTK from an Excel workbook", () => {
+test("advisor assignment import reads every template column plus an optional NUPTK", () => {
   const workbook = makeWorkbookBuffer([
-    ["NIM", "Program Studi", "NUPTK"],
-    [12345, "Teknologi Rekayasa Logistik", "198701012010011001"],
+    ["No.", "NIM", "Nama Lengkap", "Program Studi", "Angkatan", "DPA", "NUPTK"],
+    [1, 12345, "Budi Santoso", "Teknologi Rekayasa Logistik", 2023, "Hamim Rachman", "198701012010011001"],
   ]);
 
   assert.deepEqual(
@@ -173,25 +175,35 @@ test("advisor assignment import reads NIM, Program Studi, and NUPTK from an Exce
         nim: 12345,
         programStudi: "Teknologi Rekayasa Logistik",
         nuptk: "198701012010011001",
+        dpa: "Hamim Rachman",
       },
     ],
   );
 });
 
 test("attendance import rejects missing required columns", () => {
-  const csv = Buffer.from("Mata_Kuliah,Kelas,NIM\nMatematika,A,12345");
+  const csv = Buffer.from("No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran\n1,Matematika,A,12345,Budi,14");
 
   assert.throws(
     () => parseAcademicAttendanceFile(csv, "absensi.csv"),
-    (error: unknown) =>
-      error instanceof AcademicImportValidationError &&
-      error.message.includes("nama_mahasiswa"),
+    /Kolom wajib tidak ditemukan: Kehadiran, Sakit, Ijin, Alpa/,
+  );
+});
+
+test("attendance import requires every column to be filled", () => {
+  const csv = Buffer.from(
+    "No,Mata_Kuliah,Kelas,NIM,Nama_Mahasiswa,Jumlah_Kehadiran,Kehadiran,Sakit,Ijin,Alpa\n1,Matematika,A,12345,Budi,14,14,,0,",
+  );
+
+  assert.throws(
+    () => parseAcademicAttendanceFile(csv, "absensi.csv"),
+    /Sakit, Alpa wajib diisi pada baris 2/,
   );
 });
 
 test("advisor assignment import rejects duplicate student NIMs", () => {
   const csv = Buffer.from(
-    "NIM,Program Studi,NUPTK\n12345,TR Logistik,198701012010011001\n12345,TR Logistik,198901012010011002",
+    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,DPA\n1,12345,Budi,TR Logistik,2023,Dosen A\n2,12345,Budi,TR Logistik,2023,Dosen B",
   );
 
   assert.throws(
@@ -202,31 +214,29 @@ test("advisor assignment import rejects duplicate student NIMs", () => {
   );
 });
 
-test("advisor assignment import requires Program Studi", () => {
-  const csv = Buffer.from("NIM,NUPTK\n12345,198701012010011001");
+test("advisor assignment import requires every template column", () => {
+  const csv = Buffer.from("No.,NIM,Nama Lengkap,DPA\n1,12345,Budi,Dosen A");
 
   assert.throws(
     () => parseAdvisorAssignmentFile(csv, "pembagian.csv"),
-    (error: unknown) =>
-      error instanceof AcademicImportValidationError &&
-      error.message.includes("Program Studi"),
+    /Kolom wajib tidak ditemukan: Program Studi, Angkatan/,
   );
 });
 
-test("advisor assignment import does not accept legacy lecturer identifiers", () => {
+test("advisor assignment import requires DPA even when NUPTK is given", () => {
   const csv = Buffer.from(
-    "NIM,Program Studi,NIP\n12345,Teknologi Rekayasa Logistik,198701012010011001",
+    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,NUPTK\n1,12345,Budi,Teknologi Rekayasa Logistik,2023,198701012010011001",
   );
 
   assert.throws(
     () => parseAdvisorAssignmentFile(csv, "pembagian.csv"),
-    /Kolom DPA atau NUPTK tidak ditemukan/,
+    /Kolom wajib tidak ditemukan: DPA/,
   );
 });
 
-test("new student import reads required email and phone alongside optional details", () => {
+test("new student import reads every template column", () => {
   const csv = Buffer.from(
-    "NIM,Nama Lengkap,PRODI,Angkatan,Email,No Handphone,Nama SMTA,Kata Sandi\n24409901,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,mahasiswa@example.com,081234567890,SMA Berau,rahasia123",
+    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone,Kata Sandi\n1,24409901,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,SMA Berau,mahasiswa@example.com,081234567890,rahasia123",
   );
 
   assert.deepEqual(parseNewStudentImportFile(csv, "mahasiswa.csv"), [
@@ -245,7 +255,7 @@ test("new student import reads required email and phone alongside optional detai
 
 test("new student import rejects duplicate NIMs and missing passwords", () => {
   const duplicateNims = Buffer.from(
-    "NIM,Nama,PRODI,Email,No Handphone,Kata Sandi\n12345,Budi,TI,budi@example.com,081234567890,rahasia123\n12345,Budi,TI,budi@example.com,081234567890,rahasia456",
+    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone,Kata Sandi\n1,12345,Budi,TI,2024,SMA 1,budi@example.com,081234567890,rahasia123\n2,12345,Budi,TI,2024,SMA 1,budi@example.com,081234567890,rahasia456",
   );
   assert.throws(
     () => parseNewStudentImportFile(duplicateNims, "mahasiswa.csv"),
@@ -253,7 +263,7 @@ test("new student import rejects duplicate NIMs and missing passwords", () => {
   );
 
   const missingPassword = Buffer.from(
-    "NIM,Nama,PRODI,Email,No Handphone\n12345,Budi,TI,budi@example.com,081234567890",
+    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone\n1,12345,Budi,TI,2024,SMA 1,budi@example.com,081234567890",
   );
   assert.throws(
     () => parseNewStudentImportFile(missingPassword, "mahasiswa.csv"),
@@ -261,29 +271,21 @@ test("new student import rejects duplicate NIMs and missing passwords", () => {
   );
 });
 
-test("new student import requires Email and No Handphone columns and values", () => {
+test("new student import requires every template column and value", () => {
   const missingColumns = Buffer.from(
-    "NIM,Nama,PRODI,Kata Sandi\n12345,Budi,TI,rahasia123",
+    "No.,NIM,Nama Lengkap,Program Studi,Email,No Handphone,Kata Sandi\n1,12345,Budi,TI,budi@example.com,081234567890,rahasia123",
   );
   assert.throws(
     () => parseNewStudentImportFile(missingColumns, "mahasiswa.csv"),
-    /Email, No Handphone/,
+    /Kolom wajib tidak ditemukan: Angkatan, Nama SMTA/,
   );
 
-  const emptyEmail = Buffer.from(
-    "NIM,Nama,PRODI,Email,No Handphone,Kata Sandi\n12345,Budi,TI,,081234567890,rahasia123",
+  const emptyValues = Buffer.from(
+    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone,Kata Sandi\n1,12345,Budi,TI,,SMA 1,,081234567890,rahasia123",
   );
   assert.throws(
-    () => parseNewStudentImportFile(emptyEmail, "mahasiswa.csv"),
-    /Email dan No Handphone wajib diisi/,
-  );
-
-  const emptyPhone = Buffer.from(
-    "NIM,Nama,PRODI,Email,No Handphone,Kata Sandi\n12345,Budi,TI,budi@example.com,,rahasia123",
-  );
-  assert.throws(
-    () => parseNewStudentImportFile(emptyPhone, "mahasiswa.csv"),
-    /Email dan No Handphone wajib diisi/,
+    () => parseNewStudentImportFile(emptyValues, "mahasiswa.csv"),
+    /Angkatan, Email wajib diisi pada baris 2/,
   );
 });
 
@@ -292,8 +294,8 @@ test("new lecturer import reads NUPTK from XLS files and requires unique login d
   XLSX.utils.book_append_sheet(
     workbook,
     XLSX.utils.aoa_to_sheet([
-      ["NUPTK", "Nama", "Email", "Kata Sandi"],
-      ["198701012010011001", "Dosen Baru", "dosen@example.com", "rahasia123"],
+      ["No", "Nama Dosen", "Email", "NUPTK", "PRODI", "Password"],
+      ["1", "Dosen Baru", "dosen@example.com", "198701012010011001", "Teknologi Rekayasa Logistik", "rahasia123"],
     ]),
     "Data",
   );
@@ -309,13 +311,13 @@ test("new lecturer import reads NUPTK from XLS files and requires unique login d
   ]);
 });
 
-test("new lecturer import requires NUPTK", () => {
+test("new lecturer import requires every template column", () => {
   const csv = Buffer.from(
-    "Nama,Email,Kata Sandi\nDosen Baru,dosen@example.com,rahasia123",
+    "No,Nama Dosen,Email,Password\n1,Dosen Baru,dosen@example.com,rahasia123",
   );
 
   assert.throws(
     () => parseNewLecturerImportFile(csv, "dosen.csv"),
-    /NUPTK/,
+    /Kolom wajib tidak ditemukan: NUPTK, PRODI/,
   );
 });

@@ -80,7 +80,7 @@ export default function TemplatePreviewModal({ category, onClose }) {
           ) : (
             <>
               <p className="mb-4 text-xs text-slate-600">
-                Kolom bertanda <span className="font-bold text-red-800">*</span> wajib diisi. Judul kolom harus di baris pertama; urutan kolom boleh berbeda. Baris di bawah judul hanya contoh, ganti dengan data asli sebelum diunggah.
+                Semua kolom wajib ada dan wajib diisi. Judul kolom harus di baris pertama; urutan kolom boleh berbeda. Baris di bawah judul hanya contoh, ganti dengan data asli sebelum diunggah.
               </p>
               <div className="flex-1 overflow-auto rounded-2xl border border-slate-200 shadow-inner max-h-[55vh]">
                 <table className="w-full text-left text-xs">
@@ -89,7 +89,7 @@ export default function TemplatePreviewModal({ category, onClose }) {
                       {template.headers.map((header) => (
                         <th key={header} className="px-4 py-2.5 whitespace-nowrap">
                           {header}
-                          {template.requiredHeaders.includes(header) && <span className="ml-0.5 text-red-800">*</span>}
+                          <span className="ml-0.5 text-red-800">*</span>
                         </th>
                       ))}
                     </tr>

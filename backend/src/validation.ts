@@ -28,6 +28,11 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const impersonateSchema = z.object({
+  role: z.enum(["mhs", "dosen"]),
+  accountId: z.number().int().positive().max(2_147_483_647).optional(),
+});
+
 export const counselingSchema = z.object({
   studentId: z.number().int().positive().max(2_147_483_647),
   type: z.enum(["GUIDANCE_NOTE", "COUNSELING_CALL"]),

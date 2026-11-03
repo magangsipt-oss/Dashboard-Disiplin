@@ -14,8 +14,12 @@ import AdminPunishment from './reports/AdminPunishment';
 import AdminPointRules from './reports/AdminPointRules';
 import AdminPointData from './reports/AdminPointData';
 import AdminLecturerMonitoring from './reports/AdminLecturerMonitoring';
+import AdminDashboardSummary from './reports/AdminDashboardSummary';
+import DosenDashboardSummary from './reports/DosenDashboardSummary';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
 import FilePreviewModal from './modals/FilePreviewModal';
+import KemahasiswaanSwitcher from './KemahasiswaanSwitcher';
+import NotificationBell from './NotificationBell';
 import TemplatePreviewModal from './modals/TemplatePreviewModal';
 import { 
   ShieldCheck, 
@@ -61,12 +65,6 @@ const violationSeverities = [
   { severity: 'BERAT', label: 'Berat', pointRange: '15–30', minimumPoints: 15, maximumPoints: 30, followUp: 'Pembinaan edukatif ditetapkan Kemahasiswaan', badge: 'bg-red-100 text-red-800' },
 ];
 
-const severityPointDeductions = {
-  RINGAN: ['5', '10', '5', '10', '5'],
-  SEDANG: ['10', '15', '10', '20', '10'],
-  BERAT: ['15', '25', '15', '30', '15'],
-};
-
 const severityLegacyCount = {
   BERAT: 'SANGAT_BERAT',
 };
@@ -96,7 +94,7 @@ const heroImages = [
 ];
 const navigationByRole = {
   mhs: [
-    { id: 'dashboard', label: 'Aktivitas', description: 'Ringkasan skor kedisiplinan, presensi, dan riwayat perubahan poin Anda.' },
+    { id: 'dashboard', label: 'Ringkasan', description: 'Ringkasan skor kedisiplinan, presensi, dan riwayat perubahan poin Anda.' },
     { id: 'sanggah', label: 'Sanggah Pelanggaran', description: 'Ajukan keberatan atas pengurangan poin yang menurut Anda tidak sesuai, lengkap dengan alasan dan bukti.' },
     { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
     { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
@@ -104,21 +102,20 @@ const navigationByRole = {
     { id: 'klaim', label: 'Klaim Kegiatan', description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
   ],
   dosen: [
-    { id: 'bimbingan', label: 'Mahasiswa Bimbingan', description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
+    { id: 'bimbingan', label: 'Ringkasan', description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
     { id: 'laporan-dpa', label: 'Konfirmasi Laporan', description: 'Tinjau laporan pelanggaran mahasiswa bimbingan Anda, lalu konfirmasi atau tolak.' },
     { id: 'konseling', label: 'Catatan & Konseling', description: 'Catat pembinaan dan jadwalkan panggilan konseling untuk mahasiswa bimbingan.' },
     { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
     { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
   admin: [
-    { id: 'dashboard', label: 'Dashboard Kemahasiswaan', description: 'Ringkasan pemantauan kedisiplinan seluruh mahasiswa.' },
+    { id: 'dashboard', label: 'Ringkasan', description: 'Ringkasan pemantauan kedisiplinan seluruh mahasiswa.' },
     { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan', description: 'Telusuri laporan satgas yang masuk dan teruskan ke Dosen PA untuk dikonfirmasi.' },
     { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan', description: 'Verifikasi klaim poin kegiatan yang diajukan mahasiswa.' },
     { id: 'punishment', label: 'Punishment', description: 'Tetapkan tindak lanjut edukatif untuk pelanggaran yang sudah dikonfirmasi.' },
     { id: 'pengaturan-poin', label: 'Pengaturan Poin', description: 'Atur aturan poin kedisiplinan mahasiswa.' },
     { id: 'data-poin', label: 'Monitoring Mahasiswa', description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
     { id: 'monitoring-dpa', label: 'Monitoring DPA', description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
-    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
   akademik: [
     { id: 'upload-absensi', label: 'Upload Absensi', description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },
@@ -193,7 +190,6 @@ export default function App({ hasSessionCookie = false }) {
   const [isLoadingCounseling, setIsLoadingCounseling] = useState(false);
   const [counselingStudents, setCounselingStudents] = useState([]);
   const [counselingStudentsError, setCounselingStudentsError] = useState('');
-  const [studentRiskFilter, setStudentRiskFilter] = useState('ALL');
   const [selectedCounselingStudentId, setSelectedCounselingStudentId] = useState('');
   const [counselingForm, setCounselingForm] = useState({
     type: 'GUIDANCE_NOTE',
@@ -237,18 +233,6 @@ export default function App({ hasSessionCookie = false }) {
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
   const homeTab = dashboardNavigation[0].id;
   const activeMenu = dashboardNavigation.find((item) => item.id === activeTab);
-  const filteredAdvisorStudents = advisorStudents.filter((student) => {
-    if (studentRiskFilter === 'UNDISCIPLINED') {
-      return student.pointScore <= 50;
-    }
-    if (studentRiskFilter === 'LESS_DISCIPLINED') {
-      return student.pointScore > 50 && student.pointScore < 100;
-    }
-    if (studentRiskFilter === 'DISCIPLINED') {
-      return student.pointScore >= 100;
-    }
-    return true;
-  });
   // Menu konseling dosen hanya menampilkan mahasiswa yang pernah mengajukan sanggahan.
   const appealingStudents = counselingStudents.filter(
     (student) => (student.sanggahans ?? []).length > 0,
@@ -1213,7 +1197,7 @@ export default function App({ hasSessionCookie = false }) {
           </section>
 
           <footer className="bg-slate-950 text-slate-400 py-6 text-center text-xs border-t border-slate-800 relative z-20">
-            © 2026 Politeknik Sinar Mas Berau Coal — SIGMA
+            © 2026 Sentra Inovasi dan Penelitian Penerapan (SIPT)
           </footer>
         </div>
       )}
@@ -1265,15 +1249,17 @@ export default function App({ hasSessionCookie = false }) {
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-full items-center gap-1.5 rounded-lg border border-red-800/50 bg-[#581c1c]/90 px-3 text-xs text-red-200">
-                      <span className="font-semibold">Role :</span>
-                      <span className="font-bold">
-                        {authenticatedUser?.role === 'admin'
-                          ? 'Kemahasiswaan'
-                          : (authenticatedUser?.roleLabel ?? 'Belum login')}
-                      </span>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {authenticatedUser?.role === 'admin' || authenticatedUser?.impersonator ? (
+                      <KemahasiswaanSwitcher profile={authenticatedUser} />
+                    ) : (
+                      <div className="flex h-full items-center gap-1.5 rounded-lg border border-red-800/50 bg-[#581c1c]/90 px-3 text-xs text-red-200">
+                        <span className="font-semibold">Role :</span>
+                        <span className="font-bold">
+                          {authenticatedUser?.roleLabel ?? 'Belum login'}
+                        </span>
+                      </div>
+                    )}
 
                     <button 
                       onClick={handleLogout}
@@ -1294,7 +1280,7 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'admin', 'akademik'].includes(authenticatedUser?.role) && (
+            {activeTab === 'cek-laporan' && ['mhs', 'dosen', 'akademik'].includes(authenticatedUser?.role) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
                 <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
                 <CekLaporan />
@@ -1333,9 +1319,12 @@ export default function App({ hasSessionCookie = false }) {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-900/40 rounded-full text-amber-300 text-xs font-semibold border border-red-500/30">
                     <Clock className="w-3.5 h-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
                   </div>
-                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                    Selamat Datang, {authenticatedUser?.name || 'Pengguna'}
-                  </h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                      Selamat Datang, {authenticatedUser?.name || 'Pengguna'}
+                    </h2>
+                    <NotificationBell endpoint="/api/mahasiswa/pemberitahuan" />
+                  </div>
                   <p className="text-red-100 text-sm" data-testid="database-profile">
                     {authenticatedUser?.identityLabel}: {authenticatedUser?.identity}
                     {authenticatedUser?.details?.map((detail) => ` • ${detail.label}: ${detail.value}`)}
@@ -1544,66 +1533,6 @@ export default function App({ hasSessionCookie = false }) {
                       </div>
                     )}
                   </section>
-
-                  <details data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
-                    <summary className="cursor-pointer list-none text-lg font-bold text-slate-900">
-                      Pahami 5 Pilar dan Tingkat Pelanggaran
-                    </summary>
-                    <div className="mt-4 space-y-5">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {[
-                          { label: 'Disiplin Waktu', description: 'Hadir tepat waktu dan memanfaatkan waktu efektif.' },
-                          { label: 'Disiplin Akademik', description: 'Bertanggung jawab dalam pembelajaran, tugas, ujian, dan praktikum.' },
-                          { label: 'Disiplin Tata Tertib dan Etika', description: 'Menjaga penampilan, komunikasi, dan perilaku sesuai aturan kampus.' },
-                          { label: 'Disiplin Prosedur dan Keselamatan (K3)', description: 'Mematuhi SOP, K3, serta penggunaan fasilitas dan alat.' },
-                          { label: 'Disiplin Lingkungan', description: 'Menjaga kebersihan, ketertiban, fasilitas, dan kelestarian lingkungan kampus.' },
-                        ].map(({ label, description }) => (
-                          <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <h4 className="text-sm font-bold text-slate-800">{label}</h4>
-                            <p className="mt-1 text-xs leading-relaxed text-slate-600">{description}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-800">Pengurangan poin per pilar</h4>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Acuan skema; pengurangan aktual mengikuti bobot aturan yang digunakan saat verifikasi.
-                        </p>
-                        <div className="mt-3 overflow-x-auto">
-                          <table className="w-full min-w-[760px] text-left text-xs">
-                            <thead className="border-b border-slate-200 font-bold text-slate-600">
-                              <tr>
-                                <th scope="col" className="py-2 pr-3">Tingkat</th>
-                                {disciplinePillars.map(({ pillar, label }) => (
-                                  <th scope="col" key={pillar} className="px-2 py-2 text-center">{label.replace('Disiplin ', '')}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {violationSeverities.map(({ severity, label, badge }) => (
-                                <tr key={severity}>
-                                  <th scope="row" className="py-3 pr-3 font-medium">
-                                    <span className={`inline-flex rounded-full px-3 py-1 font-bold ${badge}`}>{label}</span>
-                                  </th>
-                                  {severityPointDeductions[severity].map((points, index) => (
-                                    <td key={disciplinePillars[index].pillar} className="px-2 py-3 text-center text-slate-700">
-                                      −{points} poin
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                          Pelanggaran berulang dapat dikenai tambahan pengurangan 5–10 poin sesuai hasil pembinaan dan keputusan kampus.
-                        </p>
-                      </div>
-                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
-                        Pelanggaran yang terbukti ditindaklanjuti dengan pembinaan edukatif oleh Kemahasiswaan. Skema menetapkan penyelesaian maksimal 14 hari; ikuti tenggat pada tugas yang diberikan.
-                      </p>
-                    </div>
-                  </details>
 
                   <AktivitasMahasiswa onNavigate={(tab) => setActiveTab(tab)} />
                 </>
@@ -2229,9 +2158,12 @@ export default function App({ hasSessionCookie = false }) {
                     <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-900/40 px-3 py-1 text-xs font-semibold text-amber-300">
                       <Clock className="h-3.5 w-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
                     </div>
-                    <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-                      Selamat Datang, {authenticatedUser?.name || 'Dosen'}
-                    </h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                        Selamat Datang, {authenticatedUser?.name || 'Dosen'}
+                      </h2>
+                      <NotificationBell endpoint="/api/dosen/pemberitahuan" />
+                    </div>
                     <p className="text-sm text-red-100" data-testid="database-profile">
                       {authenticatedUser?.details
                         ?.filter((detail) => detail.label === 'Email')
@@ -2283,6 +2215,15 @@ export default function App({ hasSessionCookie = false }) {
                     </div>
                   ))}
                 </section>
+
+                {activeTab === homeTab && (
+                  <DosenDashboardSummary
+                    students={advisorStudents}
+                    isLoadingStudents={isLoadingAdvisorStudents}
+                    studentsError={advisorStudentsError}
+                    onOpen={setActiveTab}
+                  />
+                )}
 
                 {activeTab === 'konseling' ? (
                   <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
@@ -2537,66 +2478,7 @@ export default function App({ hasSessionCookie = false }) {
                       </div>
                     )}
                   </section>
-                ) : (
-                  <section data-scroll-reveal className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-                    <div className="flex flex-wrap items-end justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-extrabold text-slate-900">Daftar Mahasiswa Bimbingan</h3>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Mahasiswa yang pengajuan dosen PA-nya telah disetujui akan tampil di daftar ini.
-                        </p>
-                      </div>
-                      <div>
-                        <label htmlFor="student-risk-filter" className="mb-1 block text-xs font-bold text-slate-600">Filter zona risiko</label>
-                        <select
-                          id="student-risk-filter"
-                          value={studentRiskFilter}
-                          onChange={(event) => setStudentRiskFilter(event.target.value)}
-                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-700"
-                        >
-                          <option value="ALL">Semua mahasiswa</option>
-                          <option value="UNDISCIPLINED">Tidak Disiplin (0–50)</option>
-                          <option value="LESS_DISCIPLINED">Kurang Disiplin (51–99)</option>
-                          <option value="DISCIPLINED">Disiplin (100–200)</option>
-                        </select>
-                      </div>
-                    </div>
-                    {advisorStudentsError && (
-                      <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-                        {advisorStudentsError}
-                      </p>
-                    )}
-                    {isLoadingAdvisorStudents ? (
-                      <p className="mt-5 rounded-xl bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">Memuat mahasiswa bimbingan...</p>
-                    ) : advisorStudents.length === 0 ? (
-                      <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                        <p className="font-semibold text-slate-700">Belum ada mahasiswa bimbingan</p>
-                        <p className="mt-1 text-sm text-slate-500">Mahasiswa akan muncul di sini setelah ditetapkan oleh bagian akademik.</p>
-                      </div>
-                    ) : (
-                      <div className="mt-5 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                        {filteredAdvisorStudents.map((student) => (
-                          <article key={student.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                            <div className="min-w-0">
-                              <h4 className="truncate font-bold text-slate-900">{student.nama}</h4>
-                              <p className="mt-1 text-sm text-slate-600">
-                                NIM {student.nim} <span className="mx-1 text-slate-300">·</span> {student.jurusan}
-                              </p>
-                            </div>
-                            <p className="text-xs font-semibold text-slate-600 sm:text-right">
-                              Skor kedisiplinan: {student.pointScore}
-                            </p>
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                    {!isLoadingAdvisorStudents && advisorStudents.length > 0 && filteredAdvisorStudents.length === 0 && (
-                      <p className="mt-5 rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                        Tidak ada mahasiswa pada zona risiko yang dipilih.
-                      </p>
-                    )}
-                  </section>
-                )}
+                ) : null}
               </main>
             )}
 
@@ -2605,9 +2487,12 @@ export default function App({ hasSessionCookie = false }) {
                 {activeTab === homeTab ? (
                 <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
-                  <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
-                    Dashboard Monitoring Kedisiplinan Mahasiswa
-                  </h2>
+                  <div className="mt-2 flex items-center gap-3">
+                    <h2 className="text-2xl font-extrabold sm:text-3xl">
+                      Dashboard Monitoring Kedisiplinan Mahasiswa
+                    </h2>
+                    <NotificationBell endpoint="/api/admin/pemberitahuan" />
+                  </div>
                   <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
                     Pantau data mahasiswa dan dosen PA, telusuri laporan anonim, dan tetapkan tindak lanjut edukatif setelah laporan dikonfirmasi Dosen PA.
                   </p>
@@ -2670,6 +2555,16 @@ export default function App({ hasSessionCookie = false }) {
                   <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                     {adminMonitoringError}
                   </p>
+                )}
+
+                {activeTab === homeTab && (
+                  <AdminDashboardSummary
+                    students={adminMonitoring.students}
+                    lecturers={adminMonitoring.lecturers}
+                    isLoadingMonitoring={isLoadingAdminMonitoring}
+                    monitoringError={adminMonitoringError}
+                    onOpen={setActiveTab}
+                  />
                 )}
 
                 {activeTab === 'monitoring-dpa' && (

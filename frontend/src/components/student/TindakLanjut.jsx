@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClipboardCheck, FileText, MessageSquareText } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
 import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
@@ -28,18 +28,40 @@ const reportStatusLabels = {
   DITOLAK: "Tidak dikonfirmasi Dosen PA",
 };
 
-const appealStatusLabels = {
-  DIAJUKAN: "Diajukan",
-  DISETUJUI: "Disetujui",
-  DITOLAK: "Ditolak",
-};
-
 const trainingStatusLabels = {
   DIMINTA: "Diminta",
   DIKIRIM: "Dikirim",
   DISETUJUI: "Disetujui",
   DITOLAK: "Perlu perbaikan",
 };
+
+const VISIBLE_ITEM_COUNT = 4;
+
+// Tinggi daftar dibatasi pada item ke-4; sisanya digulir. Diukur ulang saat
+// ukuran berubah karena tinggi tiap kartu berbeda-beda.
+function useVisibleItemsHeight(items) {
+  const listRef = useRef(null);
+  const [maxHeight, setMaxHeight] = useState();
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return undefined;
+    const measure = () => {
+      const lastVisible = list.children[VISIBLE_ITEM_COUNT - 1];
+      setMaxHeight(
+        list.children.length > VISIBLE_ITEM_COUNT
+          ? lastVisible.offsetTop + lastVisible.offsetHeight
+          : undefined,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [items]);
+
+  return [listRef, maxHeight];
+}
 
 export default function TindakLanjut({ onAppeal }) {
   const [reports, setReports] = useState([]);
@@ -55,6 +77,9 @@ export default function TindakLanjut({ onAppeal }) {
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [evidenceNote, setEvidenceNote] = useState("");
   const [isSubmittingEvidence, setIsSubmittingEvidence] = useState(false);
+  // null selama memuat agar ukuran diukur ulang begitu daftar tampil.
+  const [reportListRef, reportListHeight] = useVisibleItemsHeight(isLoading ? null : reports);
+  const [trainingListRef, trainingListHeight] = useVisibleItemsHeight(isLoading ? null : training);
 
   function fetchFollowUps() {
     return Promise.all([
@@ -141,6 +166,7 @@ export default function TindakLanjut({ onAppeal }) {
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
       {submitStatus && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{submitStatus}</p>}
 
+      <div className="grid gap-5 lg:grid-cols-2">
       <div className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-800"><FileText className="h-5 w-5" /></div>
@@ -157,12 +183,13 @@ export default function TindakLanjut({ onAppeal }) {
             Tidak ada laporan yang melibatkan Anda.
           </div>
         ) : (
-          <div className="mt-5 space-y-3">
+          <div ref={reportListRef} style={{ maxHeight: reportListHeight }} className="relative mt-5 space-y-3 overflow-y-auto pr-1">
             {reports.map((report) => {
               const severity = severityLabels[report.severity];
               return (
                 <article key={report.id} className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 sm:p-5">
-                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                  {/* Di layar lebar kolomnya sempit, jadi tombol sanggahan ditaruh di bawah. */}
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start lg:flex-col">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold text-slate-900">{pillarLabels[report.pillar] ?? report.pillar}</h3>
@@ -172,12 +199,6 @@ export default function TindakLanjut({ onAppeal }) {
                       <p className="mt-1 text-sm text-slate-600">{report.reason}</p>
                       <p className="mt-1 text-xs text-slate-500">Tanggal kejadian: {new Date(`${report.tanggalKejadian}T00:00:00`).toLocaleDateString("id-ID")}</p>
                       {report.pointsDeducted > 0 && <p className="mt-2 text-sm font-semibold text-red-800">Poin berkurang: {report.pointsDeducted}</p>}
-                      {report.status === "DITERIMA" && <p className="mt-2 text-sm text-slate-600">Poin belum berubah. Laporan sedang ditinjau Dosen PA.</p>}
-                      {report.status === "DITOLAK" && <p className="mt-2 text-sm text-slate-600">Poin tidak berubah karena laporan tidak dikonfirmasi Dosen PA.</p>}
-                      {report.status === "SELESAI" && <p className="mt-2 text-sm font-semibold text-emerald-800">Bukti tindak lanjut disetujui Dosen PA; poin telah dipulihkan. Riwayat pelanggaran tetap tersimpan.</p>}
-                      {report.followUp && <p className="mt-2 text-xs text-slate-600">{report.followUp}</p>}
-                      {report.sanggahan && <p className="mt-2 text-xs text-slate-600">Status sanggahan: {appealStatusLabels[report.sanggahan.status] ?? report.sanggahan.status}{report.sanggahan.catatanPemeriksa ? ` · ${report.sanggahan.catatanPemeriksa}` : ""}</p>}
-                      {report.pembinaan && <p className="mt-1 text-xs text-slate-600">Status pembinaan: {trainingStatusLabels[report.pembinaan.status] ?? report.pembinaan.status}</p>}
                     </div>
                     {report.perubahanPoinId && (
                       <button
@@ -209,7 +230,7 @@ export default function TindakLanjut({ onAppeal }) {
         ) : training.length === 0 ? (
           <p className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">Belum ada tugas pembinaan.</p>
         ) : (
-          <div className="mt-5 space-y-3">
+          <div ref={trainingListRef} style={{ maxHeight: trainingListHeight }} className="relative mt-5 space-y-3 overflow-y-auto pr-1">
             {training.map((task) => (
               <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -252,6 +273,7 @@ export default function TindakLanjut({ onAppeal }) {
             ))}
           </div>
         )}
+      </div>
       </div>
 
       {selectedTraining && (

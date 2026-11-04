@@ -7,17 +7,21 @@ export const drcTypeLabels: Record<JenisKegiatanDrc, string> = {
   KEGIATAN_LAIN: "Kegiatan",
 };
 
-export const drcProdiOptions = [
-  "Teknologi Rekayasa Logistik",
-  "Survei dan Pemetaan",
-  "Perawatan Mesin",
-] as const;
-
 export type DrcTarget = { targetProdi: string[]; targetAngkatan: number[] };
 
 // Prodi mahasiswa berasal dari file upload, jadi dicocokkan tanpa beda huruf/spasi.
 function normalizeProdi(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+// Pilihan prodi diambil dari data mahasiswa; varian huruf/spasi digabung jadi satu.
+export function uniqueProdiOptions(values: string[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const value of values) {
+    const label = value.trim().replace(/\s+/g, " ");
+    if (label && !byKey.has(normalizeProdi(label))) byKey.set(normalizeProdi(label), label);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, "id"));
 }
 
 // Array target kosong berarti semua prodi / semua angkatan. Database hanya
@@ -116,8 +120,16 @@ export function drcNotification(kind: DrcNotificationKind, activity: DrcActivity
   };
 }
 
+function todayWita(now: Date): string {
+  return new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 // Kegiatan dianggap sudah lewat setelah tanggalnya berakhir (zona WITA, UTC+8).
 export function isDrcActivityPast(tanggal: Date, now = new Date()): boolean {
-  const todayWita = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  return tanggal.toISOString().slice(0, 10) < todayWita;
+  return tanggal.toISOString().slice(0, 10) < todayWita(now);
+}
+
+// Bukti kehadiran bisa diunggah mulai hari pelaksanaan (zona WITA).
+export function canSubmitDrcEvidence(tanggal: Date, now = new Date()): boolean {
+  return tanggal.toISOString().slice(0, 10) <= todayWita(now);
 }

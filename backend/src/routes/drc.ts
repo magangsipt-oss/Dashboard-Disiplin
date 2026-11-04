@@ -2,16 +2,24 @@ import { Router } from "express";
 import { Prisma, type KegiatanDrc } from "@prisma/client";
 import { currentSession, database, requireRole, type Session } from "../auth";
 import {
+  canSubmitDrcEvidence,
   drcNotification,
-  drcProdiOptions,
   drcAngkatanWhere,
   isDrcActivityPast,
   isDrcTargetedTo,
+  uniqueProdiOptions,
   type DrcNotificationKind,
   type DrcTarget,
 } from "../drc";
+import {
+  discardEvidenceFile,
+  prepareEvidenceFile,
+  receiveEvidenceFile,
+  sendEvidenceFile,
+  storeEvidenceFile,
+} from "../evidence-file";
 import { disciplinePillarLabels } from "../points";
-import { drcActivitySchema, drcActivityUpdateSchema, parseBody } from "../validation";
+import { drcActivitySchema, drcActivityUpdateSchema, drcEvidenceSchema, parseBody } from "../validation";
 
 // Menu DRC (Disiplin Refresh Competency): Kemahasiswaan mengelola kegiatan,
 // mahasiswa melihat jadwal. Setiap pengumuman masuk ke Pemberitahuan mahasiswa
@@ -126,17 +134,20 @@ async function countRecipients(target: DrcTarget) {
   return recipientSummary(await findTargetStudents(database, target));
 }
 
-// Pilihan angkatan: angkatan yang ada di data mahasiswa ditambah 5 tahun
-// terakhir, agar angkatan baru tetap bisa dipilih sebelum datanya diunggah.
-async function angkatanOptions(): Promise<number[]> {
-  const rows = await database.mahasiswa.findMany({
-    where: { angkatan: { not: null } },
-    distinct: ["angkatan"],
-    select: { angkatan: true },
-  });
-  const currentYear = new Date().getFullYear();
-  const recentYears = Array.from({ length: 5 }, (_, index) => currentYear - index);
-  return [...new Set([...rows.map((row) => row.angkatan!), ...recentYears])].sort((a, b) => b - a);
+// Pilihan prodi dan angkatan mengikuti data mahasiswa yang ada di database.
+async function targetOptions(): Promise<{ prodi: string[]; angkatan: number[] }> {
+  const [prodiRows, angkatanRows] = await Promise.all([
+    database.mahasiswa.findMany({ distinct: ["jurusan"], select: { jurusan: true } }),
+    database.mahasiswa.findMany({
+      where: { angkatan: { not: null } },
+      distinct: ["angkatan"],
+      select: { angkatan: true },
+    }),
+  ]);
+  return {
+    prodi: uniqueProdiOptions(prodiRows.map((row) => row.jurusan)),
+    angkatan: angkatanRows.map((row) => row.angkatan!).sort((a, b) => b - a),
+  };
 }
 
 function parseTargetQuery(query: Record<string, unknown>): DrcTarget | null {
@@ -144,22 +155,22 @@ function parseTargetQuery(query: Record<string, unknown>): DrcTarget | null {
     typeof value === "string" && value.trim() ? value.split(",").map((item) => item.trim()) : [];
   const targetProdi = list(query.prodi);
   const angkatanText = list(query.angkatan);
-  if (!targetProdi.every((prodi) => (drcProdiOptions as readonly string[]).includes(prodi))) return null;
+  if (targetProdi.length > 50 || !targetProdi.every((prodi) => prodi && prodi.length <= 200)) return null;
   if (!angkatanText.every((year) => /^\d{4}$/.test(year))) return null;
   return { targetProdi, targetAngkatan: angkatanText.map(Number) };
 }
 
 drcRouter.get("/admin/drc", async (_request, response) => {
   try {
-    const [kegiatan, semua, angkatan] = await Promise.all([
+    const [kegiatan, semua, pilihan] = await Promise.all([
       listActivities(),
       countRecipients({ targetProdi: [], targetAngkatan: [] }),
-      angkatanOptions(),
+      targetOptions(),
     ]);
     response.json({
       kegiatan,
       tema: themeOptions,
-      pilihan: { prodi: drcProdiOptions, angkatan },
+      pilihan,
       jumlahMahasiswa: semua.penerima,
       jumlahMahasiswaEmail: semua.denganEmail,
     });
@@ -251,9 +262,16 @@ drcRouter.delete("/admin/drc/:id", async (request, response) => {
   }
   try {
     const result = await database.$transaction(async (transaction) => {
-      const activity = await transaction.kegiatanDrc.findUnique({ where: { id } });
+      const activity = await transaction.kegiatanDrc.findUnique({
+        where: { id },
+        include: { bukti: { select: { buktiFileName: true } } },
+      });
       if (!activity) return null;
+      // BuktiDrc ikut terhapus (cascade); file-nya di BuktiFoto dihapus manual.
       await transaction.kegiatanDrc.delete({ where: { id } });
+      await transaction.buktiFoto.deleteMany({
+        where: { fileName: { in: activity.bukti.map((item) => item.buktiFileName) } },
+      });
       await writeAudit(transaction, session, "DRC_DIHAPUS", id, snapshot(activity), null);
       return isDrcActivityPast(activity.tanggal)
         ? { penerima: 0, denganEmail: 0 }
@@ -270,25 +288,185 @@ drcRouter.delete("/admin/drc/:id", async (request, response) => {
   }
 });
 
+const evidenceSelect = { id: true, catatan: true, createdAt: true, updatedAt: true } satisfies Prisma.BuktiDrcSelect;
+
+// Peserta wajib beserta bukti kehadirannya. Bukti dari mahasiswa yang sudah
+// tidak termasuk target (target diubah setelah unggah) tetap ditampilkan.
+drcRouter.get("/admin/drc/:id/peserta", async (request, response) => {
+  const id = activityId(request.params.id);
+  if (!id) {
+    response.status(400).json({ message: "Kegiatan DRC tidak valid." });
+    return;
+  }
+  try {
+    const activity = await database.kegiatanDrc.findUnique({ where: { id } });
+    if (!activity) {
+      response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
+      return;
+    }
+    const studentSelect = { id: true, nim: true, nama: true, jurusan: true, angkatan: true } as const;
+    const [students, evidence] = await Promise.all([
+      database.mahasiswa.findMany({ where: drcAngkatanWhere(activity), select: studentSelect }),
+      database.buktiDrc.findMany({
+        where: { kegiatanId: id },
+        orderBy: { createdAt: "asc" },
+        select: { ...evidenceSelect, student: { select: studentSelect } },
+      }),
+    ]);
+    const submittedIds = new Set(evidence.map((item) => item.student.id));
+    const targeted = students.filter((student) => isDrcTargetedTo(activity, student));
+    const targetedIds = new Set(targeted.map((student) => student.id));
+    const sudahUnggah = evidence.map(({ student, ...bukti }) => ({
+      ...student,
+      bukti,
+      diluarTarget: !targetedIds.has(student.id),
+    }));
+    const belumUnggah = targeted
+      .filter((student) => !submittedIds.has(student.id))
+      .sort((a, b) => a.nim - b.nim);
+    response.json({
+      kegiatan: serialize(activity),
+      sudahUnggah,
+      belumUnggah,
+      jumlahTarget: targeted.length,
+    });
+  } catch (error) {
+    console.error("Gagal memuat peserta DRC:", error);
+    response.status(500).json({ message: "Data peserta DRC gagal dimuat." });
+  }
+});
+
 drcRouter.get(
   "/drc",
   requireRole(["mhs"], "Jadwal DRC hanya tersedia untuk akun mahasiswa."),
   async (_request, response) => {
     const session = currentSession(response);
     try {
-      const [activities, student] = await Promise.all([
+      const [activities, student, evidence] = await Promise.all([
         listActivities(),
         database.mahasiswa.findUnique({
           where: { id: session.profile.id },
           select: { jurusan: true, angkatan: true },
         }),
+        database.buktiDrc.findMany({
+          where: { studentId: session.profile.id },
+          select: { ...evidenceSelect, kegiatanId: true },
+        }),
       ]);
+      const evidenceByActivity = new Map(evidence.map(({ kegiatanId, ...bukti }) => [kegiatanId, bukti]));
       // Mahasiswa hanya melihat kegiatan yang wajib ia ikuti.
-      const kegiatan = student ? activities.filter((activity) => isDrcTargetedTo(activity, student)) : [];
+      const kegiatan = (student ? activities.filter((activity) => isDrcTargetedTo(activity, student)) : []).map(
+        (activity) => ({
+          ...activity,
+          buktiSaya: evidenceByActivity.get(activity.id) ?? null,
+          bisaUnggahBukti: canSubmitDrcEvidence(new Date(`${activity.tanggal}T00:00:00.000Z`)),
+        }),
+      );
       response.json({ kegiatan, tema: themeOptions });
     } catch (error) {
       console.error("Gagal memuat jadwal DRC mahasiswa:", error);
       response.status(500).json({ message: "Jadwal DRC gagal dimuat." });
+    }
+  },
+);
+
+// Mahasiswa peserta mengunggah bukti kehadiran (foto/sertifikat) mulai hari
+// pelaksanaan. Unggah ulang menggantikan bukti sebelumnya.
+drcRouter.post(
+  "/drc/:id/bukti",
+  requireRole(["mhs"], "Bukti DRC hanya dapat diunggah oleh mahasiswa."),
+  receiveEvidenceFile("bukti"),
+  async (request, response) => {
+    const session = currentSession(response);
+    const id = activityId(request.params.id);
+    const body = parseBody(drcEvidenceSchema, request.body);
+    if (!id || !body) {
+      response.status(400).json({ message: "Catatan bukti maksimal 500 karakter." });
+      return;
+    }
+    if (!request.file) {
+      response.status(400).json({ message: "Lampirkan foto atau sertifikat kehadiran (JPEG, PNG, atau PDF)." });
+      return;
+    }
+    let storedFileName: string | null = null;
+    try {
+      const [activity, student] = await Promise.all([
+        database.kegiatanDrc.findUnique({ where: { id } }),
+        database.mahasiswa.findUnique({
+          where: { id: session.profile.id },
+          select: { jurusan: true, angkatan: true },
+        }),
+      ]);
+      if (!activity || !student || !isDrcTargetedTo(activity, student)) {
+        response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
+        return;
+      }
+      if (!canSubmitDrcEvidence(activity.tanggal)) {
+        response.status(400).json({ message: "Bukti dapat diunggah mulai hari pelaksanaan kegiatan." });
+        return;
+      }
+      const evidence = await prepareEvidenceFile(request.file);
+      if (!evidence) {
+        response.status(400).json({ message: "File PDF tidak valid." });
+        return;
+      }
+      await storeEvidenceFile(evidence);
+      storedFileName = evidence.fileName;
+      const bukti = await database.$transaction(async (transaction) => {
+        const key = { kegiatanId_studentId: { kegiatanId: id, studentId: session.profile.id } };
+        const previous = await transaction.buktiDrc.findUnique({ where: key, select: { buktiFileName: true } });
+        const saved = await transaction.buktiDrc.upsert({
+          where: key,
+          create: { kegiatanId: id, studentId: session.profile.id, buktiFileName: evidence.fileName, catatan: body.catatan },
+          update: { buktiFileName: evidence.fileName, catatan: body.catatan },
+          select: evidenceSelect,
+        });
+        if (previous) await transaction.buktiFoto.deleteMany({ where: { fileName: previous.buktiFileName } });
+        return saved;
+      });
+      response.status(201).json({ bukti });
+    } catch (error) {
+      await discardEvidenceFile(storedFileName);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        response.status(409).json({ message: "Bukti sedang diproses. Muat ulang dan coba lagi." });
+        return;
+      }
+      console.error("Gagal menyimpan bukti DRC:", error);
+      response.status(500).json({ message: "Bukti DRC gagal diunggah. Silakan coba kembali." });
+    }
+  },
+);
+
+// File bukti DRC hanya untuk mahasiswa pemilik dan Kemahasiswaan.
+drcRouter.get(
+  "/drc/bukti/:id",
+  requireRole(["mhs", "admin"], "Anda tidak berhak melihat bukti ini."),
+  async (request, response) => {
+    const session = currentSession(response);
+    const id = activityId(request.params.id);
+    if (!id) {
+      response.status(404).json({ message: "Bukti tidak ditemukan." });
+      return;
+    }
+    try {
+      const evidence = await database.buktiDrc.findFirst({
+        where: { id, ...(session.profile.role === "mhs" ? { studentId: session.profile.id } : {}) },
+        select: { buktiFileName: true },
+      });
+      const file = evidence
+        ? await database.buktiFoto.findUnique({
+            where: { fileName: evidence.buktiFileName },
+            select: { mimeType: true, data: true },
+          })
+        : null;
+      if (!file) {
+        response.status(404).json({ message: "Bukti tidak ditemukan." });
+        return;
+      }
+      sendEvidenceFile(response, file, evidence!.buktiFileName, `bukti-drc-${id}`);
+    } catch (error) {
+      console.error("Gagal memuat bukti DRC:", error);
+      response.status(500).json({ message: "Bukti gagal dimuat." });
     }
   },
 );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarPlus, Mail, Pencil, Trash2, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarPlus, ChevronDown, ClipboardCheck, FileText, Mail, Pencil, Trash2, Users } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
 import { DrcActivityDetails, DrcThemeTable, drcThemes, drcTypeLabels } from "@/lib/drc";
 
@@ -27,30 +27,75 @@ function chipClass(selected) {
   }`;
 }
 
-// Pilihan target: "Semua" = array kosong; memilih item tertentu mempersempit target.
-function TargetPicker({ label, allLabel, options, selected, onChange, formatOption = String }) {
+// Dropdown target: "Semua" = array kosong; mencentang item tertentu mempersempit target.
+function TargetDropdown({ label, allLabel, emptyLabel, options, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function close(event) {
+      if (event.type === "keydown" ? event.key === "Escape" : !containerRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
   function toggle(value) {
-    onChange(
-      selected.includes(value)
-        ? selected.filter((item) => item !== value)
-        : options.filter((item) => item === value || selected.includes(item)),
-    );
+    const next = selected.includes(value)
+      ? selected.filter((item) => item !== value)
+      : options.filter((item) => item === value || selected.includes(item));
+    // Semua item dicentang sama dengan "Semua".
+    onChange(next.length === options.length ? [] : next);
   }
 
+  const summary = selected.length === 0 ? allLabel : selected.join(", ");
+  const rowClass = "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-50";
+
   return (
-    <fieldset>
-      <legend className="text-sm font-semibold text-slate-700">{label}</legend>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" aria-pressed={selected.length === 0} onClick={() => onChange([])} className={chipClass(selected.length === 0)}>
-          {allLabel}
-        </button>
-        {options.map((option) => (
-          <button key={option} type="button" aria-pressed={selected.includes(option)} onClick={() => toggle(option)} className={chipClass(selected.includes(option))}>
-            {formatOption(option)}
-          </button>
-        ))}
-      </div>
-    </fieldset>
+    <div ref={containerRef} className="relative">
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className={`${inputClass} flex items-center justify-between gap-2 bg-white text-left`}
+      >
+        <span className="truncate">{summary}</span>
+        <span className="flex shrink-0 items-center gap-2">
+          {selected.length > 0 && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">{selected.length} dipilih</span>
+          )}
+          <ChevronDown className={`h-4 w-4 text-slate-500 transition ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open && (
+        <div role="listbox" aria-multiselectable="true" className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <label className={`${rowClass} font-bold text-slate-900`}>
+            <input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} className="h-4 w-4 accent-red-800" />
+            {allLabel}
+          </label>
+          {options.length > 0 && <div className="my-1 border-t border-slate-100" />}
+          {options.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-slate-500">{emptyLabel}</p>
+          ) : (
+            options.map((option) => (
+              <label key={option} className={`${rowClass} text-slate-700`}>
+                <input type="checkbox" checked={selected.includes(option)} onChange={() => toggle(option)} className="h-4 w-4 accent-red-800" />
+                {option}
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -105,7 +150,8 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
   const [error, setError] = useState("");
   const preview = useRecipientPreview(form.targetProdi, form.targetAngkatan);
   const willNotify = !editing || notifyStudents;
-  // Angkatan lama yang tersimpan tetap ditampilkan walau tidak ada di pilihan.
+  // Target lama yang tersimpan tetap ditampilkan walau sudah tidak ada di database.
+  const prodiChoices = [...new Set([...options.prodi, ...form.targetProdi])].sort((a, b) => a.localeCompare(b, "id"));
   const angkatanChoices = [...new Set([...options.angkatan, ...form.targetAngkatan])].sort((a, b) => b - a);
 
   function update(field, value) {
@@ -205,20 +251,24 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
           <h4 className="text-sm font-bold text-slate-900">Peserta wajib & penerima pemberitahuan</h4>
           <p className="mt-0.5 text-xs text-slate-600">Hanya mahasiswa dari prodi dan angkatan yang dipilih yang wajib ikut dan menerima pemberitahuan.</p>
         </div>
-        <TargetPicker
-          label="Program studi"
-          allLabel="Semua prodi"
-          options={options.prodi}
-          selected={form.targetProdi}
-          onChange={(value) => update("targetProdi", value)}
-        />
-        <TargetPicker
-          label="Angkatan"
-          allLabel="Semua angkatan"
-          options={angkatanChoices}
-          selected={form.targetAngkatan}
-          onChange={(value) => update("targetAngkatan", value)}
-        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TargetDropdown
+            label="Program studi"
+            allLabel="Semua prodi"
+            emptyLabel="Belum ada data prodi mahasiswa."
+            options={prodiChoices}
+            selected={form.targetProdi}
+            onChange={(value) => update("targetProdi", value)}
+          />
+          <TargetDropdown
+            label="Angkatan"
+            allLabel="Semua angkatan"
+            emptyLabel="Belum ada data angkatan mahasiswa."
+            options={angkatanChoices}
+            selected={form.targetAngkatan}
+            onChange={(value) => update("targetAngkatan", value)}
+          />
+        </div>
         {preview && (
           <p className={`flex items-center gap-2 text-sm font-semibold ${preview.penerima === 0 ? "text-amber-800" : "text-slate-700"}`}>
             <Users className="h-4 w-4" />
@@ -283,8 +333,109 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
   );
 }
 
+function formatUploadTime(value) {
+  return new Date(value).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
+// Peserta wajib: siapa yang sudah mengunggah bukti kehadiran dan siapa yang tidak.
+function DrcParticipants({ activity }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState("hadir");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    studentApi(`/api/admin/drc/${activity.id}/peserta`)
+      .then((result) => active && setData(result))
+      .catch((loadError) => active && setError(loadError.message));
+    return () => {
+      active = false;
+    };
+  }, [activity.id]);
+
+  if (error) return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>;
+  if (!data) return <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">Memuat peserta...</p>;
+
+  const absentLabel = activity.sudahLewat ? "Tidak mengikuti" : "Belum unggah bukti";
+  const keyword = search.trim().toLowerCase();
+  const rows = (tab === "hadir" ? data.sudahUnggah : data.belumUnggah).filter(
+    (student) => !keyword || student.nama.toLowerCase().includes(keyword) || String(student.nim).includes(keyword),
+  );
+  const tabClass = (selected) =>
+    `rounded-xl px-3 py-2 text-sm font-bold ${selected ? "bg-red-800 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" aria-pressed={tab === "hadir"} onClick={() => setTab("hadir")} className={tabClass(tab === "hadir")}>
+            Sudah unggah bukti ({data.sudahUnggah.length})
+          </button>
+          <button type="button" aria-pressed={tab === "absen"} onClick={() => setTab("absen")} className={tabClass(tab === "absen")}>
+            {absentLabel} ({data.belumUnggah.length})
+          </button>
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Cari nama atau NIM"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-60"
+        />
+      </div>
+      <p className="text-xs text-slate-500">{data.jumlahTarget} mahasiswa wajib mengikuti kegiatan ini.</p>
+      {rows.length === 0 ? (
+        <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+          {keyword ? "Tidak ada mahasiswa yang cocok." : tab === "hadir" ? "Belum ada bukti yang diunggah." : "Semua peserta sudah mengunggah bukti."}
+        </p>
+      ) : (
+        <div className="max-h-96 overflow-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="sticky top-0 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2">NIM</th>
+                <th className="px-3 py-2">Nama</th>
+                <th className="px-3 py-2">Prodi / Angkatan</th>
+                {tab === "hadir" && <th className="px-3 py-2">Diunggah</th>}
+                {tab === "hadir" && <th className="px-3 py-2 text-right">Bukti</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((student) => (
+                <tr key={student.id}>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-700">{student.nim}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-800">
+                    {student.nama}
+                    {student.diluarTarget && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">di luar target</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{student.jurusan} · {student.angkatan ?? "-"}</td>
+                  {tab === "hadir" && (
+                    <td className="px-3 py-2 text-xs text-slate-600">
+                      {formatUploadTime(student.bukti.updatedAt)}
+                      {student.bukti.catatan && <p className="text-slate-500">{student.bukti.catatan}</p>}
+                    </td>
+                  )}
+                  {tab === "hadir" && (
+                    <td className="px-3 py-2 text-right">
+                      <a href={`/api/drc/bukti/${student.bukti.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-red-800 hover:underline">
+                        <FileText className="h-3.5 w-3.5" /> Lihat
+                      </a>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminDrcCard({ activity, onEdit, onDeleted }) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
   const [error, setError] = useState("");
 
   async function remove() {
@@ -321,8 +472,17 @@ function AdminDrcCard({ activity, onEdit, onDeleted }) {
         </span>
       </div>
       <DrcActivityDetails activity={activity} />
+      {showParticipants && <DrcParticipants activity={activity} />}
       {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
       <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          aria-expanded={showParticipants}
+          onClick={() => setShowParticipants((value) => !value)}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+        >
+          <ClipboardCheck className="h-4 w-4" /> {showParticipants ? "Tutup Peserta" : "Peserta & Bukti"}
+        </button>
         <button type="button" onClick={() => onEdit(activity)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
           <Pencil className="h-4 w-4" /> Ubah
         </button>

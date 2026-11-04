@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { drcProdiOptions } from "./drc";
 
 // Tanggal format YYYY-MM-DD yang benar-benar ada di kalender.
 export const dateOnlySchema = z
@@ -127,8 +126,8 @@ const drcActivityFields = z.object({
   deskripsi: z.string().trim().max(2000).optional().transform((value) => value || null),
   // Kosong = semua prodi / semua angkatan.
   targetProdi: z
-    .array(z.enum(drcProdiOptions))
-    .max(drcProdiOptions.length)
+    .array(z.string().trim().min(1).max(200))
+    .max(50)
     .default([])
     .transform((values) => [...new Set(values)]),
   targetAngkatan: z
@@ -142,6 +141,10 @@ const drcActivityFields = z.object({
 export const drcActivitySchema = drcActivityFields.refine(
   ({ jamMulai, jamSelesai }) => jamMulai < jamSelesai,
 );
+
+export const drcEvidenceSchema = z.object({
+  catatan: z.string().trim().max(500).optional().transform((value) => value || null),
+});
 
 export const drcActivityUpdateSchema = drcActivityFields
   .extend({ beritahuMahasiswa: z.boolean().default(true) })

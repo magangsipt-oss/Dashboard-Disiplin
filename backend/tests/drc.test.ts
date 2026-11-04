@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canSubmitDrcEvidence,
   describeDrcTarget,
   drcNotification,
   drcAngkatanWhere,
   isDrcActivityPast,
   isDrcTargetedTo,
+  uniqueProdiOptions,
   type DrcActivityText,
 } from "../src/drc";
 import { drcActivitySchema, drcActivityUpdateSchema, parseBody } from "../src/validation";
@@ -68,6 +70,13 @@ test("kegiatan DRC dianggap lewat setelah hari kegiatannya berakhir (WITA)", () 
   assert.equal(isDrcActivityPast(activity.tanggal, new Date("2026-11-10T16:30:00.000Z")), true);
 });
 
+test("bukti DRC bisa diunggah mulai hari pelaksanaan (WITA)", () => {
+  // 2026-11-09 16:30 UTC = 2026-11-10 00:30 WITA.
+  assert.equal(canSubmitDrcEvidence(activity.tanggal, new Date("2026-11-09T15:30:00.000Z")), false);
+  assert.equal(canSubmitDrcEvidence(activity.tanggal, new Date("2026-11-09T16:30:00.000Z")), true);
+  assert.equal(canSubmitDrcEvidence(activity.tanggal, new Date("2026-11-20T00:00:00.000Z")), true);
+});
+
 test("validasi kegiatan DRC", () => {
   const parsed = parseBody(drcActivitySchema, validBody);
   assert.deepEqual(parsed?.tema, ["WAKTU", "AKADEMIK"]);
@@ -95,6 +104,13 @@ test("target DRC dicocokkan per prodi (tanpa beda huruf/spasi) dan angkatan", ()
   assert.deepEqual(drcAngkatanWhere(activity), { angkatan: { in: [2026, 2025] } });
 });
 
+test("pilihan prodi DRC dari data mahasiswa", () => {
+  assert.deepEqual(
+    uniqueProdiOptions(["Survei dan Pemetaan", " survei  dan pemetaan ", "", "Perawatan Mesin"]),
+    ["Perawatan Mesin", "Survei dan Pemetaan"],
+  );
+});
+
 test("validasi target DRC", () => {
   const parsed = parseBody(drcActivitySchema, {
     ...validBody,
@@ -104,6 +120,6 @@ test("validasi target DRC", () => {
   assert.deepEqual(parsed?.targetProdi, ["Survei dan Pemetaan"]);
   assert.deepEqual(parsed?.targetAngkatan, [2024, 2026]);
   assert.deepEqual(parseBody(drcActivitySchema, validBody)?.targetProdi, []);
-  assert.equal(parseBody(drcActivitySchema, { ...validBody, targetProdi: ["Teknik Sipil"] }), null);
+  assert.equal(parseBody(drcActivitySchema, { ...validBody, targetProdi: ["  "] }), null);
   assert.equal(parseBody(drcActivitySchema, { ...validBody, targetAngkatan: [1999] }), null);
 });

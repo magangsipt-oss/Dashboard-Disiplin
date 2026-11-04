@@ -166,7 +166,7 @@ async function monitoringRows(
     const studentViolations = violations.get(student.id) ?? [];
     return {
       dosenPa: student.dosenPa
-        ? { nama: student.dosenPa.nama, nuptk: student.dosenPa.nuptk.toString() }
+        ? { nama: student.dosenPa.nama, nuptk: student.dosenPa.nuptk?.toString() ?? null }
         : null,
       pelanggaran: studentViolations,
       pelanggaranBelumSelesai: studentViolations.filter((violation) =>

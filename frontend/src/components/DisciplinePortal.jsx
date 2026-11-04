@@ -661,23 +661,24 @@ export default function App({ hasSessionCookie = false }) {
     );
   }
 
+  // Langsung kembali ke tampilan awal; sesi di backend diakhiri di latar belakang.
   const handleLogout = async () => {
+    setLoginError('');
+    setAuthenticatedUser(null);
+    setStudentPoints(null);
+    setAdvisor(null);
+    setAdvisorError('');
+    setActiveTab('dashboard');
+    setActivePage('landing');
+    window.scrollTo({ top: 0, behavior: 'auto' });
     try {
       const response = await fetch('/api/auth/logout', { method: 'POST' });
       if (!response.ok) {
         throw new Error(`Backend returned ${response.status}`);
       }
-      setLoginError('');
     } catch (error) {
       console.error('Tidak dapat mengakhiri sesi di backend:', error);
       setLoginError('Koneksi logout gagal. Muat ulang halaman untuk memeriksa sesi.');
-    } finally {
-      setAuthenticatedUser(null);
-      setStudentPoints(null);
-      setAdvisor(null);
-      setAdvisorError('');
-      setActiveTab('dashboard');
-      setActivePage('landing');
     }
   };
 

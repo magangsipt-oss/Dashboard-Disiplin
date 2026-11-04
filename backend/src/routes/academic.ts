@@ -197,7 +197,7 @@ academicRouter.post(
         }),
       ]);
       const existingNuptks = new Set(
-        existingIdentities.map((lecturer) => lecturer.nuptk.toString()),
+        existingIdentities.map((lecturer) => lecturer.nuptk?.toString()),
       );
       const existingEmails = new Set(
         matchingEmails.map((lecturer) => lecturer.email?.toLowerCase()),
@@ -533,6 +533,7 @@ academicRouter.post(
 
       const advisorByNuptk = new Map(
         allAdvisors
+          .filter((advisor) => advisor.nuptk !== null)
           .map((advisor) => [String(advisor.nuptk), advisor]),
       );
 

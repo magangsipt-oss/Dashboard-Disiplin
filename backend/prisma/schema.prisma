@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -34,6 +35,7 @@ model Mahasiswa {
   pembinaans        Pembinaan[]
   pemberitahuan     Pemberitahuan[]
   klaimKegiatan     KlaimKegiatan[]
+  buktiDrc          BuktiDrc[]
 
   @@index([dosenPaId])
   @@map("Mahasiswa")
@@ -413,8 +415,26 @@ model KegiatanDrc {
   dibuatOleh Int
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
+  bukti      BuktiDrc[]
 
   @@index([tanggal])
+}
+
+// Bukti kehadiran mahasiswa di kegiatan DRC; satu bukti per mahasiswa per
+// kegiatan (unggah ulang menggantikan). File disimpan di tabel BuktiFoto.
+model BuktiDrc {
+  id            Int         @id @default(autoincrement())
+  kegiatanId    Int
+  studentId     Int
+  buktiFileName String      @db.VarChar(64)
+  catatan       String?     @db.VarChar(500)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  kegiatan      KegiatanDrc @relation(fields: [kegiatanId], references: [id], onDelete: Cascade)
+  student       Mahasiswa   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([kegiatanId, studentId])
+  @@index([studentId])
 }
 
 model Pemberitahuan {
@@ -474,7 +494,8 @@ model Sesi {
 model Dosen {
   id                  Int                 @id @default(autoincrement()) @map("ID")
   email               String?             @map("Email") @db.VarChar(255)
-  nuptk               BigInt              @unique @map("NUPTK")
+  // Boleh kosong: sebagian dosen ditambahkan tanpa NUPTK (login lewat email).
+  nuptk               BigInt?             @unique @map("NUPTK")
   nama                String              @map("Nama")
   password            String              @map("Password") @db.VarChar(255)
   timestamp           DateTime            @default(now()) @map("Timestamp")

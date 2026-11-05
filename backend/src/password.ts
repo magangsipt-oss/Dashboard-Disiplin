@@ -1,5 +1,6 @@
 import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import { encryptPassword } from "./password-vault";
 
 const scryptAsync = promisify(scrypt);
 const SCRYPT_KEY_LENGTH = 64;
@@ -20,13 +21,14 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function hashImportedPasswords<T extends { password: string }>(
   rows: T[],
-): Promise<Array<Omit<T, "password"> & { password: string }>> {
-  const hashedRows: Array<Omit<T, "password"> & { password: string }> = [];
+): Promise<Array<Omit<T, "password"> & { password: string; passwordTerenkripsi: string | null }>> {
+  const hashedRows: Array<Omit<T, "password"> & { password: string; passwordTerenkripsi: string | null }> = [];
   for (let index = 0; index < rows.length; index += 32) {
     const batch = await Promise.all(
       rows.slice(index, index + 32).map(async ({ password, ...row }) => ({
         ...row,
         password: await hashPassword(password),
+        passwordTerenkripsi: encryptPassword(password),
       })),
     );
     hashedRows.push(...batch);

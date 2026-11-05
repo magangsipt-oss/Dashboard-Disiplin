@@ -269,7 +269,7 @@ export function parseNewStudentImportFile(
     ["Nama Lengkap", ["nama_lengkap", "nama_mahasiswa", "nama"]],
     ["No Handphone", ["no_handphone", "nomor_handphone", "no_hp", "telepon"]],
     ["Email", ["email"]],
-    ["Program Studi", ["program_studi", "prodi", "jurusan"]],
+    ["PRODI", ["prodi", "program_studi", "jurusan"]],
     ["Angkatan", ["angkatan", "tahun_masuk"]],
     ["Nama SMTA", ["nama_smta", "asal_sekolah"]],
     ["Kata Sandi", ["kata_sandi", "password", "password_awal"]],
@@ -299,7 +299,7 @@ export function parseNewStudentImportFile(
     const jurusan = cellText(row[jurusanColumn]);
     if (!jurusan) {
       throw new AcademicImportValidationError(
-        `Program Studi wajib diisi pada baris ${sourceRow}.`,
+        `PRODI wajib diisi pada baris ${sourceRow}.`,
       );
     }
 
@@ -543,7 +543,7 @@ export function parseAdvisorAssignmentFile(
     ["No.", NO_ALIASES],
     ["NIM", ["nim"]],
     ["Nama Lengkap", ["nama_lengkap", "nama_mahasiswa", "nama"]],
-    ["Program Studi", ["program_studi", "prodi", "jurusan"]],
+    ["PRODI", ["prodi", "program_studi", "jurusan"]],
     ["Angkatan", ["angkatan", "tahun_masuk"]],
     ["DPA", ["dpa", "dosen_pa", "nama_dosen", "dosen", "dpa_nama"]],
   ];
@@ -575,7 +575,7 @@ export function parseAdvisorAssignmentFile(
     const programStudi = cellText(row[programStudiIndex]);
     if (!programStudi) {
       throw new AcademicImportValidationError(
-        `Program Studi wajib diisi pada baris ${sourceRow}.`,
+        `PRODI wajib diisi pada baris ${sourceRow}.`,
       );
     }
 

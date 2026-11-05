@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  canSubmitDrcEvidence,
   describeDrcTarget,
   drcNotification,
   drcAngkatanWhere,
+  drcEvidenceStatus,
   isDrcActivityPast,
   isDrcTargetedTo,
   uniqueProdiOptions,
@@ -64,17 +64,19 @@ test("notifikasi DRC dipotong sesuai batas kolom Pemberitahuan", () => {
   assert.equal(isi.length, 1000);
 });
 
-test("kegiatan DRC dianggap lewat setelah hari kegiatannya berakhir (WITA)", () => {
-  // 10 Nov 23:30 WITA masih hari kegiatan; 11 Nov 00:30 WITA sudah lewat.
-  assert.equal(isDrcActivityPast(activity.tanggal, new Date("2026-11-10T15:30:00.000Z")), false);
-  assert.equal(isDrcActivityPast(activity.tanggal, new Date("2026-11-10T16:30:00.000Z")), true);
+test("bukti DRC hanya bisa diunggah saat kegiatan berlangsung hingga 30 menit setelahnya (WITA)", () => {
+  // Kegiatan 10 Nov 08:00–12:00 WITA = 00:00–04:00 UTC; ditutup 04:30 UTC.
+  const at = (iso: string) => drcEvidenceStatus(activity, new Date(iso));
+  assert.equal(at("2026-11-09T23:59:00.000Z"), "BELUM_DIBUKA");
+  assert.equal(at("2026-11-10T00:00:00.000Z"), "DIBUKA");
+  assert.equal(at("2026-11-10T04:00:00.000Z"), "DIBUKA");
+  assert.equal(at("2026-11-10T04:30:00.000Z"), "DIBUKA");
+  assert.equal(at("2026-11-10T04:31:00.000Z"), "DITUTUP");
 });
 
-test("bukti DRC bisa diunggah mulai hari pelaksanaan (WITA)", () => {
-  // 2026-11-09 16:30 UTC = 2026-11-10 00:30 WITA.
-  assert.equal(canSubmitDrcEvidence(activity.tanggal, new Date("2026-11-09T15:30:00.000Z")), false);
-  assert.equal(canSubmitDrcEvidence(activity.tanggal, new Date("2026-11-09T16:30:00.000Z")), true);
-  assert.equal(canSubmitDrcEvidence(activity.tanggal, new Date("2026-11-20T00:00:00.000Z")), true);
+test("kegiatan DRC dianggap selesai setelah waktu unggah bukti ditutup", () => {
+  assert.equal(isDrcActivityPast(activity, new Date("2026-11-10T04:30:00.000Z")), false);
+  assert.equal(isDrcActivityPast(activity, new Date("2026-11-10T04:31:00.000Z")), true);
 });
 
 test("validasi kegiatan DRC", () => {

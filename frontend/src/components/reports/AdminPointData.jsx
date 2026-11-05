@@ -251,19 +251,19 @@ export default function AdminPointData() {
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm">
+          <table className="w-full min-w-[1080px] border-collapse [&>*>tr>*]:border [&>*>tr>*]:border-slate-200 [&>*>tr>*:first-child]:border-l-0 [&>*>tr>*:last-child]:border-r-0 [&>thead>tr>th]:border-t-0 [&>tbody>tr:last-child>td]:border-b-0 text-left text-sm">
             <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">NIM</th>
-                <th className="px-4 py-3">Nama / DPA</th>
-                <th className="px-4 py-3">Prodi</th>
-                <th className="px-4 py-3">Angkatan</th>
-                <th className="px-4 py-3 text-right">Poin</th>
-                <th className="px-4 py-3">Status poin</th>
-                <th className="px-4 py-3 text-right">Pelanggaran</th>
+                <th className="px-4 py-3 text-center">NIM</th>
+                <th className="px-4 py-3 text-center">Nama / DPA</th>
+                <th className="px-4 py-3 text-center">Prodi</th>
+                <th className="px-4 py-3 text-center">Angkatan</th>
+                <th className="px-4 py-3 text-center">Poin</th>
+                <th className="px-4 py-3 text-center">Pelanggaran</th>
                 <th className="px-4 py-3 text-center">Belum selesai</th>
-                <th className="px-4 py-3">Clearance</th>
-                <th className="px-4 py-3"><span className="sr-only">Rincian</span></th>
+                <th className="px-4 py-3 text-center">Status poin</th>
+                <th className="px-4 py-3 text-center">Clearance</th>
+                <th className="px-4 py-3 text-center">Detail</th>
               </tr>
             </thead>
             <tbody className={`divide-y divide-slate-100 ${isLoading ? "opacity-60" : ""}`}>
@@ -292,28 +292,33 @@ export default function AdminPointData() {
                       </p>
                     </td>
                     <td className="px-4 py-3 text-slate-700">{student.prodi}</td>
-                    <td className="px-4 py-3 text-slate-700">{student.angkatan ?? "-"}</td>
-                    <td className="px-4 py-3 text-right text-base font-extrabold text-slate-900">{student.poin}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-center text-slate-700">{student.angkatan ?? "-"}</td>
+                    <td className="px-4 py-3 text-center text-slate-700">{student.poin}</td>
+                    <td className="px-4 py-3 text-center text-slate-700">{student.jumlahPelanggaran}</td>
+                    <td className="px-4 py-3 text-center text-slate-700">{student.pelanggaranBelumSelesai}</td>
+                    <td className="px-4 py-3 text-center">
                       <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${style?.badge ?? "bg-slate-100 text-slate-700"}`}>
                         {student.status.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-slate-700">{student.jumlahPelanggaran}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-                        student.pelanggaranBelumSelesai > 0 ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-600"
-                      }`}>
-                        {student.pelanggaranBelumSelesai}
-                      </span>
+                      {clearance ? (
+                        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${clearance.badge}`}>{clearance.label}</span>
+                      ) : (
+                        <span className="whitespace-nowrap text-xs text-slate-400">Belum dihitung</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {clearance ? (
-                          <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${clearance.badge}`}>{clearance.label}</span>
-                        ) : (
-                          <span className="whitespace-nowrap text-xs text-slate-400">Belum dihitung</span>
-                        )}
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(isExpanded ? null : student.id)}
+                          aria-expanded={isExpanded}
+                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          Rincian
+                          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                        </button>
                         <button
                           type="button"
                           disabled={downloading !== null}
@@ -331,17 +336,6 @@ export default function AdminPointData() {
                           )}
                         </button>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(isExpanded ? null : student.id)}
-                        aria-expanded={isExpanded}
-                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                      >
-                        Rincian
-                        <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                      </button>
                     </td>
                   </tr>
                   {isExpanded && (

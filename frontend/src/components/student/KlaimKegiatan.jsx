@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ModalLayer from "@/components/modals/ModalLayer";
 import { Award, FileText, Paperclip, Upload } from "lucide-react";
 import { studentApi } from "@/lib/api";
 
@@ -235,52 +236,52 @@ export default function KlaimKegiatan() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <form onSubmit={submitClaim} className="max-h-[92vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <ModalLayer>
+          <form onSubmit={submitClaim} className="max-h-[88dvh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:space-y-4 sm:p-6">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900">Formulir Klaim Kegiatan</h2>
               <p className="mt-1 text-sm text-slate-500">Isi data sesuai sertifikat. Poin ditetapkan Kemahasiswaan setelah verifikasi.</p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-semibold text-slate-700">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <label className="block min-w-0 text-sm font-semibold text-slate-700">
                 Jenis kegiatan
-                <select value={form.jenis} onChange={updateField("jenis")} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                <select value={form.jenis} onChange={updateField("jenis")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:py-2.5">
                   {Object.entries(claimTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
-              <label className="block text-sm font-semibold text-slate-700">
+              <label className="block min-w-0 text-sm font-semibold text-slate-700">
                 Tingkat
-                <select value={form.tingkat} onChange={updateField("tingkat")} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+                <select value={form.tingkat} onChange={updateField("tingkat")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:py-2.5">
                   {Object.entries(activityLevelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
-              <label className="block text-sm font-semibold text-slate-700 sm:col-span-2">
+              <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700">
                 Nama kegiatan
-                <input required minLength={3} maxLength={200} value={form.namaKegiatan} onChange={updateField("namaKegiatan")} placeholder="Contoh: Lomba Karya Tulis Ilmiah K3" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                <input required minLength={3} maxLength={200} value={form.namaKegiatan} onChange={updateField("namaKegiatan")} placeholder="Contoh: Lomba Karya Tulis Ilmiah K3" className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
               </label>
-              <label className="block text-sm font-semibold text-slate-700">
+              <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700 sm:col-span-1">
                 Penyelenggara
-                <input required minLength={2} maxLength={200} value={form.penyelenggara} onChange={updateField("penyelenggara")} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                <input required minLength={2} maxLength={200} value={form.penyelenggara} onChange={updateField("penyelenggara")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
               </label>
-              <label className="block text-sm font-semibold text-slate-700">
+              <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700 sm:col-span-1">
                 Capaian / peran
-                <input required minLength={2} maxLength={100} value={form.capaian} onChange={updateField("capaian")} placeholder="Juara 1, Finalis, Peserta, Panitia" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                <input required minLength={2} maxLength={100} value={form.capaian} onChange={updateField("capaian")} placeholder="Juara 1, Finalis, Peserta, Panitia" className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
               </label>
-              <label className="block text-sm font-semibold text-slate-700">
+              <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700 sm:col-span-1">
                 Tanggal kegiatan
-                <input required type="date" max={today} value={form.tanggalKegiatan} onChange={updateField("tanggalKegiatan")} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                <input required type="date" max={today} value={form.tanggalKegiatan} onChange={updateField("tanggalKegiatan")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
               </label>
-              <label className="block text-sm font-semibold text-slate-700">
+              <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700 sm:col-span-1">
                 Sertifikat / dokumentasi
-                <span className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-600 hover:bg-slate-50">
+                <span className="mt-1 flex min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm sm:py-2.5 font-normal text-slate-600 hover:bg-slate-50">
                   <Paperclip className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{file ? file.name : "Pilih file JPEG, PNG, atau PDF (maks. 5 MB)"}</span>
+                  <span className="truncate">{file ? file.name : "Pilih JPEG, PNG, atau PDF (maks. 5 MB)"}</span>
                 </span>
                 <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={selectFile} className="sr-only" />
               </label>
-              <label className="block text-sm font-semibold text-slate-700 sm:col-span-2">
+              <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700">
                 Keterangan tambahan (opsional)
-                <textarea maxLength={1000} rows={3} value={form.deskripsi} onChange={updateField("deskripsi")} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                <textarea maxLength={1000} rows={2} value={form.deskripsi} onChange={updateField("deskripsi")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
               </label>
             </div>
             {submitError && <p className="text-sm text-red-700" role="alert">{submitError}</p>}
@@ -289,7 +290,7 @@ export default function KlaimKegiatan() {
               <button type="submit" disabled={isSubmitting || !isFormValid} className="rounded-xl bg-red-800 px-4 py-2 text-sm font-bold text-white hover:bg-red-900 disabled:opacity-60">{isSubmitting ? "Mengirim..." : "Kirim Klaim"}</button>
             </div>
           </form>
-        </div>
+        </ModalLayer>
       )}
     </section>
   );

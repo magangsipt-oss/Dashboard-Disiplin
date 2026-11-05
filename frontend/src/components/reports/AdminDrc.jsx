@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, ChevronDown, ClipboardCheck, FileText, Mail, Pencil, Trash2, Users } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
-import { DrcActivityDetails, DrcThemeTable, drcThemes, drcTypeLabels } from "@/lib/drc";
+import { DrcActivityDetails, DrcThemeTable, drcThemes, drcTypeLabels, DrcSection } from "@/lib/drc";
 
 const emptyForm = {
   judul: "Seminar Refreshment Kedisiplinan Mahasiswa",
@@ -572,17 +572,15 @@ export default function AdminDrc() {
 
       <DrcForm key={formKey} editing={editing} options={data.pilihan} onSaved={handleChanged} onCancel={() => startEditing(null)} />
 
-      <div className="space-y-3">
-        <h3 className="text-lg font-bold text-slate-900">Garis Besar Materi DRC</h3>
+      <DrcSection title="Garis Besar Materi DRC" description="Lima tema kedisiplinan yang menjadi dasar setiap kegiatan DRC.">
         <DrcThemeTable />
-      </div>
+      </DrcSection>
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-bold text-slate-900">Kegiatan Akan Datang</h3>
+      <DrcSection title="Kegiatan Akan Datang" description="Kegiatan yang sedang atau akan berlangsung beserta peserta wajibnya.">
         {isLoading ? (
-          <p className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Memuat kegiatan DRC...</p>
+          <p className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat kegiatan DRC...</p>
         ) : upcoming.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-white/95 p-8 text-center text-sm text-slate-600">
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
             Belum ada kegiatan DRC yang dijadwalkan.
           </p>
         ) : (
@@ -590,15 +588,14 @@ export default function AdminDrc() {
             <AdminDrcCard key={activity.id} activity={activity} onEdit={startEditing} onDeleted={handleChanged} />
           ))
         )}
-      </div>
+      </DrcSection>
 
       {past.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">Riwayat Kegiatan</h3>
+        <DrcSection title="Riwayat Kegiatan" description="Kegiatan DRC yang sudah selesai.">
           {past.map((activity) => (
             <AdminDrcCard key={activity.id} activity={activity} onEdit={startEditing} onDeleted={handleChanged} />
           ))}
-        </div>
+        </DrcSection>
       )}
     </section>
   );

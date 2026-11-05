@@ -219,7 +219,7 @@ test("advisor assignment import requires every template column", () => {
 
   assert.throws(
     () => parseAdvisorAssignmentFile(csv, "pembagian.csv"),
-    /Kolom wajib tidak ditemukan: Program Studi, Angkatan/,
+    /Kolom wajib tidak ditemukan: PRODI, Angkatan/,
   );
 });
 

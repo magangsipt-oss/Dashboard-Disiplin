@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import type { UnggahanAkademik } from "@prisma/client";
 import { database } from "./db";
 
-export type AcademicFileCategory = "attendance" | "advisors";
+export type AcademicFileCategory = "attendance" | "advisors" | "students" | "lecturers";
 
 export type AcademicUploadRecord = {
   id: string;
@@ -202,7 +202,24 @@ export async function getAcademicUploadPreview(id: string): Promise<{
   }
 
   const headerRow = (rawRows[0] || []).map((h) => String(h ?? "").trim());
-  const validHeaders = headerRow.map((h, i) => (h ? h : `Kolom_${i + 1}`));
+  const visibleColumns = headerRow
+    .map((header, index) => ({ header, index }))
+    .filter(({ header }) => {
+      if (record.category !== "students" && record.category !== "lecturers") {
+        return true;
+      }
+      const normalized = header
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      return normalized !== "password" && normalized !== "kata_sandi";
+    });
+  const validHeaders = visibleColumns.map(({ header }, index) =>
+    header || `Kolom_${visibleColumns[index].index + 1}`,
+  );
 
   const dataRows: Array<Record<string, string>> = [];
   for (let idx = 1; idx < rawRows.length; idx++) {
@@ -219,8 +236,8 @@ export async function getAcademicUploadPreview(id: string): Promise<{
       continue;
     }
     const rowObj: Record<string, string> = { _rowIndex: String(idx) };
-    validHeaders.forEach((colName, colIdx) => {
-      rowObj[colName] = String(row[colIdx] ?? "").trim();
+    visibleColumns.forEach(({ index: colIdx }, visibleIndex) => {
+      rowObj[validHeaders[visibleIndex]] = String(row[colIdx] ?? "").trim();
     });
     dataRows.push(rowObj);
   }

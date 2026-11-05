@@ -8,6 +8,7 @@ const pageOptions = [
   { role: 'admin', label: 'Kemahasiswaan' },
   { role: 'mhs', label: 'Mahasiswa' },
   { role: 'dosen', label: 'Dosen PA' },
+  { role: 'akademik', label: 'Akademik' },
 ];
 
 const selectClassName =
@@ -173,13 +174,13 @@ function PageSelect({ value, disabled, onSelect }) {
   );
 }
 
-// Pengalih halaman untuk akun Kemahasiswaan: masuk sebagai mahasiswa/dosen PA
+// Pengalih halaman untuk akun Kemahasiswaan: masuk sebagai mahasiswa/dosen PA/akademik
 // mana pun, lalu kembali ke halaman Kemahasiswaan.
 export default function KemahasiswaanSwitcher({ profile }) {
   const [accounts, setAccounts] = useState([]);
   const [isSwitching, setIsSwitching] = useState(false);
   const [error, setError] = useState('');
-  const isImpersonating = profile.role === 'mhs' || profile.role === 'dosen';
+  const isImpersonating = ['mhs', 'dosen', 'akademik'].includes(profile.role);
 
   useEffect(() => {
     if (!isImpersonating) return undefined;

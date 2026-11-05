@@ -94,11 +94,16 @@ async function studentsWithUnresolvedViolations(): Promise<number[]> {
     },
     select: {
       studentId: true,
-      pembinaans: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+      pembinaans: { select: { status: true } },
     },
   });
+  // Selesai hanya jika ada punishment dan semuanya (asal + tambahan) disetujui.
   return [...new Set(
-    rows.filter((row) => row.pembinaans[0]?.status !== "DISETUJUI").map((row) => row.studentId),
+    rows
+      .filter((row) =>
+        row.pembinaans.length === 0 || row.pembinaans.some((item) => item.status !== "DISETUJUI"),
+      )
+      .map((row) => row.studentId),
   )];
 }
 

@@ -41,6 +41,7 @@ import {
   isPunishmentLate,
   openPunishmentStatuses,
   settlePunishmentPenalty,
+  countUnfinishedPunishments,
   todayInCampusTime,
 } from "./punishment";
 import {
@@ -56,6 +57,7 @@ import {
   isValidNimFormat,
   matchReportedStudent,
   resolveReportRoute,
+  type ReportRoute,
 } from "./report-routing";
 
 const reportRouter = Router();
@@ -262,8 +264,9 @@ reportRouter.post(
         : null;
       const modeTerlapor = request.body.modeTerlapor;
       const diketahui = modeTerlapor === "DIKETAHUI";
+      const nonMahasiswa = modeTerlapor === "NON_MAHASISWA";
       const terlaporNama =
-        diketahui && typeof request.body.terlaporNama === "string"
+        (diketahui || nonMahasiswa) && typeof request.body.terlaporNama === "string"
           ? request.body.terlaporNama.trim().replace(/\s+/g, " ")
           : "";
       const terlaporNim =
@@ -289,13 +292,13 @@ reportRouter.post(
       if (
         (request.body.jenis !== undefined && request.body.jenis !== JenisLaporan.TEMUAN) ||
         !pillarValues.includes(pillar) ||
-        (modeTerlapor !== "DIKETAHUI" && modeTerlapor !== "TIDAK_DIKETAHUI") ||
+        !["DIKETAHUI", "TIDAK_DIKETAHUI", "NON_MAHASISWA"].includes(modeTerlapor) ||
         (request.body.aturanId && aturanId === null) ||
         (severityUsulan && !severityValues.includes(severityUsulan)) ||
         (diketahui &&
           (!terlaporNama ||
-            terlaporNama.length > 200 ||
             (terlaporNim !== "" && !isValidNimFormat(terlaporNim)))) ||
+        terlaporNama.length > 200 ||
         (!diketahui && terlaporKeterangan.length < 5) ||
         terlaporKeterangan.length > 500 ||
         !lokasi ||
@@ -347,11 +350,13 @@ reportRouter.post(
       });
       storedFileName = fileName;
       await database.$transaction(async (transaction) => {
-        const route = await matchReportedStudent(transaction, {
-          diketahui,
-          nama: terlaporNama,
-          nim: terlaporNim,
-        });
+        const route: ReportRoute = nonMahasiswa
+          ? { jalur: "NON_MAHASISWA" }
+          : await matchReportedStudent(transaction, {
+              diketahui,
+              nama: terlaporNama,
+              nim: terlaporNim,
+            });
         const laporan = await transaction.laporan.create({
           data: {
             kodeHash: hashTrackingCode(kodePelacakan),
@@ -359,7 +364,7 @@ reportRouter.post(
             pillar,
             aturanId,
             severityUsulan,
-            terlaporNama: diketahui ? terlaporNama : null,
+            terlaporNama: terlaporNama || null,
             terlaporNim: diketahui && terlaporNim ? terlaporNim : null,
             terlaporKeterangan: terlaporKeterangan || null,
             terlaporId: route.jalur === "TERIDENTIFIKASI" ? route.student.id : null,
@@ -376,7 +381,7 @@ reportRouter.post(
           pillar,
           tanggalKejadian,
           route,
-          terlaporNama: diketahui ? terlaporNama : null,
+          terlaporNama: terlaporNama || null,
           terlaporNim: diketahui ? terlaporNim : null,
         });
         await createReportNotifications(transaction, {
@@ -500,6 +505,7 @@ reportRouter.get("/mahasiswa/tindak-lanjut", async (request, response) => {
                 status: true,
                 buktiUrl: true,
               },
+              where: { pembinaanAsalId: null },
               orderBy: { createdAt: "desc" },
               take: 1,
             },
@@ -668,6 +674,7 @@ reportRouter.get("/mahasiswa/pembinaan", async (request, response) => {
         batasWaktu: true,
         hariDenda: true,
         totalDenda: true,
+        pembinaanAsalId: true,
         createdAt: true,
         perubahanPoin: { select: { reason: true, pillar: true, severity: true } },
       },
@@ -996,6 +1003,7 @@ reportRouter.get("/dosen/laporan/riwayat", async (request, response) => {
           select: {
             delta: true,
             pembinaans: {
+              where: { pembinaanAsalId: null },
               orderBy: { createdAt: "desc" },
               take: 1,
               select: {
@@ -1277,7 +1285,12 @@ reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
         if (updatedCount.count === 0) return null;
 
         let restoredPoints = 0;
-        if (keputusan === "DISETUJUI") {
+        // Poin pelanggaran dipulihkan sekali, setelah semua punishment
+        // (asal + tambahan karena terlambat) disetujui.
+        const remaining = keputusan === "DISETUJUI"
+          ? await countUnfinishedPunishments(transaction, training.perubahanPoinId)
+          : 0;
+        if (keputusan === "DISETUJUI" && remaining === 0) {
           const restored = await recordPointChange(transaction, {
             studentId: training.studentId,
             type: "POINT_RESTORATION",
@@ -1313,7 +1326,11 @@ reportRouter.patch("/dosen/pembinaan/:id", async (request, response) => {
               ? "Bukti tindak lanjut disetujui"
               : "Bukti tindak lanjut perlu diperbaiki",
             isi: keputusan === "DISETUJUI"
-              ? `Dosen PA menyetujui bukti tindak lanjut. ${restoredPoints} poin telah dipulihkan.${
+              ? `Dosen PA menyetujui bukti tindak lanjut. ${
+                  remaining > 0
+                    ? `Masih ada ${remaining} punishment lain untuk pelanggaran ini; poin dipulihkan setelah semuanya disetujui.`
+                    : `${restoredPoints} poin telah dipulihkan.`
+                }${
                   training.totalDenda > 0
                     ? ` Potongan sanksi keterlambatan (${training.totalDenda} poin) tidak dipulihkan.`
                     : ""
@@ -1432,6 +1449,7 @@ reportRouter.get("/admin/laporan", async (request, response) => {
                 isiRefleksi: true,
                 catatanPemeriksa: true,
               },
+              where: { pembinaanAsalId: null },
               orderBy: { createdAt: "desc" },
               take: 1,
             },
@@ -1628,7 +1646,7 @@ reportRouter.patch("/admin/laporan/:id/tindak-lanjut", async (request, response)
         data: {
           studentId: report.terlapor.id,
           judul: "Punishment telah ditetapkan Kemahasiswaan",
-          isi: `${instruksi} Batas waktu: ${batasWaktu.toLocaleDateString("id-ID", { timeZone: "UTC" })}. Poin dipulihkan setelah bukti disetujui Dosen PA; lewat batas waktu, poin berkurang 2 per hari.`,
+          isi: `${instruksi} Batas waktu: ${batasWaktu.toLocaleDateString("id-ID", { timeZone: "UTC" })}. Poin dipulihkan setelah bukti disetujui Dosen PA; lewat batas waktu, poin berkurang 2 per hari dan setiap 3 hari keterlambatan menambah 1 punishment.`,
           tautanTab: "tindak-lanjut",
         },
       });
@@ -1696,6 +1714,7 @@ reportRouter.get("/admin/punishment", async (request, response) => {
           batasWaktu: true,
           hariDenda: true,
           totalDenda: true,
+          pembinaanAsalId: true,
           createdAt: true,
           updatedAt: true,
           student: { select: { nama: true, nim: true, jurusan: true, pointScore: true } },

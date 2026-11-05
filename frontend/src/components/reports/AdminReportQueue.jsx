@@ -146,7 +146,9 @@ function AdminReportCard({ report, reportNumber, onChanged }) {
                 : "Identitas dicantumkan pelapor dan cocok dengan data mahasiswa"
               : report.jalur === "TIDAK_TERDAFTAR"
                 ? "Nama/NIM tidak cocok dengan data mahasiswa"
-                : "Identitas terlapor belum diketahui"}
+                : report.jalur === "NON_MAHASISWA"
+                  ? "Terlapor bukan mahasiswa (staf/pihak lain)"
+                  : "Identitas terlapor belum diketahui"}
           </dd>
         </div>
         <div className="sm:col-span-2">

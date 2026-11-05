@@ -121,7 +121,19 @@ export function calculatePointChange(
 
 // Sanksi punishment yang tidak ditindaklanjuti: 2 poin per hari lewat batas.
 export const punishmentPenaltyPerDay = 2;
+// Setiap 3 hari keterlambatan menambah satu punishment dengan batas waktu baru.
+export const punishmentLateDaysPerExtra = 3;
+export const extraPunishmentDeadlineDays = 7;
 const dayInMilliseconds = 24 * 60 * 60 * 1000;
+
+// Jumlah punishment tambahan yang jatuh tempo saat hari terlambat naik dari
+// previousDays ke totalDays (hari ke-3, 6, 9, ... masing-masing satu).
+export function countExtraPunishmentsDue(previousDays: number, totalDays: number): number {
+  return (
+    Math.floor(totalDays / punishmentLateDaysPerExtra) -
+    Math.floor(previousDays / punishmentLateDaysPerExtra)
+  );
+}
 
 // Semua tanggal berupa tanggal kalender (UTC tengah malam, kolom @db.Date).
 // Hari batas waktu masih boleh dikerjakan; denda mulai hari berikutnya.

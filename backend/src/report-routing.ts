@@ -15,6 +15,7 @@ const pillarLabels: Record<DisciplinePillar, string> = {
 export type ReportRoute =
   | { jalur: "TIDAK_DIKETAHUI" }
   | { jalur: "TIDAK_TERDAFTAR" }
+  | { jalur: "NON_MAHASISWA" }
   | {
       jalur: "TERIDENTIFIKASI";
       student: { id: number; nama: string; nim: number; dosenPaId: number | null };
@@ -157,6 +158,8 @@ export function buildReportNotificationTexts({
       : `Laporan diteruskan kepada terlapor dan Dosen PA untuk konfirmasi. ${detailKejadian}`;
   } else if (route.jalur === "TIDAK_TERDAFTAR") {
     kemahasiswaanIsi = `Nama/NIM yang diisi (${terlaporNama || "-"} / ${terlaporNim || "-"}) tidak cocok atau cocok dengan lebih dari satu mahasiswa. Perlu ditelusuri. ${detailKejadian}`;
+  } else if (route.jalur === "NON_MAHASISWA") {
+    kemahasiswaanIsi = `Terlapor bukan mahasiswa (staf/pihak lain${terlaporNama ? `: ${terlaporNama}` : ""}). Perlu ditindaklanjuti Kemahasiswaan. ${detailKejadian}`;
   } else {
     kemahasiswaanIsi = `Pelapor tidak mengetahui nama/NIM terlapor. Perlu ditelusuri. ${detailKejadian}`;
   }

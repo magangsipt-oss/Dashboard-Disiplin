@@ -33,7 +33,7 @@ export const changePasswordSchema = loginSchema.extend({
 });
 
 export const impersonateSchema = z.object({
-  role: z.enum(["mhs", "dosen"]),
+  role: z.enum(["mhs", "dosen", "akademik"]),
   accountId: z.number().int().positive().max(2_147_483_647).optional(),
 });
 

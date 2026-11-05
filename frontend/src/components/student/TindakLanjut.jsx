@@ -222,7 +222,7 @@ export default function TindakLanjut({ onAppeal }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800"><ClipboardCheck className="h-5 w-5" /></div>
           <div>
             <h2 className="text-lg font-bold text-slate-900">Punishment & Pembinaan</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Selesaikan punishment sebelum batas waktu dan kirim bukti kepada Dosen PA agar poin dikembalikan. Lewat batas waktu, poin berkurang 2 setiap hari.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Selesaikan punishment sebelum batas waktu dan kirim bukti kepada Dosen PA agar poin dikembalikan. Lewat batas waktu, poin berkurang 2 setiap hari dan setiap 3 hari keterlambatan menambah 1 punishment.</p>
           </div>
         </div>
         {isLoading ? (
@@ -234,7 +234,12 @@ export default function TindakLanjut({ onAppeal }) {
             {training.map((task) => (
               <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-bold text-slate-900">{punishmentTypeLabels[task.jenis] ?? task.jenis}</h3>
+                  <h3 className="font-bold text-slate-900">
+                    {punishmentTypeLabels[task.jenis] ?? task.jenis}
+                    {task.pembinaanAsalId && (
+                      <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">Punishment tambahan</span>
+                    )}
+                  </h3>
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{trainingStatusLabels[task.status] ?? task.status}</span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{task.instruksi}</p>
@@ -244,7 +249,7 @@ export default function TindakLanjut({ onAppeal }) {
                 {task.hariDenda > 0 && (
                   <p className="mt-2 rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-800">
                     Terlambat {task.hariDenda} hari · sanksi keterlambatan -{task.totalDenda} poin (tidak dikembalikan).
-                    {["DIMINTA", "DITOLAK"].includes(task.status) && " Poin terus berkurang 2 per hari sampai bukti dikirim."}
+                    {["DIMINTA", "DITOLAK"].includes(task.status) && " Poin terus berkurang 2 per hari sampai bukti dikirim, dan setiap 3 hari terlambat menambah 1 punishment."}
                   </p>
                 )}
                 {task.catatanPemeriksa && <p className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Catatan pemeriksa: {task.catatanPemeriksa}</p>}

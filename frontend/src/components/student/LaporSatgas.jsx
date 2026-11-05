@@ -157,7 +157,7 @@ export default function LaporSatgas({ onCheckReports }) {
             </label>
             <fieldset className="sm:col-span-2">
               <legend className="text-sm font-semibold text-slate-700">Data terlapor</legend>
-              <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-1.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {[
                   {
                     value: "DIKETAHUI",
@@ -168,6 +168,11 @@ export default function LaporSatgas({ onCheckReports }) {
                     value: "TIDAK_DIKETAHUI",
                     title: "Saya tidak tahu nama atau NIM terlapor",
                     description: "Laporan langsung diteruskan ke Kemahasiswaan untuk ditelusuri.",
+                  },
+                  {
+                    value: "NON_MAHASISWA",
+                    title: "Laporan lainnya (bukan mahasiswa)",
+                    description: "Untuk melaporkan staf, dosen, atau pihak lain selain mahasiswa. Laporan langsung diteruskan ke Kemahasiswaan.",
                   },
                 ].map((mode) => (
                   <label
@@ -203,6 +208,17 @@ export default function LaporSatgas({ onCheckReports }) {
                 <label className="text-sm font-semibold text-slate-700">
                   NIM terlapor (opsional)
                   <input name="terlaporNim" value={form.terlaporNim} onChange={updateField} inputMode="numeric" pattern="\d{4,15}" maxLength={15} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                </label>
+              </>
+            ) : form.modeTerlapor === "NON_MAHASISWA" ? (
+              <>
+                <label className="text-sm font-semibold text-slate-700">
+                  Nama terlapor (opsional)
+                  <input name="terlaporNama" value={form.terlaporNama} onChange={updateField} maxLength={200} autoComplete="off" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Jabatan / unit / ciri-ciri terlapor
+                  <input required name="terlaporKeterangan" value={form.terlaporKeterangan} onChange={updateField} minLength={5} maxLength={500} placeholder="Contoh: staf administrasi gedung A" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                 </label>
               </>
             ) : (

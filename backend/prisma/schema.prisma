@@ -173,6 +173,7 @@ enum JalurLaporan {
   TERIDENTIFIKASI
   TIDAK_TERDAFTAR
   TIDAK_DIKETAHUI
+  NON_MAHASISWA
 }
 
 enum PeranPenerima {
@@ -336,13 +337,19 @@ model Pembinaan {
   dendaDihitungSampai DateTime?       @db.Date
   hariDenda           Int             @default(0)
   totalDenda          Int             @default(0)
+  // Punishment tambahan otomatis: setiap 3 hari keterlambatan punishment asal
+  // menambah satu punishment untuk pelanggaran yang sama.
+  pembinaanAsalId     Int?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   perubahanPoin       PointChange     @relation(fields: [perubahanPoinId], references: [id], onDelete: Cascade)
   student             Mahasiswa       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  pembinaanAsal       Pembinaan?      @relation("PunishmentTambahan", fields: [pembinaanAsalId], references: [id], onDelete: Cascade)
+  punishmentTambahan  Pembinaan[]     @relation("PunishmentTambahan")
 
   @@index([studentId, status, createdAt])
   @@index([status, batasWaktu])
+  @@index([pembinaanAsalId])
 }
 
 enum JenisKlaimKegiatan {

@@ -1,7 +1,10 @@
 import { Prisma, StatusPembinaan } from "@prisma/client";
 import { database } from "./db";
 import {
+  countExtraPunishmentsDue,
   countPunishmentPenaltyDays,
+  extraPunishmentDeadlineDays,
+  punishmentLateDaysPerExtra,
   punishmentPenaltyPerDay,
 } from "./points";
 import { recordPointChanges } from "./point-ledger";
@@ -59,6 +62,21 @@ export function getViolationResolution(
   return isPunishmentLate(violation.punishment, today) ? "TERLAMBAT" : "BERJALAN";
 }
 
+// Satu pelanggaran bisa punya punishment asal dan tambahan. Yang mewakili:
+// punishment terlambat yang belum disetujui, lalu yang belum disetujui, lalu
+// punishment asal (semua sudah disetujui).
+export function representativePunishment<
+  T extends { status: StatusPembinaan; batasWaktu: Date | null; hariDenda: number },
+>(punishments: T[], today = todayInCampusTime()): T | null {
+  const unfinished = punishments.filter((item) => item.status !== StatusPembinaan.DISETUJUI);
+  return (
+    unfinished.find((item) => isPunishmentLate(item, today)) ??
+    unfinished[0] ??
+    punishments[0] ??
+    null
+  );
+}
+
 export const unresolvedViolationStatuses: ViolationResolution[] = ["BELUM_PUNISHMENT", "BERJALAN", "TERLAMBAT"];
 
 // Seluruh pelanggaran (pengurangan poin) per mahasiswa beserta status
@@ -89,8 +107,7 @@ export async function listViolationsWithResolution(
         select: { id: true, status: true, tanggalKejadian: true, aturan: { select: { nama: true } } },
       },
       pembinaans: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
+        orderBy: { createdAt: "asc" },
         select: {
           jenis: true,
           status: true,
@@ -108,7 +125,7 @@ export async function listViolationsWithResolution(
     status: ViolationResolution;
   }>>();
   for (const { studentId, sanggahans, pembinaans, laporan, ...violation } of violations) {
-    const punishment = pembinaans[0] ?? null;
+    const punishment = representativePunishment(pembinaans, today);
     const list = byStudent.get(studentId) ?? [];
     list.push({
       ...violation,
@@ -179,11 +196,44 @@ export async function settlePunishmentPenalty(
     data: {
       studentId: training.studentId,
       judul: "Poin dipotong: punishment belum ditindaklanjuti",
-      isi: `Batas waktu punishment telah lewat ${training.hariDenda + days} hari. Poin berkurang ${Math.abs(appliedDelta)} hari ini dan terus berkurang ${punishmentPenaltyPerDay} poin per hari sampai bukti penyelesaian dikirim.`,
+      isi: `Batas waktu punishment telah lewat ${training.hariDenda + days} hari. Poin berkurang ${Math.abs(appliedDelta)} hari ini dan terus berkurang ${punishmentPenaltyPerDay} poin per hari sampai bukti penyelesaian dikirim. Setiap ${punishmentLateDaysPerExtra} hari keterlambatan menambah 1 punishment.`,
       tautanTab: "tindak-lanjut",
     },
   });
+
+  const extras = countExtraPunishmentsDue(training.hariDenda, training.hariDenda + days);
+  if (extras > 0) {
+    const batasWaktu = new Date(today.getTime() + extraPunishmentDeadlineDays * 24 * 60 * 60 * 1000);
+    await transaction.pembinaan.createMany({
+      data: Array.from({ length: extras }, () => ({
+        perubahanPoinId: training.perubahanPoinId,
+        studentId: training.studentId,
+        pembinaanAsalId: training.id,
+        jenis: training.jenis,
+        instruksi: training.instruksi,
+        batasWaktu,
+      })),
+    });
+    await transaction.pemberitahuan.create({
+      data: {
+        studentId: training.studentId,
+        judul: "Punishment tambahan diberikan",
+        isi: `Punishment laporan #${laporanId ?? training.id} terlambat ${training.hariDenda + days} hari, sehingga Anda mendapat ${extras} punishment tambahan. Batas waktu: ${batasWaktu.toLocaleDateString("id-ID", { timeZone: "UTC" })}. Poin pelanggaran baru dipulihkan setelah semua punishment disetujui Dosen PA.`,
+        tautanTab: "tindak-lanjut",
+      },
+    });
+  }
   return days;
+}
+
+// Punishment yang belum disetujui untuk satu pelanggaran (asal maupun tambahan).
+export async function countUnfinishedPunishments(
+  transaction: Prisma.TransactionClient,
+  perubahanPoinId: number,
+): Promise<number> {
+  return transaction.pembinaan.count({
+    where: { perubahanPoinId, status: { not: StatusPembinaan.DISETUJUI } },
+  });
 }
 
 export async function applyOverduePunishmentPenalties(

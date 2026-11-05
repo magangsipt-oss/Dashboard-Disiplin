@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   calculatePointChange,
   calculatePointChangeForDelta,
+  countExtraPunishmentsDue,
   countPunishmentPenaltyDays,
   getPointChangeMetadata,
   getScorePredicate,
@@ -10,7 +11,12 @@ import {
   punishmentPenaltyPerDay,
   violationSeverityFollowUps,
 } from "../src/points";
-import { getViolationResolution, isPunishmentLate, todayInCampusTime } from "../src/punishment";
+import {
+  getViolationResolution,
+  isPunishmentLate,
+  representativePunishment,
+  todayInCampusTime,
+} from "../src/punishment";
 
 test("score predicates honor the configured threshold boundaries", () => {
   assert.equal(getScorePredicate(200), "Disiplin");
@@ -122,6 +128,35 @@ test("punishment penalties start the day after the deadline and skip counted day
   assert.equal(countPunishmentPenaltyDays(deadline, date("2026-11-01"), date("2026-11-02")), 1);
   assert.equal(countPunishmentPenaltyDays(deadline, date("2026-11-02"), date("2026-11-02")), 0);
   assert.equal(punishmentPenaltyPerDay, 2);
+});
+
+test("every 3 late days adds one extra punishment", () => {
+  assert.equal(countExtraPunishmentsDue(0, 2), 0);
+  assert.equal(countExtraPunishmentsDue(0, 3), 1);
+  assert.equal(countExtraPunishmentsDue(2, 3), 1);
+  assert.equal(countExtraPunishmentsDue(3, 5), 0);
+  assert.equal(countExtraPunishmentsDue(5, 6), 1);
+  // Job tidak berjalan beberapa hari: semua yang terlewat tetap ditambahkan.
+  assert.equal(countExtraPunishmentsDue(0, 7), 2);
+});
+
+test("a violation stays unresolved until every punishment is approved", () => {
+  const today = new Date("2026-10-30T00:00:00.000Z");
+  const past = new Date("2026-10-20T00:00:00.000Z");
+  const future = new Date("2026-11-05T00:00:00.000Z");
+  const original = { id: 1, status: "DISETUJUI" as const, batasWaktu: past, hariDenda: 3 };
+  const extra = { id: 2, status: "DIMINTA" as const, batasWaktu: future, hariDenda: 0 };
+  assert.equal(representativePunishment([original, extra], today)?.id, 2);
+  assert.equal(
+    getViolationResolution(
+      { type: "REPORTED_VIOLATION", sanggahanDisetujui: false, punishment: representativePunishment([original, extra], today) },
+      today,
+    ),
+    "BERJALAN",
+  );
+  const doneExtra = { ...extra, status: "DISETUJUI" as const };
+  assert.equal(representativePunishment([original, doneExtra], today)?.id, 1);
+  assert.equal(representativePunishment([], today), null);
 });
 
 test("campus day rolls over at midnight WITA", () => {

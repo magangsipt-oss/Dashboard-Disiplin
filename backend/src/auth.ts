@@ -968,7 +968,7 @@ authRouter.post("/points/adjust", requireRole(["admin"], "Hanya admin kemahasisw
 });
 
 // Akun Kemahasiswaan asli dari sesi, baik saat di halamannya sendiri maupun
-// saat sedang masuk sebagai mahasiswa/dosen PA.
+// saat sedang masuk sebagai mahasiswa/dosen PA/akademik.
 function kemahasiswaanProfileOf(session: Session | null): UserProfile | null {
   if (!session) return null;
   if (session.profile.role === "admin") return session.profile;
@@ -976,8 +976,21 @@ function kemahasiswaanProfileOf(session: Session | null): UserProfile | null {
 }
 
 type ImpersonationAccount = { id: number; name: string; identity: string };
+type ImpersonationRole = "mhs" | "dosen" | "akademik";
 
-async function listImpersonationAccounts(role: "mhs" | "dosen"): Promise<ImpersonationAccount[]> {
+const impersonationRoleLabels: Record<ImpersonationRole, string> = {
+  mhs: "mahasiswa",
+  dosen: "dosen PA",
+  akademik: "akademik",
+};
+
+const impersonationEntities: Record<ImpersonationRole, string> = {
+  mhs: "Mahasiswa",
+  dosen: "Dosen",
+  akademik: "Akademik",
+};
+
+async function listImpersonationAccounts(role: ImpersonationRole): Promise<ImpersonationAccount[]> {
   if (role === "mhs") {
     const students = await database.mahasiswa.findMany({
       orderBy: [{ nama: "asc" }, { nim: "asc" }],
@@ -987,6 +1000,17 @@ async function listImpersonationAccounts(role: "mhs" | "dosen"): Promise<Imperso
       id: student.id,
       name: student.nama,
       identity: String(student.nim),
+    }));
+  }
+  if (role === "akademik") {
+    const staff = await database.akademik.findMany({
+      orderBy: [{ nama: "asc" }, { id: "asc" }],
+      select: { id: true, nama: true, email: true },
+    });
+    return staff.map((account) => ({
+      id: account.id,
+      name: account.nama,
+      identity: account.email?.trim() || "-",
     }));
   }
   const lecturers = await database.dosen.findMany({
@@ -1001,7 +1025,7 @@ async function listImpersonationAccounts(role: "mhs" | "dosen"): Promise<Imperso
 }
 
 async function findImpersonationProfile(
-  role: "mhs" | "dosen",
+  role: ImpersonationRole,
   accountId: number,
 ): Promise<UserProfile | null> {
   if (role === "mhs") {
@@ -1016,6 +1040,21 @@ async function findImpersonationProfile(
       identityLabel: "NIM",
       details: [{ label: "Jurusan", value: student.jurusan }],
       createdAt: student.timestamp.toISOString(),
+    };
+  }
+  if (role === "akademik") {
+    const account = await database.akademik.findUnique({ where: { id: accountId } });
+    if (!account) return null;
+    const email = account.email?.trim() || "-";
+    return {
+      id: account.id,
+      role,
+      roleLabel: "Akademik",
+      name: account.nama,
+      identity: email,
+      identityLabel: "Email",
+      details: [{ label: "Email", value: email }],
+      createdAt: account.timestamp.toISOString(),
     };
   }
   const lecturer = await database.dosen.findUnique({ where: { id: accountId } });
@@ -1050,7 +1089,7 @@ authRouter.get("/impersonation/accounts", async (request, response) => {
     return;
   }
   const role = request.query.role;
-  if (role !== "mhs" && role !== "dosen") {
+  if (role !== "mhs" && role !== "dosen" && role !== "akademik") {
     response.status(400).json({ message: "Peran akun tidak valid." });
     return;
   }
@@ -1090,7 +1129,7 @@ authRouter.post("/impersonation", async (request, response) => {
       response.status(404).json({
         message: body.accountId
           ? "Akun tujuan tidak ditemukan."
-          : `Belum ada akun ${body.role === "mhs" ? "mahasiswa" : "dosen PA"} yang terdaftar.`,
+          : `Belum ada akun ${impersonationRoleLabels[body.role]} yang terdaftar.`,
       });
       return;
     }
@@ -1107,7 +1146,7 @@ authRouter.post("/impersonation", async (request, response) => {
           aktorId: kemahasiswaan.id,
           aktorPeran: "admin",
           aksi: "MASUK_SEBAGAI_AKUN",
-          entitas: body.role === "mhs" ? "Mahasiswa" : "Dosen",
+          entitas: impersonationEntities[body.role],
           entitasId: target.id,
           nilaiBaru: { identity: target.identity, name: target.name },
         },

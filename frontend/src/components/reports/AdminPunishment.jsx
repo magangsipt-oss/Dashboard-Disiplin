@@ -197,7 +197,7 @@ function AssignPunishmentCard({ report, today, onChanged }) {
           />
         </label>
         <p className="text-xs text-red-900">
-          Poin {Math.abs(report.perubahanPoin?.delta ?? 0)} dikembalikan setelah bukti disetujui Dosen PA. Lewat batas waktu tanpa tindak lanjut, poin berkurang 2 setiap hari.
+          Poin {Math.abs(report.perubahanPoin?.delta ?? 0)} dikembalikan setelah bukti disetujui Dosen PA. Lewat batas waktu tanpa tindak lanjut, poin berkurang 2 setiap hari dan setiap 3 hari keterlambatan menambah 1 punishment.
         </p>
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         <button
@@ -248,6 +248,9 @@ function PunishmentCard({ punishment, today }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {punishment.pembinaanAsalId && (
+            <span className="rounded-full bg-red-100 px-3 py-1.5 text-xs font-bold text-red-800">Punishment tambahan</span>
+          )}
           {punishment.terlambat && (
             <span className="rounded-full bg-red-700 px-3 py-1.5 text-xs font-bold text-white">Terlambat</span>
           )}

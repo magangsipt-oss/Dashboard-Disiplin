@@ -15,6 +15,7 @@ import AdminPunishment from './reports/AdminPunishment';
 import AdminPointRules from './reports/AdminPointRules';
 import AdminPointData from './reports/AdminPointData';
 import AdminLecturerMonitoring from './reports/AdminLecturerMonitoring';
+import AdminPasswordData from './reports/AdminPasswordData';
 import AdminDrc from './reports/AdminDrc';
 import AdminDashboardSummary from './reports/AdminDashboardSummary';
 import DosenDashboardSummary from './reports/DosenDashboardSummary';
@@ -60,6 +61,7 @@ import {
   Ellipsis,
   CalendarCheck,
   CalendarDays,
+  KeyRound,
   CircleCheck,
 } from 'lucide-react';
 
@@ -199,6 +201,7 @@ const navigationByRole = {
     { id: 'pengaturan-poin', label: 'Pengaturan Poin', short: 'Atur Poin', icon: SlidersHorizontal, description: 'Atur aturan poin kedisiplinan mahasiswa.' },
     { id: 'data-poin', label: 'Monitoring Mahasiswa', short: 'Mahasiswa', icon: Users, description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
     { id: 'monitoring-dpa', label: 'Monitoring DPA', short: 'Monitor DPA', icon: UserCheck, description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
+    { id: 'data-password', label: 'Data Password', short: 'Password', icon: KeyRound, description: 'Lihat password akun Mahasiswa, Dosen PA, Kemahasiswaan, dan Akademik untuk membantu pengguna yang lupa password.' },
     { id: 'drc', label: 'DRC', short: 'DRC', icon: CalendarDays, description: 'Umumkan seminar atau kegiatan Disiplin Refresh Competency (DRC) yang wajib diikuti mahasiswa setiap awal semester.' },
   ],
   akademik: [
@@ -766,7 +769,7 @@ export default function App({ hasSessionCookie = false }) {
     if (
       authenticatedUser?.role !== 'akademik' ||
       activePage !== 'dashboard' ||
-      !['upload-absensi', 'pembagian-bimbingan'].includes(activeTab)
+      !['upload-absensi', 'upload-mahasiswa', 'upload-dosen', 'pembagian-bimbingan'].includes(activeTab)
     ) {
       return undefined;
     }
@@ -1944,16 +1947,16 @@ export default function App({ hasSessionCookie = false }) {
                 )}
 
                 {activeTab === 'upload-absensi' && (
-                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-8">
                     <div className="mb-6">
-                      <h3 className="text-xl font-bold text-slate-900">Upload Absensi</h3>
+                      <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Upload Absensi</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
                         Menu ini digunakan untuk mencatat kehadiran mahasiswa agar presensi dan poin kedisiplinan dapat diperbarui.
                       </p>
                       <button
                         type="button"
                         onClick={() => setTemplatePreviewCategory('attendance')}
-                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-800 hover:bg-red-100 sm:w-auto sm:justify-start sm:py-2"
                       >
                         <FileText className="h-4 w-4" />
                         Lihat template absensi
@@ -1974,7 +1977,7 @@ export default function App({ hasSessionCookie = false }) {
                             setAcademicAttendanceResult(null);
                             setAcademicAttendanceError('');
                           }}
-                          className="block w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900 cursor-pointer"
+                          className="block w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-red-800 file:px-3 file:py-2 sm:px-4 sm:text-sm sm:file:mr-4 sm:file:px-4 file:font-semibold file:text-white hover:file:bg-red-900 cursor-pointer"
                         />
                         <button
                           type="submit"
@@ -2030,8 +2033,7 @@ export default function App({ hasSessionCookie = false }) {
                     <AcademicFileHistory
                       files={academicFiles.filter((f) => f.category === 'attendance')}
                       isLoading={isLoadingAcademicFiles}
-                      title="Lampiran File Absensi yang Pernah Diunggah"
-                      description="Klik nama file atau tombol preview untuk melihat isi data file secara langsung."
+                      title="Riwayat Unggahan File"
                       emptyText="Belum ada file absensi yang diunggah."
                       onPreview={handleOpenFilePreview}
                       onDeleted={handleAcademicFilesDeleted}
@@ -2040,16 +2042,16 @@ export default function App({ hasSessionCookie = false }) {
                 )}
 
                 {activeTab === 'upload-mahasiswa' && (
-                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-8">
                     <div className="mb-6">
-                      <h3 className="text-xl font-bold text-slate-900">Upload Data Mahasiswa Baru</h3>
+                      <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Upload Data Mahasiswa Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
                         Menu ini digunakan untuk menambahkan data dan akun mahasiswa baru ke dalam sistem.
                       </p>
                       <button
                         type="button"
                         onClick={() => setTemplatePreviewCategory('students')}
-                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-800 hover:bg-red-100 sm:w-auto sm:justify-start sm:py-2"
                       >
                         <FileText className="h-4 w-4" />
                         Lihat template data mahasiswa
@@ -2070,7 +2072,7 @@ export default function App({ hasSessionCookie = false }) {
                             setNewStudentImportResult(null);
                             setNewStudentImportError('');
                           }}
-                          className="block w-full flex-1 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
+                          className="block w-full flex-1 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-red-800 file:px-3 file:py-2 sm:px-4 sm:text-sm sm:file:mr-4 sm:file:px-4 file:font-semibold file:text-white hover:file:bg-red-900"
                         />
                         <button
                           type="submit"
@@ -2092,20 +2094,28 @@ export default function App({ hasSessionCookie = false }) {
                         Berhasil menambahkan {newStudentImportResult.imported} mahasiswa baru. {newStudentImportResult.skipped} baris dilewati karena NIM sudah terdaftar.
                       </p>
                     )}
+                    <AcademicFileHistory
+                      files={academicFiles.filter((file) => file.category === 'students')}
+                      isLoading={isLoadingAcademicFiles}
+                      title="Riwayat Unggahan File"
+                      emptyText="Belum ada file data mahasiswa yang diunggah."
+                      onPreview={handleOpenFilePreview}
+                      onDeleted={handleAcademicFilesDeleted}
+                    />
                   </section>
                 )}
 
                 {activeTab === 'upload-dosen' && (
-                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-8">
                     <div className="mb-6">
-                      <h3 className="text-xl font-bold text-slate-900">Upload Data Dosen Baru</h3>
+                      <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Upload Data Dosen Baru</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
                         Menu ini digunakan untuk menambahkan data dan akun dosen agar dapat menggunakan layanan dosen di sistem.
                       </p>
                       <button
                         type="button"
                         onClick={() => setTemplatePreviewCategory('lecturers')}
-                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-800 hover:bg-red-100 sm:w-auto sm:justify-start sm:py-2"
                       >
                         <FileText className="h-4 w-4" />
                         Lihat template data dosen
@@ -2126,7 +2136,7 @@ export default function App({ hasSessionCookie = false }) {
                             setNewLecturerImportResult(null);
                             setNewLecturerImportError('');
                           }}
-                          className="block w-full flex-1 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900"
+                          className="block w-full flex-1 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-red-800 file:px-3 file:py-2 sm:px-4 sm:text-sm sm:file:mr-4 sm:file:px-4 file:font-semibold file:text-white hover:file:bg-red-900"
                         />
                         <button
                           type="submit"
@@ -2148,20 +2158,28 @@ export default function App({ hasSessionCookie = false }) {
                         Berhasil menambahkan {newLecturerImportResult.imported} dosen baru. {newLecturerImportResult.skipped} baris dilewati karena NUPTK atau Email sudah terdaftar.
                       </p>
                     )}
+                    <AcademicFileHistory
+                      files={academicFiles.filter((file) => file.category === 'lecturers')}
+                      isLoading={isLoadingAcademicFiles}
+                      title="Riwayat Unggahan File"
+                      emptyText="Belum ada file data dosen yang diunggah."
+                      onPreview={handleOpenFilePreview}
+                      onDeleted={handleAcademicFilesDeleted}
+                    />
                   </section>
                 )}
 
                 {activeTab === 'pembagian-bimbingan' && (
-                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg sm:p-8">
+                  <section className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg sm:p-8">
                     <div className="mb-6">
-                      <h3 className="text-xl font-bold text-slate-900">Pembagian Mahasiswa Bimbingan</h3>
+                      <h3 className="text-lg font-bold text-slate-900 sm:text-xl">Pembagian Mahasiswa Bimbingan</h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600">
                         Menu ini digunakan untuk menetapkan dosen pembimbing akademik bagi mahasiswa agar data bimbingan dan pemantauan mahasiswa tersinkronisasi.
                       </p>
                       <button
                         type="button"
                         onClick={() => setTemplatePreviewCategory('advisor-assignments')}
-                        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-800 hover:bg-red-100 sm:w-auto sm:justify-start sm:py-2"
                       >
                         <FileText className="h-4 w-4" />
                         Lihat template pembagian DPA
@@ -2182,7 +2200,7 @@ export default function App({ hasSessionCookie = false }) {
                             setAdvisorAssignmentResult(null);
                             setAdvisorAssignmentError('');
                           }}
-                          className="block w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-red-800 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-red-900 cursor-pointer"
+                          className="block w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-red-800 file:px-3 file:py-2 sm:px-4 sm:text-sm sm:file:mr-4 sm:file:px-4 file:font-semibold file:text-white hover:file:bg-red-900 cursor-pointer"
                         />
                         <button
                           type="submit"
@@ -2208,8 +2226,7 @@ export default function App({ hasSessionCookie = false }) {
                     <AcademicFileHistory
                       files={academicFiles.filter((f) => f.category === 'advisors')}
                       isLoading={isLoadingAcademicFiles}
-                      title="Lampiran File Pembagian DPA yang Pernah Diunggah"
-                      description="Klik nama file atau tombol preview untuk melihat isi pembagian DPA di dalam file."
+                      title="Riwayat Unggahan File"
                       emptyText="Belum ada file pembagian DPA yang diunggah."
                       onPreview={handleOpenFilePreview}
                       onDeleted={handleAcademicFilesDeleted}
@@ -2557,11 +2574,8 @@ export default function App({ hasSessionCookie = false }) {
                 ) : (
                   <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
                 )}
-
-                <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow">
-                  Poin berkurang setelah Dosen PA mengonfirmasi pelanggaran. Kemahasiswaan menetapkan tindak lanjut; poin dipulihkan oleh sistem setelah bukti mahasiswa disetujui Dosen PA.
-                </p>
-
+  
+                {activeTab !== 'data-password' && (
                 <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
                   {[
                     {
@@ -2607,6 +2621,7 @@ export default function App({ hasSessionCookie = false }) {
                     </button>
                   ))}
                 </section>
+                )}
 
                 {adminMonitoringError && (
                   <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -2630,6 +2645,8 @@ export default function App({ hasSessionCookie = false }) {
                     isLoading={isLoadingAdminMonitoring}
                   />
                 )}
+
+                {activeTab === 'data-password' && <AdminPasswordData />}
               </main>
             )}
           </div>

@@ -15,6 +15,8 @@ model Mahasiswa {
   noHandphone       String?            @map("No_Handphone") @db.VarChar(30)
   email             String?            @map("Email") @db.VarChar(255)
   password          String             @map("Password") @db.VarChar(255)
+  // Salinan terenkripsi untuk menu Data Password (Kemahasiswaan).
+  passwordTerenkripsi String? @map("Password_Terenkripsi") @db.VarChar(512)
   jurusan           String             @map("PRODI")
   angkatan          Int?               @map("Angkatan")
   namaSmta          String?            @map("Nama_SMTA") @db.VarChar(255)
@@ -498,6 +500,8 @@ model Dosen {
   nuptk               BigInt?             @unique @map("NUPTK")
   nama                String              @map("Nama")
   password            String              @map("Password") @db.VarChar(255)
+  // Salinan terenkripsi untuk menu Data Password (Kemahasiswaan).
+  passwordTerenkripsi String? @map("Password_Terenkripsi") @db.VarChar(512)
   timestamp           DateTime            @default(now()) @map("Timestamp")
   mahasiswaBimbingan  Mahasiswa[]
   advisorRequests     AdvisorRequest[]
@@ -513,6 +517,8 @@ model Kemahasiswaan {
   email     String?  @unique @map("Email") @db.VarChar(255)
   nama      String   @map("Nama")
   password  String   @map("Password") @db.VarChar(255)
+  // Salinan terenkripsi untuk menu Data Password (Kemahasiswaan).
+  passwordTerenkripsi String? @map("Password_Terenkripsi") @db.VarChar(512)
   timestamp DateTime @default(now()) @map("Timestamp")
 
   @@map("Kemahasiswaan")
@@ -523,6 +529,8 @@ model Akademik {
   email               String?   @unique @map("Email") @db.VarChar(255)
   nama                String    @map("Nama")
   password            String    @map("Password") @db.VarChar(255)
+  // Salinan terenkripsi untuk menu Data Password (Kemahasiswaan).
+  passwordTerenkripsi String? @map("Password_Terenkripsi") @db.VarChar(512)
   timestamp           DateTime  @default(now()) @map("Timestamp")
   laporanDiverifikasi Laporan[]
 

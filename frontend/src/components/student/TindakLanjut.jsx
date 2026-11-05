@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ModalLayer from "@/components/modals/ModalLayer";
 import { ClipboardCheck, FileText, MessageSquareText } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
 import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
@@ -277,7 +278,7 @@ export default function TindakLanjut({ onAppeal }) {
       </div>
 
       {selectedTraining && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <ModalLayer>
           <form onSubmit={submitReflection} className="w-full max-w-xl space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900">Kirim Refleksi Tertulis</h2>
@@ -292,11 +293,11 @@ export default function TindakLanjut({ onAppeal }) {
               <button type="submit" disabled={isSubmitting || reflection.trim().length < 100} className="rounded-xl bg-red-800 px-4 py-2 text-sm font-bold text-white hover:bg-red-900 disabled:opacity-60">{isSubmitting ? "Mengirim..." : "Kirim Refleksi"}</button>
             </div>
           </form>
-        </div>
+        </ModalLayer>
       )}
 
       {selectedEvidenceTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <ModalLayer>
           <form onSubmit={submitEvidence} className="w-full max-w-xl space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900">Kirim Bukti Tindak Lanjut</h2>
@@ -331,7 +332,7 @@ export default function TindakLanjut({ onAppeal }) {
               <button type="submit" disabled={isSubmittingEvidence || !evidenceUrl.trim()} className="rounded-xl bg-red-800 px-4 py-2 text-sm font-bold text-white hover:bg-red-900 disabled:opacity-60">{isSubmittingEvidence ? "Mengirim..." : "Kirim bukti"}</button>
             </div>
           </form>
-        </div>
+        </ModalLayer>
       )}
     </section>
   );

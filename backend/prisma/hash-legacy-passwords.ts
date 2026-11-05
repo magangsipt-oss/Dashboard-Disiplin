@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { Client } from "pg";
 import { hashPassword, isHashedPassword } from "../src/password";
+import { encryptPassword } from "../src/password-vault";
 
 // Meng-hash semua password teks polos yang tersisa. Aman dijalankan berulang.
 const tables = ["Mahasiswa", "Dosen", "Kemahasiswaan", "Akademik"] as const;
@@ -29,8 +30,8 @@ async function main(): Promise<void> {
         for (const row of rows) {
           if (isHashedPassword(row.password)) continue;
           await client.query(
-            `UPDATE public."${table}" SET "Password" = $1 WHERE "ID" = $2`,
-            [await hashPassword(row.password), row.id],
+            `UPDATE public."${table}" SET "Password" = $1, "Password_Terenkripsi" = $2 WHERE "ID" = $3`,
+            [await hashPassword(row.password), encryptPassword(row.password), row.id],
           );
         }
         console.log(`${table}: ${rows.length} password di-hash.`);

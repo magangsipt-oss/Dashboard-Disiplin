@@ -138,6 +138,7 @@ academicRouter.post(
             nama: row.nama,
             jurusan: row.jurusan,
             password: row.password,
+            passwordTerenkripsi: row.passwordTerenkripsi,
             email: row.email,
             noHandphone: row.noHandphone,
             angkatan: row.angkatan,
@@ -147,10 +148,25 @@ academicRouter.post(
         }),
       );
 
+      let savedUploadRecord = null;
+      try {
+        savedUploadRecord = await saveAcademicUpload({
+          category: "students",
+          fileName: request.file.originalname,
+          buffer: request.file.buffer,
+          uploadedBy: currentSession(response).profile.name || currentSession(response).profile.identity,
+          rowCount: result.count,
+          summary: `${result.count} mahasiswa baru ditambahkan. ${rows.length - result.count} baris dilewati.`,
+        });
+      } catch (error) {
+        console.error("Gagal mencatat riwayat file data mahasiswa:", error);
+      }
+
       response.json({
         imported: result.count,
         skipped: rows.length - result.count,
         totalRows: rows.length,
+        fileRecord: savedUploadRecord,
       });
     } catch (error) {
       if (error instanceof AcademicImportValidationError) {
@@ -229,15 +245,31 @@ academicRouter.post(
             nuptk: row.nuptk,
             email: row.email,
             password: row.password,
+            passwordTerenkripsi: row.passwordTerenkripsi,
           })),
           skipDuplicates: true,
         }),
       );
 
+      let savedUploadRecord = null;
+      try {
+        savedUploadRecord = await saveAcademicUpload({
+          category: "lecturers",
+          fileName: request.file.originalname,
+          buffer: request.file.buffer,
+          uploadedBy: currentSession(response).profile.name || currentSession(response).profile.identity,
+          rowCount: result.count,
+          summary: `${result.count} dosen baru ditambahkan. ${rows.length - result.count} baris dilewati.`,
+        });
+      } catch (error) {
+        console.error("Gagal mencatat riwayat file data dosen:", error);
+      }
+
       response.json({
         imported: result.count,
         skipped: rows.length - result.count,
         totalRows: rows.length,
+        fileRecord: savedUploadRecord,
       });
     } catch (error) {
       if (error instanceof AcademicImportValidationError) {
@@ -616,7 +648,7 @@ academicRouter.post(
             ? `NIM tidak ditemukan: ${missingNims.slice(0, 20).join(", ")}`
             : "",
           mismatchedPrograms.length > 0
-            ? `Program Studi tidak sesuai untuk NIM: ${mismatchedPrograms
+            ? `PRODI tidak sesuai untuk NIM: ${mismatchedPrograms
                 .slice(0, 20)
                 .map((row) => row.nim)
                 .join(", ")}`
@@ -626,7 +658,7 @@ academicRouter.post(
             : "",
         ].filter(Boolean);
         response.status(400).json({
-          message: `${details.join(". ")}. Periksa NIM dan Program Studi; tidak ada pembagian yang diubah.`,
+          message: `${details.join(". ")}. Periksa NIM dan PRODI; tidak ada pembagian yang diubah.`,
         });
         return;
       }
@@ -747,6 +779,8 @@ academicRouter.get(
       const category = request.query.category as
         | "attendance"
         | "advisors"
+        | "students"
+        | "lecturers"
         | undefined;
       const files = await listAcademicUploads(category);
       response.json({ files });

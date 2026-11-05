@@ -33,14 +33,6 @@ const roleDetails: Record<
   },
 };
 
-// Reset sandi belum otomatis; arahkan ke pihak yang mengelola akun tiap peran.
-const forgotPasswordContacts: Record<LoginRole, string> = {
-  mhs: "bagian Akademik",
-  dosen: "bagian Akademik",
-  admin: "administrator sistem",
-  akademik: "administrator sistem",
-};
-
 const inputClassName =
   "w-full rounded-xl border border-slate-200 bg-blue-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600";
 
@@ -228,7 +220,13 @@ export default function LoginForm({ role }: { role: LoginRole }) {
           <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
             {mode === "login" ? "Login" : "Ubah Kata Sandi"} {details.label}
           </h1>
-          <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+          <p
+            className={`mt-1 text-slate-500 ${
+              mode === "login"
+                ? "text-xs sm:text-sm"
+                : "whitespace-nowrap text-[11px] min-[400px]:text-xs sm:text-[13px]"
+            }`}
+          >
             {mode === "login"
               ? "Masukkan identitas dan kata sandi Anda"
               : "Masukkan kata sandi lama dan kata sandi baru Anda"}
@@ -295,10 +293,13 @@ export default function LoginForm({ role }: { role: LoginRole }) {
           </div>
 
           {mode === "login" && showForgotHelp && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs text-amber-900" role="status">
-              Hubungi {forgotPasswordContacts[role]} dengan menyebutkan {details.identityLabel.split(" (")[0]} Anda
-              agar kata sandi direset. Setelah menerima kata sandi sementara, gunakan &quot;Ubah Kata Sandi&quot;
-              untuk menggantinya.
+            <p
+              className="text-pretty rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-left text-[11px] leading-relaxed text-amber-900 sm:py-2 sm:leading-normal"
+              role="status"
+            >
+              Hubungi Kemahasiswaan dengan menyebutkan{" "}
+              <span className="whitespace-nowrap sm:whitespace-normal">{details.identityLabel.split(" (")[0]}</span> Anda
+              agar Kemahasiswaan dapat melakukan pengecekan kata sandi Anda.
             </p>
           )}
 
@@ -378,7 +379,7 @@ export default function LoginForm({ role }: { role: LoginRole }) {
           <button
             type="button"
             onClick={() => switchMode("login")}
-            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white py-2.5 text-sm font-bold text-red-800 transition hover:bg-red-50"
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
           >
             <ArrowLeft aria-hidden="true" className="h-4 w-4" />
             Kembali ke Login

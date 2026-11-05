@@ -120,16 +120,38 @@ export function drcNotification(kind: DrcNotificationKind, activity: DrcActivity
   };
 }
 
-function todayWita(now: Date): string {
-  return new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const WITA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+// Tambahan waktu unggah bukti setelah kegiatan selesai.
+export const DRC_EVIDENCE_GRACE_MINUTES = 30;
+
+type DrcSchedule = { tanggal: Date; jamMulai: string; jamSelesai: string };
+
+// Tanggal (DATE, 00:00 UTC) + jam "HH:MM" WITA menjadi waktu sebenarnya.
+function witaDateTime(tanggal: Date, clock: string): Date {
+  const [hours, minutes] = clock.split(":").map(Number);
+  return new Date(tanggal.getTime() + (hours * 60 + minutes) * 60_000 - WITA_OFFSET_MS);
 }
 
-// Kegiatan dianggap sudah lewat setelah tanggalnya berakhir (zona WITA, UTC+8).
-export function isDrcActivityPast(tanggal: Date, now = new Date()): boolean {
-  return tanggal.toISOString().slice(0, 10) < todayWita(now);
+// Unggah bukti dibuka saat kegiatan mulai, ditutup 30 menit setelah kegiatan selesai.
+export function drcEvidenceWindow(activity: DrcSchedule): { dibuka: Date; ditutup: Date } {
+  return {
+    dibuka: witaDateTime(activity.tanggal, activity.jamMulai),
+    ditutup: new Date(
+      witaDateTime(activity.tanggal, activity.jamSelesai).getTime() + DRC_EVIDENCE_GRACE_MINUTES * 60_000,
+    ),
+  };
 }
 
-// Bukti kehadiran bisa diunggah mulai hari pelaksanaan (zona WITA).
-export function canSubmitDrcEvidence(tanggal: Date, now = new Date()): boolean {
-  return tanggal.toISOString().slice(0, 10) <= todayWita(now);
+export type DrcEvidenceStatus = "BELUM_DIBUKA" | "DIBUKA" | "DITUTUP";
+
+export function drcEvidenceStatus(activity: DrcSchedule, now = new Date()): DrcEvidenceStatus {
+  const { dibuka, ditutup } = drcEvidenceWindow(activity);
+  if (now < dibuka) return "BELUM_DIBUKA";
+  return now <= ditutup ? "DIBUKA" : "DITUTUP";
+}
+
+// Kegiatan dianggap selesai setelah waktu unggah bukti ditutup.
+export function isDrcActivityPast(activity: DrcSchedule, now = new Date()): boolean {
+  return drcEvidenceStatus(activity, now) === "DITUTUP";
 }

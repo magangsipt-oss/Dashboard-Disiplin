@@ -13,6 +13,7 @@ import {
   type PointChangeAction,
 } from "./points";
 import { hashPassword, verifyPassword } from "./password";
+import { encryptPassword } from "./password-vault";
 import { classifyPointStatus, getPointSettings, recordPointChange } from "./point-ledger";
 import { listViolationsWithResolution, todayInCampusTime } from "./punishment";
 import {
@@ -424,12 +425,16 @@ authRouter.post("/change-password", loginIpLimiter, loginFailureLimiter, async (
     }
 
     const hashed = await hashPassword(newPassword);
+    const encrypted = encryptPassword(newPassword);
     await database.$transaction([
       role === "mhs"
-        ? database.mahasiswa.update({ where: { id: account.id }, data: { password: hashed } })
+        ? database.mahasiswa.update({
+            where: { id: account.id },
+            data: { password: hashed, passwordTerenkripsi: encrypted },
+          })
         : database.$executeRaw(
             Prisma.sql`UPDATE public.${Prisma.raw(`"${passwordTables[role]}"`)}
-              SET "Password" = ${hashed}
+              SET "Password" = ${hashed}, "Password_Terenkripsi" = ${encrypted}
               WHERE "ID" = ${account.id}`,
           ),
       // Keluarkan sesi lama akun ini agar sandi lama tidak bisa dipakai lagi lewat sesi aktif.

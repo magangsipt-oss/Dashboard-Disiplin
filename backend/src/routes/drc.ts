@@ -2,7 +2,8 @@ import { Router } from "express";
 import { Prisma, type KegiatanDrc } from "@prisma/client";
 import { currentSession, database, requireRole, type Session } from "../auth";
 import {
-  canSubmitDrcEvidence,
+  drcEvidenceStatus,
+  drcEvidenceWindow,
   drcNotification,
   drcAngkatanWhere,
   isDrcActivityPast,
@@ -57,14 +58,18 @@ function serialize(activity: KegiatanDrc) {
     deskripsi: activity.deskripsi,
     targetProdi: activity.targetProdi,
     targetAngkatan: activity.targetAngkatan,
-    sudahLewat: isDrcActivityPast(activity.tanggal),
+    sudahLewat: isDrcActivityPast(activity),
+    unggahBukti: {
+      dibuka: drcEvidenceWindow(activity).dibuka,
+      ditutup: drcEvidenceWindow(activity).ditutup,
+    },
     createdAt: activity.createdAt,
     updatedAt: activity.updatedAt,
   };
 }
 
 function snapshot(activity: KegiatanDrc): Prisma.InputJsonValue {
-  const { createdAt: _createdAt, updatedAt: _updatedAt, sudahLewat: _sudahLewat, ...rest } = serialize(activity);
+  const { createdAt: _createdAt, updatedAt: _updatedAt, sudahLewat: _sudahLewat, unggahBukti: _unggahBukti, ...rest } = serialize(activity);
   return rest;
 }
 
@@ -273,7 +278,7 @@ drcRouter.delete("/admin/drc/:id", async (request, response) => {
         where: { fileName: { in: activity.bukti.map((item) => item.buktiFileName) } },
       });
       await writeAudit(transaction, session, "DRC_DIHAPUS", id, snapshot(activity), null);
-      return isDrcActivityPast(activity.tanggal)
+      return isDrcActivityPast(activity)
         ? { penerima: 0, denganEmail: 0 }
         : await notifyTargetStudents(transaction, "DIBATALKAN", activity);
     });
@@ -359,7 +364,7 @@ drcRouter.get(
         (activity) => ({
           ...activity,
           buktiSaya: evidenceByActivity.get(activity.id) ?? null,
-          bisaUnggahBukti: canSubmitDrcEvidence(new Date(`${activity.tanggal}T00:00:00.000Z`)),
+          statusUnggahBukti: drcEvidenceStatus({ ...activity, tanggal: new Date(`${activity.tanggal}T00:00:00.000Z`) }),
         }),
       );
       response.json({ kegiatan, tema: themeOptions });
@@ -370,8 +375,8 @@ drcRouter.get(
   },
 );
 
-// Mahasiswa peserta mengunggah bukti kehadiran (foto/sertifikat) mulai hari
-// pelaksanaan. Unggah ulang menggantikan bukti sebelumnya.
+// Mahasiswa peserta mengunggah bukti kehadiran (foto/sertifikat) selama kegiatan
+// berlangsung hingga 30 menit setelah selesai. Unggah ulang menggantikan bukti sebelumnya.
 drcRouter.post(
   "/drc/:id/bukti",
   requireRole(["mhs"], "Bukti DRC hanya dapat diunggah oleh mahasiswa."),
@@ -401,8 +406,14 @@ drcRouter.post(
         response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
         return;
       }
-      if (!canSubmitDrcEvidence(activity.tanggal)) {
-        response.status(400).json({ message: "Bukti dapat diunggah mulai hari pelaksanaan kegiatan." });
+      const evidenceStatus = drcEvidenceStatus(activity);
+      if (evidenceStatus !== "DIBUKA") {
+        response.status(400).json({
+          message:
+            evidenceStatus === "BELUM_DIBUKA"
+              ? `Bukti baru dapat diunggah saat kegiatan dimulai (${activity.jamMulai} WITA).`
+              : "Waktu unggah bukti sudah ditutup (30 menit setelah kegiatan selesai).",
+        });
         return;
       }
       const evidence = await prepareEvidenceFile(request.file);

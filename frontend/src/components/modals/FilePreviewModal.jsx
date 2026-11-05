@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import ModalLayer from "./ModalLayer";
 import { AlertCircle, Clock, Download, FileText, Search, X } from "lucide-react";
 
 // Pratinjau isi file Excel/CSV yang sudah diunggah Akademik.
@@ -30,7 +31,7 @@ export default function FilePreviewModal({
   }, [data, searchTerm]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-150">
+    <ModalLayer className="p-3 sm:p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -50,7 +51,12 @@ export default function FilePreviewModal({
                 </h3>
                 {data?.record && (
                   <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-bold uppercase text-slate-800">
-                    {data.record.category === 'advisors' ? 'Pembagian DPA' : 'Absensi'}
+                    {{
+                      advisors: 'Pembagian DPA',
+                      attendance: 'Absensi',
+                      students: 'Data Mahasiswa',
+                      lecturers: 'Data Dosen',
+                    }[data.record.category] || data.record.category}
                   </span>
                 )}
               </div>
@@ -180,6 +186,6 @@ export default function FilePreviewModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalLayer>
   );
 }

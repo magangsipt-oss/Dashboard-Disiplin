@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ModalLayer from "./ModalLayer";
 import { AlertCircle, Clock, Download, FileText, X } from "lucide-react";
 
 // Pratinjau template upload Akademik sebelum diunduh.
@@ -33,7 +34,7 @@ export default function TemplatePreviewModal({ category, onClose }) {
   }, [category]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-150">
+    <ModalLayer className="p-3 sm:p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -131,6 +132,6 @@ export default function TemplatePreviewModal({ category, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </ModalLayer>
   );
 }

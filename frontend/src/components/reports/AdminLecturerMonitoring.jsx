@@ -150,54 +150,33 @@ export default function AdminLecturerMonitoring({ lecturers, isLoading }) {
         <p className="px-6 py-10 text-center text-sm text-slate-500">Memuat data dosen PA…</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <table className="min-w-full border-collapse [&>*>tr>*]:border [&>*>tr>*]:border-slate-200 [&>*>tr>*:first-child]:border-l-0 [&>*>tr>*:last-child]:border-r-0 [&>thead>tr>th]:border-t-0 [&>tbody>tr:last-child>td]:border-b-0 text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3 font-bold">Nama DPA</th>
-                <th className="px-5 py-3 font-bold">NUPTK</th>
-                <th className="px-5 py-3 font-bold">Laporan belum dikonfirmasi</th>
-                <th className="px-5 py-3 font-bold">Laporan sudah dikonfirmasi</th>
-                <th className="px-5 py-3 font-bold">Catatan coaching</th>
-                <th className="px-5 py-3 font-bold"><span className="sr-only">Rincian</span></th>
+                <th className="px-5 py-3 text-center font-bold">Nama DPA</th>
+                <th className="px-5 py-3 text-center font-bold">NUPTK</th>
+                <th className="px-5 py-3 text-center font-bold">Laporan belum dikonfirmasi</th>
+                <th className="px-5 py-3 text-center font-bold">Laporan sudah dikonfirmasi</th>
+                <th className="px-5 py-3 text-center font-bold">Catatan coaching</th>
+                <th className="px-5 py-3 text-center font-bold">Detail</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((lecturer) => {
                 const pending = lecturer.laporanBelumDikonfirmasi;
-                const oldestWaiting = pending.length > 0 ? daysWaiting(pending[0].tanggalLapor) : null;
-                const latestCoaching = lecturer.counselingRecords[0];
                 const isExpanded = expandedId === lecturer.id;
                 return (
                   <Fragment key={lecturer.id}>
-                    <tr className="align-top hover:bg-slate-50/80">
+                    <tr className="align-middle hover:bg-slate-50/80">
                       <td className="px-5 py-4">
                         <p className="font-bold text-slate-900">{lecturer.nama}</p>
                         <p className="mt-1 text-xs text-slate-500">{lecturer._count.mahasiswaBimbingan} mahasiswa bimbingan</p>
                       </td>
-                      <td className="px-5 py-4 text-slate-700">{lecturer.nuptk ?? "-"}</td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-                          pending.length > 0 ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"
-                        }`}>
-                          {pending.length} laporan
-                        </span>
-                        {oldestWaiting !== null && (
-                          <p className="mt-1 text-xs text-slate-500">Terlama menunggu {oldestWaiting} hari</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-slate-800">{lecturer.laporanDikonfirmasi.length} laporan</p>
-                        {lecturer.laporanTidakDikonfirmasi.length > 0 && (
-                          <p className="mt-1 text-xs text-slate-500">{lecturer.laporanTidakDikonfirmasi.length} tidak dikonfirmasi</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-slate-800">{lecturer._count.counselingRecords} catatan</p>
-                        {latestCoaching && (
-                          <p className="mt-1 text-xs text-slate-500">Terakhir {formatDate(latestCoaching.counselingDate)}</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-5 py-4 text-center text-slate-700">{lecturer.nuptk ?? "-"}</td>
+                      <td className="px-5 py-4 text-center text-slate-800">{pending.length}</td>
+                      <td className="px-5 py-4 text-center text-slate-800">{lecturer.laporanDikonfirmasi.length}</td>
+                      <td className="px-5 py-4 text-center text-slate-800">{lecturer._count.counselingRecords}</td>
+                      <td className="px-5 py-4 text-center">
                         <button
                           type="button"
                           onClick={() => setExpandedId(isExpanded ? null : lecturer.id)}

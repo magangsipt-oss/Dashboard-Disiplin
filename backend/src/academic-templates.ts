@@ -23,7 +23,7 @@ export const academicTemplates: Record<string, AcademicTemplate> = {
     title: "Template Data Mahasiswa",
     fileName: "Template Mahasiswa.xlsx",
     sheetName: "Data Mahasiswa",
-    headers: ["No", "NIM", "Nama Lengkap", "No Handphone", "Email", "Program Studi", "Angkatan", "Nama SMTA", "Kata Sandi"],
+    headers: ["No", "NIM", "Nama Lengkap", "No Handphone", "Email", "PRODI", "Angkatan", "Nama SMTA", "Kata Sandi"],
     rows: [["1", "23401024", "Abin Nabawi", "081234567890", "abin.nabawi@gmail.com", "Teknologi Rekayasa Logistik", "2023", "SMAN 5 BERAU", "Abin2324"]],
   },
   lecturers: {
@@ -37,7 +37,7 @@ export const academicTemplates: Record<string, AcademicTemplate> = {
     title: "Template Pembagian DPA",
     fileName: "Template Pembagian DPA.xlsx",
     sheetName: "Data Pembagian DPA",
-    headers: ["No.", "NIM", "Nama Lengkap", "Program Studi", "Angkatan", "DPA"],
+    headers: ["No.", "NIM", "Nama Lengkap", "PRODI", "Angkatan", "DPA"],
     rows: [["1", "23401024", "Abin Nabawi", "Teknologi Rekayasa Logistik", "2023", "Hamim Rachman, S.T., M.T."]],
   },
 };
@@ -47,7 +47,6 @@ const leftAlignedHeaders = new Set([
   "Matakuliah",
   "Nama Mahasiswa",
   "Nama Lengkap",
-  "Program Studi",
   "Nama Dosen",
   "PRODI",
   "DPA",

@@ -3,17 +3,30 @@
 import { useEffect, useState } from "react";
 import { CalendarCheck, CheckCircle2, FileText, Paperclip, Upload } from "lucide-react";
 import { studentApi } from "@/lib/api";
-import { DrcActivityDetails, DrcThemeTable, drcTypeLabels } from "@/lib/drc";
+import { DrcActivityDetails, DrcThemeTable, drcTypeLabels, DrcSection } from "@/lib/drc";
 
 const maxFileSize = 5 * 1024 * 1024;
 const acceptedTypes = ["image/jpeg", "image/png", "application/pdf"];
+
+function formatClock(value) {
+  return new Date(value).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Makassar" });
+}
+
+// Status jendela unggah dihitung ulang di browser agar tombol terbuka/tertutup tepat waktu.
+function evidenceStatus(activity, now) {
+  const range = activity.unggahBukti;
+  if (!range) return activity.statusUnggahBukti ?? "DITUTUP";
+  if (now < new Date(range.dibuka).getTime()) return "BELUM_DIBUKA";
+  return now <= new Date(range.ditutup).getTime() ? "DIBUKA" : "DITUTUP";
+}
 
 function formatUploadTime(value) {
   return new Date(value).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// Bukti kehadiran: tersedia mulai hari pelaksanaan; unggah ulang menggantikan bukti lama.
-function DrcEvidence({ activity, onUploaded }) {
+// Bukti kehadiran: dibuka saat kegiatan mulai, ditutup 30 menit setelah selesai.
+// Unggah ulang menggantikan bukti lama.
+function DrcEvidence({ activity, now, onUploaded }) {
   const evidence = activity.buktiSaya;
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [file, setFile] = useState(null);
@@ -21,13 +34,26 @@ function DrcEvidence({ activity, onUploaded }) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
 
-  if (!activity.bisaUnggahBukti) {
+  const status = evidenceStatus(activity, now);
+  const closesAt = activity.unggahBukti ? formatClock(activity.unggahBukti.ditutup) : "";
+
+  if (status === "BELUM_DIBUKA") {
     return (
       <p className="rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-600">
-        Setelah mengikuti kegiatan, unggah foto atau sertifikat kehadiran di sini (mulai hari pelaksanaan).
+        Unggah foto atau sertifikat kehadiran di sini saat kegiatan berlangsung, mulai pukul {activity.jamMulai} hingga {closesAt} WITA (30 menit setelah kegiatan selesai).
       </p>
     );
   }
+
+  if (status === "DITUTUP" && !evidence) {
+    return (
+      <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+        Waktu unggah bukti sudah ditutup pukul {closesAt} WITA. Anda tidak mengunggah bukti kehadiran untuk kegiatan ini.
+      </p>
+    );
+  }
+
+  const isOpen = status === "DIBUKA";
 
   function selectFile(event) {
     const selected = event.target.files?.[0] ?? null;
@@ -91,7 +117,7 @@ function DrcEvidence({ activity, onUploaded }) {
             <a href={`/api/drc/bukti/${evidence.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
               <FileText className="h-3.5 w-3.5" /> Lihat
             </a>
-            {!isFormOpen && (
+            {isOpen && !isFormOpen && (
               <button type="button" onClick={openForm} className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                 <Upload className="h-3.5 w-3.5" /> Ganti bukti
               </button>
@@ -109,7 +135,13 @@ function DrcEvidence({ activity, onUploaded }) {
         )
       )}
 
-      {isFormOpen && (
+      {isOpen && (
+        <p className="text-xs font-semibold text-amber-700">
+          Batas unggah bukti: pukul {closesAt} WITA.
+        </p>
+      )}
+
+      {isOpen && isFormOpen && (
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm font-semibold text-slate-700">
             Foto atau sertifikat kehadiran
@@ -144,7 +176,7 @@ function DrcEvidence({ activity, onUploaded }) {
   );
 }
 
-function DrcCard({ activity, onUploaded }) {
+function DrcCard({ activity, now, onUploaded }) {
   return (
     <article className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -159,7 +191,7 @@ function DrcCard({ activity, onUploaded }) {
         </span>
       </div>
       <DrcActivityDetails activity={activity} />
-      <DrcEvidence activity={activity} onUploaded={onUploaded} />
+      <DrcEvidence activity={activity} now={now} onUploaded={onUploaded} />
     </article>
   );
 }
@@ -169,6 +201,13 @@ export default function DrcMahasiswa() {
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+
+  // Jam berjalan agar jendela unggah bukti terbuka/tertutup tanpa muat ulang.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -193,39 +232,29 @@ export default function DrcMahasiswa() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-lg">
-        <h3 className="text-lg font-bold text-slate-900">DRC – Disiplin Refresh Competency</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Kegiatan wajib setiap awal semester untuk menyegarkan pemahaman 5 tema budaya disiplin kampus. Jadwal di bawah ini adalah kegiatan yang wajib Anda ikuti sesuai prodi dan angkatan Anda.
-        </p>
-      </div>
-
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-bold text-slate-900">Jadwal Akan Datang</h3>
+      <DrcSection title="Jadwal Akan Datang" description="Kegiatan DRC yang wajib Anda ikuti. Unggah bukti kehadiran saat kegiatan berlangsung.">
         {isLoading ? (
-          <p className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Memuat jadwal DRC...</p>
+          <p className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat jadwal DRC...</p>
         ) : upcoming.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white/95 p-8 text-center">
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
             <CalendarCheck className="mx-auto h-8 w-8 text-slate-400" />
             <p className="mt-3 text-sm text-slate-600">Belum ada jadwal DRC. Anda akan mendapat pemberitahuan dan email saat jadwal diumumkan.</p>
           </div>
         ) : (
-          upcoming.map((activity) => <DrcCard key={activity.id} activity={activity} onUploaded={handleUploaded} />)
+          upcoming.map((activity) => <DrcCard key={activity.id} activity={activity} now={now} onUploaded={handleUploaded} />)
         )}
-      </div>
+      </DrcSection>
 
-      <div className="space-y-3">
-        <h3 className="text-lg font-bold text-slate-900">Garis Besar Materi DRC</h3>
+      <DrcSection title="Garis Besar Materi DRC" description="Lima tema kedisiplinan yang menjadi dasar setiap kegiatan DRC.">
         <DrcThemeTable />
-      </div>
+      </DrcSection>
 
       {past.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900">Riwayat Kegiatan</h3>
-          {past.map((activity) => <DrcCard key={activity.id} activity={activity} onUploaded={handleUploaded} />)}
-        </div>
+        <DrcSection title="Riwayat Kegiatan" description="Kegiatan DRC yang sudah selesai.">
+          {past.map((activity) => <DrcCard key={activity.id} activity={activity} now={now} onUploaded={handleUploaded} />)}
+        </DrcSection>
       )}
     </div>
   );

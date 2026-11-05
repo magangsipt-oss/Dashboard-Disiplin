@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Download, LoaderCircle, Search, Users } from "lucide-react";
 import { downloadFile, studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import ViolationDetails from "@/components/reports/ViolationDetails";
 
 // Status dan batasnya dihitung backend (src/point-ledger.ts).
@@ -46,6 +47,9 @@ export default function AdminPointData() {
   const [expandedId, setExpandedId] = useState(null);
   // Hasil terakhir beserta query-nya; memuat = query aktif belum selesai dimuat.
   const [loaded, setLoaded] = useState({ key: null, data: null, error: "" });
+  // Naik tiap penyegaran otomatis; data lama tetap tampil sampai data baru tiba.
+  const [refreshTick, setRefreshTick] = useState(0);
+  useAutoRefresh(() => setRefreshTick((tick) => tick + 1));
   const requestKey = new URLSearchParams(
     Object.entries(query).filter(([, value]) => value !== "").map(([key, value]) => [key, String(value)]),
   ).toString();
@@ -93,7 +97,7 @@ export default function AdminPointData() {
     return () => {
       active = false;
     };
-  }, [requestKey]);
+  }, [requestKey, refreshTick]);
 
   function updateFilter(key, value) {
     setQuery((current) => ({ ...current, [key]: value, halaman: 1 }));

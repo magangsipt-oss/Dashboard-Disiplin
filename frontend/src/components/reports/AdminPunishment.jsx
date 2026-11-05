@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, Gavel, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Gavel } from "lucide-react";
 import { jsonRequest, safeHref, studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -321,17 +322,19 @@ export default function AdminPunishment() {
     setToday(result.hariIni ?? new Date().toISOString().slice(0, 10));
   }
 
-  async function loadPunishments() {
-    setIsLoading(true);
+  async function loadPunishments(showLoading = true) {
+    if (showLoading) setIsLoading(true);
     setError("");
     try {
       applyResult(await studentApi("/api/admin/punishment"));
     } catch (loadError) {
       setError(loadError.message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }
+
+  useAutoRefresh(() => loadPunishments(false));
 
   useEffect(() => {
     let active = true;
@@ -409,13 +412,6 @@ export default function AdminPunishment() {
             : visible.map((punishment) => <PunishmentCard key={punishment.id} punishment={punishment} today={today} />)}
         </div>
       )}
-      <button
-        type="button"
-        onClick={loadPunishments}
-        className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-      >
-        <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Muat ulang</span>
-      </button>
     </section>
   );
 }

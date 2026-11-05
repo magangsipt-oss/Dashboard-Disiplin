@@ -401,7 +401,20 @@ export default function App({ hasSessionCookie = false }) {
   // menu → Ringkasan → (Kemahasiswaan, bila sedang masuk sebagai akun lain) → halaman utama → keluar.
   const initDashboardHistory = useCallback((homeTab, profile) => {
     const entry = readHistoryEntry();
-    const base = window.history.state;
+    const account = `${profile.role}:${profile.id}:${profile.impersonator ? 'impersonate' : 'self'}`;
+    const current = window.history.state;
+    // Refresh tab (F5) pada akun yang sama: tetap di menu yang sedang dibuka,
+    // riwayat back tidak disusun ulang.
+    const isSameAccount = current?.sigmaAccount === account;
+    const restoredTab = isSameAccount
+      ? (navigationByRole[profile.role] ?? []).find((item) => item.id === current?.sigmaTab)?.id
+      : undefined;
+    if (restoredTab) {
+      activeTabRef.current = restoredTab;
+      setActiveTabState(restoredTab);
+      return;
+    }
+    const base = { ...current, sigmaAccount: account };
     if (profile.impersonator) {
       window.history.replaceState({ ...base, sigmaTab: undefined, sigmaPage: 'kemahasiswaan' }, '');
       window.history.pushState({ ...base, sigmaTab: homeTab, sigmaPage: undefined }, '');

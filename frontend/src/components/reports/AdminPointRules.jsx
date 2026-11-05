@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { History, Pencil, Plus, Scale, Search } from "lucide-react";
+import { History, Pencil, Plus, Scale } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 
 // Bobot di API selalu angka negatif (mis. -25 = poin berkurang 25).
 const policySeverities = ["RINGAN", "SEDANG", "BERAT"];
@@ -292,17 +293,22 @@ export default function AdminPointRules() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  async function loadRules() {
-    setIsLoading(true);
+  async function loadRules(showLoading = true) {
+    if (showLoading) setIsLoading(true);
     setError("");
     try {
       setData(await studentApi("/api/admin/poin/aturan"));
     } catch (loadError) {
       setError(loadError.message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }
+
+  // Tidak disegarkan saat aturan sedang diubah atau ditambah.
+  useAutoRefresh(() => {
+    if (editingId === null && !isAdding) loadRules(false);
+  });
 
   useEffect(() => {
     let active = true;
@@ -509,14 +515,6 @@ export default function AdminPointRules() {
           </>
         )
       )}
-
-      <button
-        type="button"
-        onClick={loadRules}
-        className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-      >
-        <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Muat ulang</span>
-      </button>
     </section>
   );
 }

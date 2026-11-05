@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import {
   AlertCircle,
   CalendarDays,
   FileText,
   MapPin,
   MessageSquareText,
-  RefreshCw,
   UserRound,
 } from "lucide-react";
 import { studentApi } from "@/lib/api";
@@ -122,17 +122,15 @@ export default function CekLaporan() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadReports = useCallback(async () => {
-    setIsLoading(true);
-    setError("");
+  // Disegarkan otomatis tanpa indikator "Memuat...".
+  useAutoRefresh(async () => {
     try {
       setReports(await fetchStudentReports());
+      setError("");
     } catch (err) {
       setError(err.message);
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  });
 
   useEffect(() => {
     let isCurrent = true;
@@ -161,14 +159,6 @@ export default function CekLaporan() {
             {isLoading ? "Memuat laporan..." : `${reports.length} laporan telah Anda kirim.`}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={loadReports}
-          disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} /> Muat ulang
-        </button>
       </div>
 
       {error && (

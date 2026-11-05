@@ -153,12 +153,12 @@ export default function AdminLecturerMonitoring({ lecturers, isLoading }) {
           <table className="min-w-full border-collapse [&>*>tr>*]:border [&>*>tr>*]:border-slate-200 [&>*>tr>*:first-child]:border-l-0 [&>*>tr>*:last-child]:border-r-0 [&>thead>tr>th]:border-t-0 [&>tbody>tr:last-child>td]:border-b-0 text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3 text-center font-bold">Nama DPA</th>
-                <th className="px-5 py-3 text-center font-bold">NUPTK</th>
-                <th className="px-5 py-3 text-center font-bold">Laporan belum dikonfirmasi</th>
-                <th className="px-5 py-3 text-center font-bold">Laporan sudah dikonfirmasi</th>
-                <th className="px-5 py-3 text-center font-bold">Catatan coaching</th>
-                <th className="px-5 py-3 text-center font-bold">Detail</th>
+                <th className="min-w-[200px] px-5 py-3 text-center font-bold">Nama DPA</th>
+                <th className="min-w-[200px] px-5 py-3 text-center font-bold">NUPTK</th>
+                <th className="min-w-[160px] px-5 py-3 text-center font-bold">Laporan belum dikonfirmasi</th>
+                <th className="min-w-[160px] px-5 py-3 text-center font-bold">Laporan sudah dikonfirmasi</th>
+                <th className="min-w-[140px] px-5 py-3 text-center font-bold">Catatan coaching</th>
+                <th className="min-w-[130px] px-5 py-3 text-center font-bold">Detail</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

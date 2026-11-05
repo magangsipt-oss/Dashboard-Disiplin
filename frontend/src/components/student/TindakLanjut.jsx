@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ModalLayer from "@/components/modals/ModalLayer";
 import { ClipboardCheck, FileText, MessageSquareText } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
 
 const pillarLabels = {
@@ -93,6 +94,9 @@ export default function TindakLanjut({ onAppeal }) {
     setReports(reportData.tindakLanjut ?? []);
     setTraining(trainingData.pembinaan ?? []);
   }
+
+  // Penyegaran otomatis tanpa indikator "Memuat...".
+  useAutoRefresh(() => fetchFollowUps().then(applyFollowUps).catch(() => {}));
 
   async function loadFollowUps() {
     setIsLoading(true);

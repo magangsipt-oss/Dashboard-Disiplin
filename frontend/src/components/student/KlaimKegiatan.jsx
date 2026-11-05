@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import ModalLayer from "@/components/modals/ModalLayer";
 import { Award, FileText, Paperclip, Upload } from "lucide-react";
 import { studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 
 export const claimTypeLabels = {
   LOMBA: "Lomba",
@@ -64,6 +65,13 @@ export default function KlaimKegiatan() {
       setIsLoading(false);
     }
   }
+
+  // Penyegaran otomatis tanpa indikator "Memuat...".
+  useAutoRefresh(() =>
+    studentApi("/api/mahasiswa/klaim-kegiatan")
+      .then((data) => setClaims(data.klaim ?? []))
+      .catch(() => {}),
+  );
 
   useEffect(() => {
     let active = true;

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Award, CheckCircle2, Clock3, FileText, Search } from "lucide-react";
+import { Award, CheckCircle2, Clock3, FileText } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import {
   activityLevelLabels,
   claimStatus,
@@ -174,8 +175,8 @@ export default function AdminClaimQueue() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function loadClaims(nextStatus = status) {
-    setIsLoading(true);
+  async function loadClaims(nextStatus = status, showLoading = true) {
+    if (showLoading) setIsLoading(true);
     setError("");
     try {
       const query = nextStatus ? `?status=${nextStatus}` : "";
@@ -185,9 +186,11 @@ export default function AdminClaimQueue() {
     } catch (loadError) {
       setError(loadError.message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }
+
+  useAutoRefresh(() => loadClaims(status, false));
 
   useEffect(() => {
     let active = true;
@@ -222,13 +225,13 @@ export default function AdminClaimQueue() {
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
         {statusFilters.map((filter) => (
           <button
             key={filter.value || "all"}
             type="button"
             onClick={() => changeFilter(filter.value)}
-            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+            className={`min-w-0 truncate rounded-xl px-1 py-2 text-xs font-bold sm:px-4 sm:text-sm ${
               status === filter.value
                 ? "bg-red-800 text-white"
                 : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -260,13 +263,6 @@ export default function AdminClaimQueue() {
           ))}
         </div>
       )}
-      <button
-        type="button"
-        onClick={() => loadClaims()}
-        className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-      >
-        <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Muat ulang</span>
-      </button>
     </section>
   );
 }

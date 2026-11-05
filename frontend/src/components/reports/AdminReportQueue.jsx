@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, Clock3, FileText, Search, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock3, FileText, ShieldCheck } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 
 const statusLabels = {
   DITERIMA: "Menunggu peninjauan",
@@ -271,9 +272,11 @@ export default function AdminReportQueue() {
   const [nextCursor, setNextCursor] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasLoadedMore, setHasLoadedMore] = useState(false);
   const [error, setError] = useState("");
 
   function applyResult(result) {
+    setHasLoadedMore(false);
     setReports(result.laporan ?? []);
     setCategoryCounts(result.kategoriCount ?? {});
     setNextCursor(result.nextCursor ?? null);
@@ -291,6 +294,12 @@ export default function AdminReportQueue() {
     }
   }
 
+  // Penyegaran otomatis dilewati bila daftar sudah ditambah lewat "Muat laporan
+  // lainnya", agar laporan yang sudah dibuka tidak terpotong.
+  useAutoRefresh(() => {
+    if (!isLoadingMore && !hasLoadedMore) loadReports(false);
+  });
+
   async function loadMoreReports() {
     if (!nextCursor) return;
     setIsLoadingMore(true);
@@ -298,6 +307,7 @@ export default function AdminReportQueue() {
     try {
       const result = await studentApi(`/api/admin/laporan?kategori=${category}&cursor=${nextCursor}`);
       setReports((current) => [...current, ...(result.laporan ?? [])]);
+      setHasLoadedMore(true);
       setCategoryCounts(result.kategoriCount ?? {});
       setNextCursor(result.nextCursor ?? null);
     } catch (loadError) {
@@ -387,13 +397,6 @@ export default function AdminReportQueue() {
           )}
         </div>
       )}
-      <button
-        type="button"
-        onClick={() => loadReports()}
-        className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-      >
-        <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Muat ulang antrean</span>
-      </button>
       <p className="text-xs text-slate-500">
         <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
         Identitas pelapor tidak disimpan maupun ditampilkan.

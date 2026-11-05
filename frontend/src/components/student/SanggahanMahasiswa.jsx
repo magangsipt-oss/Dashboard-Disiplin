@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import ModalLayer from "@/components/modals/ModalLayer";
 import { FileText, Paperclip, X } from "lucide-react";
 import { studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 
 const appealStatus = {
   DIAJUKAN: "Diajukan",
@@ -53,6 +54,13 @@ export default function SanggahanMahasiswa({
       setIsLoading(false);
     }
   }
+
+  // Penyegaran otomatis tanpa indikator "Memuat...".
+  useAutoRefresh(() =>
+    studentApi("/api/mahasiswa/sanggahan")
+      .then((data) => setAppeals(data.sanggahan ?? []))
+      .catch(() => {}),
+  );
 
   useEffect(() => {
     let active = true;

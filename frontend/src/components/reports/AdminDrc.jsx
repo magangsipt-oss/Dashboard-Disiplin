@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, ChevronDown, ClipboardCheck, FileText, Mail, Pencil, Trash2, Users } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { DrcActivityDetails, DrcThemeTable, drcThemes, drcTypeLabels, DrcSection } from "@/lib/drc";
 
 const emptyForm = {
@@ -517,6 +518,8 @@ export default function AdminDrc() {
       setIsLoading(false);
     }
   }
+
+  useAutoRefresh(loadActivities);
 
   useEffect(() => {
     let active = true;

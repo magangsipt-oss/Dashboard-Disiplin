@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CalendarCheck, CheckCircle2, FileText, Paperclip, Upload } from "lucide-react";
 import { studentApi } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { DrcActivityDetails, DrcThemeTable, drcTypeLabels, DrcSection } from "@/lib/drc";
 
 const maxFileSize = 5 * 1024 * 1024;
@@ -208,6 +209,13 @@ export default function DrcMahasiswa() {
     const timer = window.setInterval(() => setNow(Date.now()), 15000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Penyegaran otomatis tanpa indikator "Memuat...".
+  useAutoRefresh(() =>
+    studentApi("/api/drc")
+      .then((result) => setActivities(result.kegiatan ?? []))
+      .catch(() => {}),
+  );
 
   useEffect(() => {
     let active = true;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Clock3, FileCheck2, FileText, History, ShieldCheck } from "lucide-react";
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
 
 const pillarLabels = {
@@ -200,6 +201,8 @@ export default function DosenReportWorkflow() {
       if (showLoading) setIsLoading(false);
     }
   }
+
+  useAutoRefresh(() => loadQueue(false));
 
   useEffect(() => {
     let active = true;
@@ -447,9 +450,6 @@ export default function DosenReportWorkflow() {
           <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700" />
           Identitas pelapor anonim tidak ditampilkan kepada Dosen PA maupun mahasiswa.
         </p>
-        <button type="button" onClick={() => loadQueue()} className="self-start rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:self-auto">
-          Muat ulang antrean
-        </button>
       </div>
     </section>
   );

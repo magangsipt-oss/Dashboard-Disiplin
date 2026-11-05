@@ -8,12 +8,14 @@ import TindakLanjut from './student/TindakLanjut';
 import SanggahanMahasiswa from './student/SanggahanMahasiswa';
 import KlaimKegiatan from './student/KlaimKegiatan';
 import AktivitasMahasiswa from './student/AktivitasMahasiswa';
+import DrcMahasiswa from './student/DrcMahasiswa';
 import AdminReportQueue from './reports/AdminReportQueue';
 import AdminClaimQueue from './reports/AdminClaimQueue';
 import AdminPunishment from './reports/AdminPunishment';
 import AdminPointRules from './reports/AdminPointRules';
 import AdminPointData from './reports/AdminPointData';
 import AdminLecturerMonitoring from './reports/AdminLecturerMonitoring';
+import AdminDrc from './reports/AdminDrc';
 import AdminDashboardSummary from './reports/AdminDashboardSummary';
 import DosenDashboardSummary from './reports/DosenDashboardSummary';
 import DosenReportWorkflow from './reports/DosenReportWorkflow';
@@ -57,6 +59,7 @@ import {
   UserCog,
   Ellipsis,
   CalendarCheck,
+  CalendarDays,
   CircleCheck,
 } from 'lucide-react';
 
@@ -179,6 +182,7 @@ const navigationByRole = {
     { id: 'cek-laporan', label: 'Cek Laporan', short: 'Cek Laporan', icon: FileSearch, description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
     { id: 'tindak-lanjut', label: 'Tindak Lanjut', short: 'Tindak Lanjut', icon: ClipboardCheck, description: 'Lihat tugas pembinaan dari pelanggaran yang dikonfirmasi dan unggah bukti penyelesaian untuk memulihkan poin.' },
     { id: 'klaim', label: 'Klaim Kegiatan', short: 'Klaim', icon: Award, description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
+    { id: 'drc', label: 'DRC', short: 'DRC', icon: CalendarDays, description: 'Lihat jadwal Disiplin Refresh Competency (DRC) yang wajib diikuti setiap awal semester.' },
   ],
   dosen: [
     { id: 'bimbingan', label: 'Ringkasan', short: 'Ringkasan', icon: LayoutDashboard, description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
@@ -195,6 +199,7 @@ const navigationByRole = {
     { id: 'pengaturan-poin', label: 'Pengaturan Poin', short: 'Atur Poin', icon: SlidersHorizontal, description: 'Atur aturan poin kedisiplinan mahasiswa.' },
     { id: 'data-poin', label: 'Monitoring Mahasiswa', short: 'Mahasiswa', icon: Users, description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
     { id: 'monitoring-dpa', label: 'Monitoring DPA', short: 'Monitor DPA', icon: UserCheck, description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
+    { id: 'drc', label: 'DRC', short: 'DRC', icon: CalendarDays, description: 'Umumkan seminar atau kegiatan Disiplin Refresh Competency (DRC) yang wajib diikuti mahasiswa setiap awal semester.' },
   ],
   akademik: [
     { id: 'upload-absensi', label: 'Upload Absensi', short: 'Absensi', icon: CalendarCheck, description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },
@@ -923,26 +928,27 @@ export default function App({ hasSessionCookie = false }) {
     );
   }
 
+  // Langsung kembali ke tampilan awal; sesi di backend diakhiri di latar belakang.
   const handleLogout = async () => {
+    setLoginError('');
+    setAuthenticatedUser(null);
+    setStudentPoints(null);
+    setAdvisor(null);
+    setAdvisorError('');
+    authenticatedUserRef.current = null;
+    activeTabRef.current = 'dashboard';
+    setActiveTabState('dashboard');
+    window.history.replaceState({ ...window.history.state, sigmaTab: undefined, sigmaPage: 'landing' }, '');
+    setActivePage('landing');
+    window.scrollTo({ top: 0, behavior: 'auto' });
     try {
       const response = await fetch('/api/auth/logout', { method: 'POST' });
       if (!response.ok) {
         throw new Error(`Backend returned ${response.status}`);
       }
-      setLoginError('');
     } catch (error) {
       console.error('Tidak dapat mengakhiri sesi di backend:', error);
       setLoginError('Koneksi logout gagal. Muat ulang halaman untuk memeriksa sesi.');
-    } finally {
-      setAuthenticatedUser(null);
-      authenticatedUserRef.current = null;
-      setStudentPoints(null);
-      setAdvisor(null);
-      setAdvisorError('');
-      activeTabRef.current = 'dashboard';
-      setActiveTabState('dashboard');
-      window.history.replaceState({ ...window.history.state, sigmaTab: undefined, sigmaPage: 'landing' }, '');
-      setActivePage('landing');
     }
   };
 
@@ -1549,6 +1555,10 @@ export default function App({ hasSessionCookie = false }) {
               <AdminPointData />
             )}
 
+            {authenticatedUser?.role === 'admin' && activeTab === 'drc' && (
+              <AdminDrc />
+            )}
+
             {authenticatedUser?.role === 'mhs' && !['lapor', 'cek-laporan'].includes(activeTab) && (
             <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6 flex-1 w-full">
               {activeTab === homeTab ? (
@@ -1785,10 +1795,13 @@ export default function App({ hasSessionCookie = false }) {
 
               {activeTab === 'klaim' && authenticatedUser?.role === 'mhs' && <KlaimKegiatan />}
 
+              {activeTab === 'drc' && authenticatedUser?.role === 'mhs' && <DrcMahasiswa />}
+
               {activeTab !== 'konseling' &&
                 activeTab !== 'lapor' &&
                 activeTab !== 'tindak-lanjut' &&
                 activeTab !== 'klaim' &&
+                activeTab !== 'drc' &&
                 !(activeTab === 'sanggah' && authenticatedUser?.role === 'mhs') && (
                 <>
               <div data-scroll-reveal className="bg-white/95 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg p-6">
@@ -2528,7 +2541,7 @@ export default function App({ hasSessionCookie = false }) {
               </main>
             )}
 
-            {authenticatedUser?.role === 'admin' && !['lapor', 'cek-laporan', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin'].includes(activeTab) && (
+            {authenticatedUser?.role === 'admin' && !['lapor', 'cek-laporan', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin', 'drc'].includes(activeTab) && (
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
                 {activeTab === homeTab ? (
                 <section data-scroll-reveal className={`${welcomeCardClassName} rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-5 text-white shadow-2xl sm:p-8`}>

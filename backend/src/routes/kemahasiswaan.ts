@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { Prisma, type StatusPoin } from "@prisma/client";
 import { currentSession, database, requireRole, type Session } from "../auth";
 import { disciplinePillarLabels, violationSeverityLabels } from "../points";
@@ -8,8 +8,16 @@ import {
   getStudentPointStatuses,
   scoreRangeForStatus,
   violationLedgerTypes,
+  type PointSettings,
 } from "../point-ledger";
 import { listViolationsWithResolution, unresolvedViolationStatuses } from "../punishment";
+import {
+  buildStudentExportCsv,
+  buildStudentExportWorkbook,
+  exportContentType,
+  exportFileName,
+  type ExportFormat,
+} from "../student-export";
 import {
   parseBody,
   violationLevelUpdateSchema,
@@ -94,45 +102,170 @@ async function studentsWithUnresolvedViolations(): Promise<number[]> {
   )];
 }
 
+function sortOrderOf(query: Request["query"]): SortOrder {
+  return queryString(query.urut) in sortOrders ? (queryString(query.urut) as SortOrder) : "poin_asc";
+}
+
+// Filter Monitoring Mahasiswa; dipakai tabel dashboard dan ekspor agar isinya sama.
+async function monitoringWhere(
+  query: Request["query"],
+  settings: PointSettings,
+): Promise<Prisma.MahasiswaWhereInput> {
+  const search = queryString(query.q).slice(0, 100);
+  const prodi = queryString(query.prodi).slice(0, 200);
+  const angkatan = queryInteger(query.angkatan);
+  const status = queryString(query.status) as StatusPoin;
+  const violationFilter = queryString(query.pelanggaran);
+  const statusRange = statusCodes.includes(status) ? scoreRangeForStatus(status, settings) : null;
+  const countedViolation: Prisma.PointChangeWhereInput = {
+    type: { in: violationLedgerTypes },
+    delta: { lt: 0 },
+    sanggahans: { none: { status: "DISETUJUI" } },
+  };
+  return {
+    ...(search
+      ? {
+          OR: [
+            { nama: { contains: search, mode: "insensitive" } },
+            { dosenPa: { nama: { contains: search, mode: "insensitive" } } },
+            ...(/^\d{1,9}$/.test(search) ? [{ nim: Number(search) }] : []),
+          ],
+        }
+      : {}),
+    ...(prodi ? { jurusan: prodi } : {}),
+    ...(angkatan ? { angkatan } : {}),
+    ...(statusRange ? { pointScore: { gte: statusRange.min, lte: statusRange.max } } : {}),
+    ...(violationFilter === "UNRESOLVED" ? { id: { in: await studentsWithUnresolvedViolations() } } : {}),
+    ...(violationFilter === "HAS_VIOLATION" ? { pointChanges: { some: countedViolation } } : {}),
+    ...(violationFilter === "NONE" ? { pointChanges: { none: countedViolation } } : {}),
+  };
+}
+
+const monitoringStudentSelect = {
+  id: true,
+  nim: true,
+  nama: true,
+  jurusan: true,
+  angkatan: true,
+  statusClearance: true,
+  dosenPa: { select: { nama: true, nuptk: true } },
+} satisfies Prisma.MahasiswaSelect;
+
+// Satu baris tabel Monitoring Mahasiswa beserta rincian pelanggarannya.
+async function monitoringRows(
+  students: Prisma.MahasiswaGetPayload<{ select: typeof monitoringStudentSelect }>[],
+) {
+  const ids = students.map((student) => student.id);
+  const [pointStatuses, violationCounts, violations] = await Promise.all([
+    getStudentPointStatuses(database, ids),
+    countViolations(database, ids),
+    listViolationsWithResolution(database, ids),
+  ]);
+  return students.map((student) => {
+    const point = pointStatuses.get(student.id)!;
+    const studentViolations = violations.get(student.id) ?? [];
+    return {
+      dosenPa: student.dosenPa
+        ? { nama: student.dosenPa.nama, nuptk: student.dosenPa.nuptk?.toString() ?? null }
+        : null,
+      pelanggaran: studentViolations,
+      pelanggaranBelumSelesai: studentViolations.filter((violation) =>
+        unresolvedViolationStatuses.includes(violation.status),
+      ).length,
+      id: student.id,
+      nim: student.nim,
+      nama: student.nama,
+      prodi: student.jurusan,
+      angkatan: student.angkatan,
+      poin: point.score,
+      status: { kode: point.status.kode, label: point.status.label },
+      jumlahPelanggaran: violationCounts.get(student.id) ?? 0,
+      statusClearance: student.statusClearance,
+    };
+  });
+}
+
+function sendExport(
+  response: Response,
+  format: ExportFormat,
+  label: string,
+  rows: Awaited<ReturnType<typeof monitoringRows>>,
+) {
+  const body = format === "xlsx" ? buildStudentExportWorkbook(rows) : buildStudentExportCsv(rows);
+  response.setHeader("Content-Type", exportContentType(format));
+  response.setHeader("Content-Disposition", `attachment; filename="${exportFileName(label, format)}"`);
+  response.setHeader("Cache-Control", "no-store");
+  response.send(body);
+}
+
+function exportFormatOf(query: Request["query"]): ExportFormat | null {
+  const format = queryString(query.format) || "xlsx";
+  return format === "xlsx" || format === "csv" ? format : null;
+}
+
+// Batas ekspor massal agar satu permintaan tidak membebani server.
+const MAX_EXPORT_STUDENTS = 5000;
+
+// Rekap seluruh mahasiswa sesuai filter aktif (semua halaman, urutan sama).
+kemahasiswaanRouter.get("/admin/poin/mahasiswa/ekspor", async (request, response) => {
+  const format = exportFormatOf(request.query);
+  if (!format) {
+    response.status(400).json({ message: "Format ekspor harus xlsx atau csv." });
+    return;
+  }
+  try {
+    const settings = await getPointSettings(database);
+    const where = await monitoringWhere(request.query, settings);
+    const total = await database.mahasiswa.count({ where });
+    if (total > MAX_EXPORT_STUDENTS) {
+      response.status(413).json({
+        message: `Data terlalu banyak (${total} mahasiswa). Persempit filter hingga maksimal ${MAX_EXPORT_STUDENTS} mahasiswa.`,
+      });
+      return;
+    }
+    const students = await database.mahasiswa.findMany({
+      where,
+      orderBy: sortOrders[sortOrderOf(request.query)],
+      select: monitoringStudentSelect,
+    });
+    sendExport(response, format, "Monitoring_Mahasiswa", await monitoringRows(students));
+  } catch (error) {
+    console.error("Gagal mengekspor data monitoring mahasiswa:", error);
+    response.status(500).json({ message: "Ekspor data mahasiswa gagal." });
+  }
+});
+
+// Rekap satu mahasiswa (ikon unduh di kolom Clearance).
+kemahasiswaanRouter.get("/admin/poin/mahasiswa/:id/ekspor", async (request, response) => {
+  const id = queryInteger(request.params.id);
+  const format = exportFormatOf(request.query);
+  if (!id || !format) {
+    response.status(400).json({ message: "Permintaan ekspor tidak valid." });
+    return;
+  }
+  try {
+    const student = await database.mahasiswa.findUnique({ where: { id }, select: monitoringStudentSelect });
+    if (!student) {
+      response.status(404).json({ message: "Mahasiswa tidak ditemukan." });
+      return;
+    }
+    sendExport(response, format, `${student.nim}_${student.nama}`, await monitoringRows([student]));
+  } catch (error) {
+    console.error("Gagal mengekspor data mahasiswa:", error);
+    response.status(500).json({ message: "Ekspor data mahasiswa gagal." });
+  }
+});
+
 kemahasiswaanRouter.get("/admin/poin/mahasiswa", async (request, response) => {
-  const search = queryString(request.query.q).slice(0, 100);
-  const prodi = queryString(request.query.prodi).slice(0, 200);
-  const angkatan = queryInteger(request.query.angkatan);
-  const status = queryString(request.query.status) as StatusPoin;
-  const sort: SortOrder = queryString(request.query.urut) in sortOrders
-    ? (queryString(request.query.urut) as SortOrder)
-    : "poin_asc";
+  const sort = sortOrderOf(request.query);
   const pageSize = pageSizes.includes(queryInteger(request.query.per) ?? 0)
     ? queryInteger(request.query.per)!
     : 20;
   const requestedPage = Math.max(1, queryInteger(request.query.halaman) ?? 1);
-  const violationFilter = queryString(request.query.pelanggaran);
 
   try {
     const settings = await getPointSettings(database);
-    const statusRange = statusCodes.includes(status) ? scoreRangeForStatus(status, settings) : null;
-    const countedViolation: Prisma.PointChangeWhereInput = {
-      type: { in: violationLedgerTypes },
-      delta: { lt: 0 },
-      sanggahans: { none: { status: "DISETUJUI" } },
-    };
-    const where: Prisma.MahasiswaWhereInput = {
-      ...(search
-        ? {
-            OR: [
-              { nama: { contains: search, mode: "insensitive" } },
-              { dosenPa: { nama: { contains: search, mode: "insensitive" } } },
-              ...(/^\d{1,9}$/.test(search) ? [{ nim: Number(search) }] : []),
-            ],
-          }
-        : {}),
-      ...(prodi ? { jurusan: prodi } : {}),
-      ...(angkatan ? { angkatan } : {}),
-      ...(statusRange ? { pointScore: { gte: statusRange.min, lte: statusRange.max } } : {}),
-      ...(violationFilter === "UNRESOLVED" ? { id: { in: await studentsWithUnresolvedViolations() } } : {}),
-      ...(violationFilter === "HAS_VIOLATION" ? { pointChanges: { some: countedViolation } } : {}),
-      ...(violationFilter === "NONE" ? { pointChanges: { none: countedViolation } } : {}),
-    };
+    const where = await monitoringWhere(request.query, settings);
 
     const [total, prodiRows, angkatanRows, overallTotal, statusCounts] = await Promise.all([
       database.mahasiswa.count({ where }),
@@ -162,46 +295,11 @@ kemahasiswaanRouter.get("/admin/poin/mahasiswa", async (request, response) => {
       orderBy: sortOrders[sort],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      select: {
-        id: true,
-        nim: true,
-        nama: true,
-        jurusan: true,
-        angkatan: true,
-        statusClearance: true,
-        dosenPa: { select: { nama: true, nuptk: true } },
-      },
+      select: monitoringStudentSelect,
     });
-    const ids = students.map((student) => student.id);
-    const [pointStatuses, violationCounts, violations] = await Promise.all([
-      getStudentPointStatuses(database, ids),
-      countViolations(database, ids),
-      listViolationsWithResolution(database, ids),
-    ]);
 
     response.json({
-      mahasiswa: students.map((student) => {
-        const point = pointStatuses.get(student.id)!;
-        const studentViolations = violations.get(student.id) ?? [];
-        return {
-          dosenPa: student.dosenPa
-            ? { nama: student.dosenPa.nama, nuptk: student.dosenPa.nuptk ? student.dosenPa.nuptk.toString() : "-" }
-            : null,
-          pelanggaran: studentViolations,
-          pelanggaranBelumSelesai: studentViolations.filter((violation) =>
-            unresolvedViolationStatuses.includes(violation.status),
-          ).length,
-          id: student.id,
-          nim: student.nim,
-          nama: student.nama,
-          prodi: student.jurusan,
-          angkatan: student.angkatan,
-          poin: point.score,
-          status: { kode: point.status.kode, label: point.status.label },
-          jumlahPelanggaran: violationCounts.get(student.id) ?? 0,
-          statusClearance: student.statusClearance,
-        };
-      }),
+      mahasiswa: await monitoringRows(students),
       halaman: page,
       totalHalaman: totalPages,
       per: pageSize,

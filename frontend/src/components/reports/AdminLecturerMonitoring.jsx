@@ -106,7 +106,7 @@ export default function AdminLecturerMonitoring({ lecturers, isLoading }) {
     const term = deferredSearch.trim().toLowerCase();
     return lecturers.filter(
       (lecturer) =>
-        (!term || [lecturer.nama, String(lecturer.nuptk)].some((value) => value.toLowerCase().includes(term))) &&
+        (!term || [lecturer.nama, lecturer.nuptk ?? ""].some((value) => value.toLowerCase().includes(term))) &&
         (!pendingOnly || lecturer.laporanBelumDikonfirmasi.length > 0),
     );
   }, [lecturers, deferredSearch, pendingOnly]);
@@ -174,7 +174,7 @@ export default function AdminLecturerMonitoring({ lecturers, isLoading }) {
                         <p className="font-bold text-slate-900">{lecturer.nama}</p>
                         <p className="mt-1 text-xs text-slate-500">{lecturer._count.mahasiswaBimbingan} mahasiswa bimbingan</p>
                       </td>
-                      <td className="px-5 py-4 text-slate-700">{lecturer.nuptk}</td>
+                      <td className="px-5 py-4 text-slate-700">{lecturer.nuptk ?? "-"}</td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
                           pending.length > 0 ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"

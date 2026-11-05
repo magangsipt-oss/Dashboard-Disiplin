@@ -1,8 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
-import { studentApi } from "@/lib/api";
+import { ChevronDown, ChevronLeft, ChevronRight, Download, LoaderCircle, Search, Users } from "lucide-react";
+import { downloadFile, studentApi } from "@/lib/api";
 import ViolationDetails from "@/components/reports/ViolationDetails";
 
 // Status dan batasnya dihitung backend (src/point-ledger.ts).
@@ -35,6 +35,11 @@ const violationOptions = [
 
 const inputClass = "mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal";
 
+const exportFormats = [
+  { value: "xlsx", label: "Excel" },
+  { value: "csv", label: "CSV" },
+];
+
 export default function AdminPointData() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState({ q: "", prodi: "", angkatan: "", status: "", pelanggaran: "", urut: "poin_asc", per: "20", halaman: 1 });
@@ -47,6 +52,30 @@ export default function AdminPointData() {
   const data = loaded.data;
   const error = loaded.key === requestKey ? loaded.error : "";
   const isLoading = loaded.key !== requestKey;
+  const [exportFormat, setExportFormat] = useState("xlsx");
+  // "all" = unduh semua sesuai filter; angka = id mahasiswa yang sedang diunduh.
+  const [downloading, setDownloading] = useState(null);
+  const [exportError, setExportError] = useState("");
+
+  // Filter aktif tanpa halaman, agar ekspor mencakup semua halaman.
+  const exportFilterKey = new URLSearchParams(
+    Object.entries(query)
+      .filter(([key, value]) => value !== "" && key !== "halaman" && key !== "per")
+      .map(([key, value]) => [key, String(value)]),
+  );
+  exportFilterKey.set("format", exportFormat);
+
+  async function runExport(target, path) {
+    setDownloading(target);
+    setExportError("");
+    try {
+      await downloadFile(path);
+    } catch (downloadError) {
+      setExportError(downloadError.message);
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   // Pencarian dikirim setelah pengguna berhenti mengetik sebentar.
   useEffect(() => {
@@ -185,6 +214,41 @@ export default function AdminPointData() {
 
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm">
+        <p className="text-sm text-slate-600">
+          Unduh rekap sesuai tabel beserta rincian pelanggaran. Ikon <Download className="inline h-3.5 w-3.5" /> di kolom Clearance mengunduh rekap satu mahasiswa.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="radiogroup" aria-label="Format unduhan" className="flex rounded-xl border border-slate-300 bg-white p-0.5">
+            {exportFormats.map((format) => (
+              <button
+                key={format.value}
+                type="button"
+                role="radio"
+                aria-checked={exportFormat === format.value}
+                onClick={() => setExportFormat(format.value)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                  exportFormat === format.value ? "bg-red-800 text-white" : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {format.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={downloading !== null || !data || data.total === 0}
+            onClick={() => runExport("all", `/api/admin/poin/mahasiswa/ekspor?${exportFilterKey}`)}
+            className="inline-flex items-center gap-2 rounded-xl bg-red-800 px-4 py-2 text-sm font-bold text-white hover:bg-red-900 disabled:opacity-60"
+          >
+            {downloading === "all" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Unduh semua{data ? ` (${data.total})` : ""}
+          </button>
+        </div>
+      </div>
+
+      {exportError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{exportError}</p>}
+
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] text-left text-sm">
@@ -244,11 +308,29 @@ export default function AdminPointData() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {clearance ? (
-                        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${clearance.badge}`}>{clearance.label}</span>
-                      ) : (
-                        <span className="whitespace-nowrap text-xs text-slate-400">Belum dihitung</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {clearance ? (
+                          <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${clearance.badge}`}>{clearance.label}</span>
+                        ) : (
+                          <span className="whitespace-nowrap text-xs text-slate-400">Belum dihitung</span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={downloading !== null}
+                          onClick={() =>
+                            runExport(student.id, `/api/admin/poin/mahasiswa/${student.id}/ekspor?format=${exportFormat}`)
+                          }
+                          title={`Unduh rekap ${student.nama} (${exportFormat === "xlsx" ? "Excel" : "CSV"})`}
+                          aria-label={`Unduh rekap ${student.nama} (${exportFormat === "xlsx" ? "Excel" : "CSV"})`}
+                          className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:border-red-300 hover:bg-red-50 hover:text-red-800 disabled:opacity-50"
+                        >
+                          {downloading === student.id ? (
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button

@@ -68,6 +68,28 @@ function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+// Cache sesi di memori agar setiap request tidak perlu bolak-balik ke
+// database (latensi jaringan ke database cukup tinggi). Setiap perubahan sesi
+// lewat fungsi di bawah ikut memperbarui cache.
+const SESSION_CACHE_TTL_MS = 30 * 1000;
+const SESSION_CACHE_LIMIT = 5000;
+const sessionCache = new Map<string, { session: Session; cachedAt: number }>();
+
+function cacheSession(tokenHash: string, session: Session): void {
+  if (sessionCache.size >= SESSION_CACHE_LIMIT) sessionCache.clear();
+  sessionCache.set(tokenHash, { session, cachedAt: Date.now() });
+}
+
+function cachedSession(tokenHash: string): Session | null {
+  const entry = sessionCache.get(tokenHash);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > SESSION_CACHE_TTL_MS || entry.session.expiresAt <= Date.now()) {
+    sessionCache.delete(tokenHash);
+    return null;
+  }
+  return entry.session;
+}
+
 async function createSession(profile: UserProfile): Promise<string> {
   const now = Date.now();
   // Bersihkan sesi kedaluwarsa sesekali agar tabel tidak menumpuk.
@@ -86,6 +108,7 @@ async function createSession(profile: UserProfile): Promise<string> {
 }
 
 async function updateSessionProfile(token: string, profile: UserProfile): Promise<void> {
+  sessionCache.delete(hashSessionToken(token));
   await database.sesi.update({
     where: { tokenHash: hashSessionToken(token) },
     data: { profile: profile as unknown as Prisma.InputJsonValue },
@@ -93,6 +116,7 @@ async function updateSessionProfile(token: string, profile: UserProfile): Promis
 }
 
 async function deleteSession(token: string): Promise<void> {
+  sessionCache.delete(hashSessionToken(token));
   await database.sesi.deleteMany({ where: { tokenHash: hashSessionToken(token) } });
 }
 
@@ -107,15 +131,22 @@ export async function loadSession(
     next();
     return;
   }
+  const tokenHash = hashSessionToken(token);
+  const cached = cachedSession(tokenHash);
+  if (cached) {
+    response.locals.session = cached;
+    next();
+    return;
+  }
   try {
-    const row = await database.sesi.findUnique({
-      where: { tokenHash: hashSessionToken(token) },
-    });
+    const row = await database.sesi.findUnique({ where: { tokenHash } });
     if (row && row.expiresAt.getTime() > Date.now()) {
-      response.locals.session = {
+      const session: Session = {
         profile: row.profile as unknown as UserProfile,
         expiresAt: row.expiresAt.getTime(),
-      } satisfies Session;
+      };
+      cacheSession(tokenHash, session);
+      response.locals.session = session;
     } else {
       if (row) await deleteSession(token);
       clearSessionCookie(response);
@@ -598,12 +629,12 @@ authRouter.get("/admin/monitoring", requireRole(["admin"], "Hanya admin kemahasi
         predikat: getScorePredicate(student.pointScore),
         pelanggaran: violations.get(student.id) ?? [],
         dosenPa: student.dosenPa
-          ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk ? student.dosenPa.nuptk.toString() : "-" }
+          ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk?.toString() ?? null }
           : null,
       })),
       lecturers: lecturers.map(({ laporanDikonfirmasi, ...lecturer }) => ({
         ...lecturer,
-        nuptk: lecturer.nuptk ? lecturer.nuptk.toString() : "-",
+        nuptk: lecturer.nuptk?.toString() ?? null,
         laporanBelumDikonfirmasi: pendingReports
           .filter((report) => report.terlapor?.dosenPaId === lecturer.id)
           .map(({ terlapor, ...report }) => ({
@@ -965,7 +996,7 @@ async function listImpersonationAccounts(role: "mhs" | "dosen"): Promise<Imperso
   return lecturers.map((lecturer) => ({
     id: lecturer.id,
     name: lecturer.nama,
-    identity: lecturer.email?.trim() || String(lecturer.nuptk),
+    identity: lecturer.email?.trim() || lecturer.nuptk?.toString() || "-",
   }));
 }
 
@@ -995,7 +1026,7 @@ async function findImpersonationProfile(
     role,
     roleLabel: "Dosen",
     name: lecturer.nama,
-    identity: email || String(lecturer.nuptk),
+    identity: email || lecturer.nuptk?.toString() || "-",
     identityLabel: email ? "Email" : "NUPTK",
     details: [
       ...(email ? [{ label: "Email", value: email }] : []),
@@ -1065,6 +1096,7 @@ authRouter.post("/impersonation", async (request, response) => {
     }
 
     const profile: UserProfile = { ...target, impersonator: kemahasiswaan };
+    sessionCache.delete(hashSessionToken(token));
     await database.$transaction([
       database.sesi.update({
         where: { tokenHash: hashSessionToken(token) },

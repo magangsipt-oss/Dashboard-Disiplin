@@ -236,7 +236,7 @@ test("advisor assignment import requires DPA even when NUPTK is given", () => {
 
 test("new student import reads every template column", () => {
   const csv = Buffer.from(
-    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone,Kata Sandi\n1,24409901,Contoh Mahasiswa,Teknologi Rekayasa Logistik,2024,SMA Berau,mahasiswa@example.com,081234567890,rahasia123",
+    "No,NIM,Nama Lengkap,No Handphone,Email,Program Studi,Angkatan,Nama SMTA,Kata Sandi\n1,24409901,Contoh Mahasiswa,081234567890,mahasiswa@example.com,Teknologi Rekayasa Logistik,2024,SMA Berau,rahasia123",
   );
 
   assert.deepEqual(parseNewStudentImportFile(csv, "mahasiswa.csv"), [
@@ -255,7 +255,7 @@ test("new student import reads every template column", () => {
 
 test("new student import rejects duplicate NIMs and missing passwords", () => {
   const duplicateNims = Buffer.from(
-    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone,Kata Sandi\n1,12345,Budi,TI,2024,SMA 1,budi@example.com,081234567890,rahasia123\n2,12345,Budi,TI,2024,SMA 1,budi@example.com,081234567890,rahasia456",
+    "No,NIM,Nama Lengkap,No Handphone,Email,Program Studi,Angkatan,Nama SMTA,Kata Sandi\n1,12345,Budi,081234567890,budi@example.com,TI,2024,SMA 1,rahasia123\n2,12345,Budi,081234567890,budi@example.com,TI,2024,SMA 1,rahasia456",
   );
   assert.throws(
     () => parseNewStudentImportFile(duplicateNims, "mahasiswa.csv"),
@@ -263,7 +263,7 @@ test("new student import rejects duplicate NIMs and missing passwords", () => {
   );
 
   const missingPassword = Buffer.from(
-    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone\n1,12345,Budi,TI,2024,SMA 1,budi@example.com,081234567890",
+    "No,NIM,Nama Lengkap,No Handphone,Email,Program Studi,Angkatan,Nama SMTA\n1,12345,Budi,081234567890,budi@example.com,TI,2024,SMA 1",
   );
   assert.throws(
     () => parseNewStudentImportFile(missingPassword, "mahasiswa.csv"),
@@ -281,11 +281,11 @@ test("new student import requires every template column and value", () => {
   );
 
   const emptyValues = Buffer.from(
-    "No.,NIM,Nama Lengkap,Program Studi,Angkatan,Nama SMTA,Email,No Handphone,Kata Sandi\n1,12345,Budi,TI,,SMA 1,,081234567890,rahasia123",
+    "No,NIM,Nama Lengkap,No Handphone,Email,Program Studi,Angkatan,Nama SMTA,Kata Sandi\n1,12345,Budi,081234567890,,TI,,SMA 1,rahasia123",
   );
   assert.throws(
     () => parseNewStudentImportFile(emptyValues, "mahasiswa.csv"),
-    /Angkatan, Email wajib diisi pada baris 2/,
+    /Email, Angkatan wajib diisi pada baris 2/,
   );
 });
 
@@ -320,4 +320,85 @@ test("new lecturer import requires every template column", () => {
     () => parseNewLecturerImportFile(csv, "dosen.csv"),
     /Kolom wajib tidak ditemukan: NUPTK, PRODI/,
   );
+});
+
+test("new lecturer import accepts '-' as empty data/null and allows multiple lecturers without NUPTK", () => {
+  const workbook = makeWorkbookBuffer([
+    ["No", "Nama Dosen", "Email", "NUPTK", "PRODI", "Password"],
+    ["1", "Zulkarnaen", "zulkarnaen@poltek.ac.id", "-", "D-III Perawatan Mesin", "Zulkarnaen@poltek"],
+    ["2", "Munawar", "-", "-", "D-III Perawatan Mesin", "Munawar@poltek"],
+    ["3", "Nisa", "nisa@poltek.ac.id", "", "-", "Nisa@poltek"],
+  ]);
+
+  const rows = parseNewLecturerImportFile(workbook, "Dosen.xlsx");
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows[0], {
+    nuptk: null,
+    nama: "Zulkarnaen",
+    email: "zulkarnaen@poltek.ac.id",
+    password: "Zulkarnaen@poltek",
+  });
+  assert.deepEqual(rows[1], {
+    nuptk: null,
+    nama: "Munawar",
+    email: null,
+    password: "Munawar@poltek",
+  });
+  assert.deepEqual(rows[2], {
+    nuptk: null,
+    nama: "Nisa",
+    email: "nisa@poltek.ac.id",
+    password: "Nisa@poltek",
+  });
+});
+
+test("new student import accepts '-' as empty data/null for optional fields", () => {
+  const csv = Buffer.from(
+    "No,NIM,Nama Lengkap,No Handphone,Email,Program Studi,Angkatan,Nama SMTA,Kata Sandi\n" +
+    "1,24409901,Mahasiswa Baru,-,-,Teknologi Rekayasa Logistik,-,-,rahasia123",
+  );
+
+  const rows = parseNewStudentImportFile(csv, "mahasiswa.csv");
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], {
+    nim: 24409901,
+    nama: "Mahasiswa Baru",
+    jurusan: "Teknologi Rekayasa Logistik",
+    password: "rahasia123",
+    email: null,
+    noHandphone: null,
+    angkatan: null,
+    namaSmta: null,
+  });
+});
+
+test("attendance import accepts '-' as 0 count and skips dash placeholder rows", () => {
+  const workbook = makeWorkbookBuffer([
+    ["NO", "Matakuliah", "Kelas", "NIM", "Nama Mahasiswa", "Jumlah Kehadiran", "Kehadiran", "Sakit", "Ijin", "Alpa"],
+    [1, "Matematika", "TI-1", 23401024, "Abin Nabawi", 14, 14, "-", "-", "-"],
+    [2, "-", "-", "-", "-", "-", "-", "-", "-", "-"],
+  ]);
+
+  const rows = parseAcademicAttendanceFile(workbook, "absensi.xlsx");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].nim, 23401024);
+  assert.equal(rows[0].sakit, 0);
+  assert.equal(rows[0].ijin, 0);
+  assert.equal(rows[0].alpa, 0);
+});
+
+test("advisor assignment import accepts '-' as empty/null for DPA and NUPTK", () => {
+  const workbook = makeWorkbookBuffer([
+    ["No.", "NIM", "Nama Lengkap", "Program Studi", "Angkatan", "DPA", "NUPTK"],
+    [1, 12345, "Budi Santoso", "Teknologi Rekayasa Logistik", 2023, "-", "-"],
+  ]);
+
+  const rows = parseAdvisorAssignmentFile(workbook, "pembagian.xlsx");
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], {
+    nim: 12345,
+    programStudi: "Teknologi Rekayasa Logistik",
+    nuptk: undefined,
+    dpa: null,
+  });
 });

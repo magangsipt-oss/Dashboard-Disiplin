@@ -5,6 +5,7 @@ import {
   buildReportNotificationTexts,
   createReportNotifications,
   isValidNimFormat,
+  matchReportedStudent,
   normalizeName,
   parseNim,
   resolveReportRoute,
@@ -135,6 +136,65 @@ test("nama berbeda, NIM tidak ditemukan, dan NIM di luar int32 tidak terdaftar",
     { jalur: "TIDAK_TERDAFTAR" },
   );
   assert.equal(tooLargeNimDb.queryCount(), 0);
+});
+
+const students = [
+  { id: 1, nama: "Abin Nabawi", nim: 23400001, dosenPaId: 17 },
+  { id: 2, nama: "Muhammad Abin", nim: 23400002, dosenPaId: 17 },
+  { id: 3, nama: "Hasan Abin", nim: 23400003, dosenPaId: null },
+  { id: 4, nama: "Sabina Putri", nim: 23400004, dosenPaId: 17 },
+  { id: 5, nama: "Rizky Pratama", nim: 23400005, dosenPaId: 17 },
+];
+
+// Meniru findUnique per NIM dan findMany dengan filter `contains` insensitive.
+function makeStudentsDatabase(rows: typeof students) {
+  const db = {
+    mahasiswa: {
+      findUnique: async ({ where }: { where: { nim: number } }) =>
+        rows.find((row) => row.nim === where.nim) ?? null,
+      findMany: async ({ where }: { where: { AND: Array<{ nama: { contains: string } }> } }) =>
+        rows.filter((row) =>
+          where.AND.every((filter) => row.nama.toLowerCase().includes(filter.nama.contains)),
+        ),
+    },
+  };
+  return db as unknown as Prisma.TransactionClient;
+}
+
+async function match(nama: string, nim = "", rows = students) {
+  return matchReportedStudent(makeStudentsDatabase(rows), { diketahui: true, nama, nim });
+}
+
+function identifiedId(route: ReportRoute) {
+  return route.jalur === "TERIDENTIFIKASI" ? route.student.id : null;
+}
+
+test("pencocokan pelapor: nama panggilan unik tanpa NIM teridentifikasi, kapital diabaikan", async () => {
+  assert.equal(identifiedId(await match("RIZKY")), 5);
+  assert.equal(identifiedId(await match("rizky pratama")), 5);
+  // "sabina" tidak dianggap cocok dengan "abin" karena bukan kata utuh.
+  assert.equal(identifiedId(await match("sabina")), 4);
+});
+
+test("pencocokan pelapor: nama panggilan yang dimiliki banyak mahasiswa ke Kemahasiswaan", async () => {
+  assert.deepEqual(await match("abin"), { jalur: "TIDAK_TERDAFTAR" });
+  assert.deepEqual(await match("budi"), { jalur: "TIDAK_TERDAFTAR" });
+});
+
+test("pencocokan pelapor: nama lengkap persis diutamakan", async () => {
+  const rows = [...students, { id: 6, nama: "Abin Nabawi Putra", nim: 23400006, dosenPaId: 17 }];
+  assert.equal(identifiedId(await match("Abin Nabawi", "", rows)), 1);
+});
+
+test("pencocokan pelapor: nama benar NIM salah, atau NIM benar nama salah, tetap teridentifikasi", async () => {
+  assert.equal(identifiedId(await match("Rizky Pratama", "99999999")), 5);
+  assert.equal(identifiedId(await match("Rizki", "23400005")), 5);
+  // NIM memperjelas nama panggilan yang ganda.
+  assert.equal(identifiedId(await match("abin", "23400002")), 2);
+});
+
+test("pencocokan pelapor: NIM dan nama menunjuk mahasiswa berbeda ke Kemahasiswaan", async () => {
+  assert.deepEqual(await match("Rizky", "23400001"), { jalur: "TIDAK_TERDAFTAR" });
 });
 
 test("laporan temuan teridentifikasi memberi notifikasi mahasiswa, DPA, dan Kemahasiswaan", async () => {

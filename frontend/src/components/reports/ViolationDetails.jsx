@@ -39,7 +39,7 @@ const isUnresolved = (violation) => resolutionLabels[violation.status]?.done ===
 
 export default function ViolationDetails({ violations }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <ViolationList
         title="Pelanggaran belum selesai"
         emptyText="Tidak ada pelanggaran yang belum selesai."

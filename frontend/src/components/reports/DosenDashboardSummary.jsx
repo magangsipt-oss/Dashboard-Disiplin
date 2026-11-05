@@ -197,7 +197,7 @@ export default function DosenDashboardSummary({ students, isLoadingStudents, stu
   // Kartu berisi daftar tampil paling atas, sebelum pemberitahuan.
   const listTabs = ["bimbingan", "laporan-dpa"];
   const renderCards = (list) => (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       {list.map((card, index) => {
         const fromServer = card.source === "server";
         return (

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import * as XLSX from "xlsx";
 import type { UnggahanAkademik } from "@prisma/client";
@@ -231,6 +231,26 @@ export async function getAcademicUploadPreview(id: string): Promise<{
     rows: dataRows,
     totalRows: dataRows.length,
   };
+}
+
+// Hapus riwayat file beserta file fisiknya. Data yang sudah diimpor tidak ikut dihapus.
+export async function deleteAcademicUploads(ids: string[]): Promise<number> {
+  await importLegacyHistory();
+  const rows = await database.unggahanAkademik.findMany({
+    where: { id: { in: ids } },
+  });
+  if (rows.length === 0) {
+    return 0;
+  }
+  await database.unggahanAkademik.deleteMany({
+    where: { id: { in: rows.map((row) => row.id) } },
+  });
+  await Promise.all(
+    rows.map((row) =>
+      unlink(resolve(academicUploadsDirectory, row.storedFileName)).catch(() => {}),
+    ),
+  );
+  return rows.length;
 }
 
 export async function getAcademicUploadFilePath(

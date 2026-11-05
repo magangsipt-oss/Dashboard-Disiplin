@@ -185,7 +185,7 @@ kemahasiswaanRouter.get("/admin/poin/mahasiswa", async (request, response) => {
         const studentViolations = violations.get(student.id) ?? [];
         return {
           dosenPa: student.dosenPa
-            ? { nama: student.dosenPa.nama, nuptk: student.dosenPa.nuptk.toString() }
+            ? { nama: student.dosenPa.nama, nuptk: student.dosenPa.nuptk ? student.dosenPa.nuptk.toString() : "-" }
             : null,
           pelanggaran: studentViolations,
           pelanggaranBelumSelesai: studentViolations.filter((violation) =>

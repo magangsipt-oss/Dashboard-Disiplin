@@ -64,6 +64,61 @@ export async function resolveReportRoute(
   return { jalur: "TERIDENTIFIKASI", student };
 }
 
+type ReportedStudent = { id: number; nama: string; nim: number; dosenPaId: number | null };
+
+function nameTokens(value: string): string[] {
+  return normalizeName(value).split(" ").filter(Boolean);
+}
+
+// Mahasiswa yang namanya memuat semua kata yang diisi pelapor (kata utuh, bukan potongan).
+async function findStudentsByName(
+  db: Prisma.TransactionClient,
+  nama: string,
+): Promise<ReportedStudent[]> {
+  const tokens = nameTokens(nama);
+  if (tokens.length === 0) return [];
+  const candidates = await db.mahasiswa.findMany({
+    where: { AND: tokens.map((token) => ({ nama: { contains: token, mode: "insensitive" } })) },
+    select: { id: true, nama: true, nim: true, dosenPaId: true },
+  });
+  const matches = candidates.filter((student) => {
+    const studentTokens = new Set(nameTokens(student.nama));
+    return tokens.every((token) => studentTokens.has(token));
+  });
+  // Nama lengkap yang persis sama lebih diutamakan daripada kecocokan sebagian.
+  const exact = matches.filter((student) => normalizeName(student.nama) === tokens.join(" "));
+  return exact.length === 1 ? exact : matches;
+}
+
+// Pencocokan laporan dari pelapor: nama wajib, NIM opsional.
+// Teridentifikasi jika nama atau NIM menunjuk tepat satu mahasiswa.
+export async function matchReportedStudent(
+  db: Prisma.TransactionClient,
+  { diketahui, nama, nim }: ResolveReportRouteInput,
+): Promise<ReportRoute> {
+  if (!diketahui) return { jalur: "TIDAK_DIKETAHUI" };
+  const parsedNim = nim ? parseNim(nim) : null;
+  const nimStudent = parsedNim === null
+    ? null
+    : await db.mahasiswa.findUnique({
+        where: { nim: parsedNim },
+        select: { id: true, nama: true, nim: true, dosenPaId: true },
+      });
+  const nameStudents = await findStudentsByName(db, nama);
+
+  if (nimStudent) {
+    // NIM cocok, tetapi nama menunjuk mahasiswa lain: data bertentangan.
+    const conflict =
+      nameStudents.length > 0 && !nameStudents.some((student) => student.id === nimStudent.id);
+    return conflict
+      ? { jalur: "TIDAK_TERDAFTAR" }
+      : { jalur: "TERIDENTIFIKASI", student: nimStudent };
+  }
+  return nameStudents.length === 1
+    ? { jalur: "TERIDENTIFIKASI", student: nameStudents[0] }
+    : { jalur: "TIDAK_TERDAFTAR" };
+}
+
 type BuildReportNotificationTextsInput = {
   pillar: DisciplinePillar;
   tanggalKejadian: Date;
@@ -101,7 +156,7 @@ export function buildReportNotificationTexts({
       ? `Terlapor sudah menerima notifikasi, tetapi Dosen PA belum ditetapkan. ${detailKejadian}`
       : `Laporan diteruskan kepada terlapor dan Dosen PA untuk konfirmasi. ${detailKejadian}`;
   } else if (route.jalur === "TIDAK_TERDAFTAR") {
-    kemahasiswaanIsi = `Nama/NIM yang diisi (${terlaporNama ?? ""} / ${terlaporNim ?? ""}) tidak cocok dengan data mahasiswa. Perlu ditelusuri. ${detailKejadian}`;
+    kemahasiswaanIsi = `Nama/NIM yang diisi (${terlaporNama || "-"} / ${terlaporNim || "-"}) tidak cocok atau cocok dengan lebih dari satu mahasiswa. Perlu ditelusuri. ${detailKejadian}`;
   } else {
     kemahasiswaanIsi = `Pelapor tidak mengetahui nama/NIM terlapor. Perlu ditelusuri. ${detailKejadian}`;
   }

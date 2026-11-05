@@ -46,6 +46,7 @@ import {
   buildReportNotificationTexts,
   createReportNotifications,
   isValidNimFormat,
+  matchReportedStudent,
   resolveReportRoute,
 } from "./report-routing";
 
@@ -285,7 +286,7 @@ reportRouter.post(
         (diketahui &&
           (!terlaporNama ||
             terlaporNama.length > 200 ||
-            !isValidNimFormat(terlaporNim))) ||
+            (terlaporNim !== "" && !isValidNimFormat(terlaporNim)))) ||
         (!diketahui && terlaporKeterangan.length < 5) ||
         terlaporKeterangan.length > 500 ||
         !lokasi ||
@@ -334,7 +335,7 @@ reportRouter.post(
       if (!session) return;
       const kodePelacakan = createTrackingCode();
       await database.$transaction(async (transaction) => {
-        const route = await resolveReportRoute(transaction, {
+        const route = await matchReportedStudent(transaction, {
           diketahui,
           nama: terlaporNama,
           nim: terlaporNim,
@@ -354,7 +355,7 @@ reportRouter.post(
             aturanId,
             severityUsulan,
             terlaporNama: diketahui ? terlaporNama : null,
-            terlaporNim: diketahui ? terlaporNim : null,
+            terlaporNim: diketahui && terlaporNim ? terlaporNim : null,
             terlaporKeterangan: terlaporKeterangan || null,
             terlaporId: route.jalur === "TERIDENTIFIKASI" ? route.student.id : null,
             jalur: route.jalur,

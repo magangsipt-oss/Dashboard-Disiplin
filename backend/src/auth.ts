@@ -12,10 +12,16 @@ import {
   type ViolationSeverity,
   type PointChangeAction,
 } from "./points";
-import { verifyPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password";
 import { classifyPointStatus, getPointSettings, recordPointChange } from "./point-ledger";
 import { listViolationsWithResolution, todayInCampusTime } from "./punishment";
-import { counselingSchema, impersonateSchema, loginSchema, parseBody } from "./validation";
+import {
+  changePasswordSchema,
+  counselingSchema,
+  impersonateSchema,
+  loginSchema,
+  parseBody,
+} from "./validation";
 
 
 import { database } from "./db";
@@ -200,6 +206,14 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
     admin: "Kemahasiswaan",
     akademik: "Akademik",
   };
+  const details = [{ label: "Email", value: account.email }];
+  if (role === "dosen") {
+    const lecturer = await database.dosen.findUnique({
+      where: { id: account.id },
+      select: { nuptk: true },
+    });
+    details.push({ label: "NUPTK", value: lecturer?.nuptk ? lecturer.nuptk.toString() : "-" });
+  }
   return {
     id: account.id,
     name: account.name,
@@ -208,7 +222,7 @@ async function findAccount(role: Role, identity: string): Promise<Account | null
     identityLabel: "Email",
     role,
     roleLabel: roleLabels[role],
-    details: [{ label: "Email", value: account.email }],
+    details,
     createdAt: account.timestamp,
   };
 }
@@ -346,6 +360,61 @@ authRouter.post("/login", loginIpLimiter, loginFailureLimiter, async (request, r
   } catch (error) {
     console.error("Login gagal karena database atau proses autentikasi bermasalah:", error);
     response.status(503).json({ message: "Layanan login sedang tidak tersedia." });
+  }
+});
+
+const passwordTables: Record<Exclude<Role, "mhs">, string> = {
+  dosen: "Dosen",
+  admin: "Kemahasiswaan",
+  akademik: "Akademik",
+};
+
+// Ubah sandi dari halaman login: identitas + sandi lama dibuktikan seperti
+// login, jadi memakai pembatas percobaan yang sama.
+authRouter.post("/change-password", loginIpLimiter, loginFailureLimiter, async (request, response) => {
+  const input = parseBody(changePasswordSchema, request.body);
+  if (!input) {
+    response.status(400).json({
+      message: "Identitas, kata sandi lama, dan kata sandi baru (8–128 karakter) wajib diisi.",
+    });
+    return;
+  }
+  const { role, identity, password, newPassword } = input;
+  if (newPassword === password) {
+    response.status(400).json({ message: "Kata sandi baru harus berbeda dari kata sandi lama." });
+    return;
+  }
+
+  try {
+    const account = await findAccount(role, identity);
+    if (!account || !(await verifyPassword(password, account.password))) {
+      response.status(401).json({ message: "Identitas atau kata sandi lama salah." });
+      return;
+    }
+
+    const hashed = await hashPassword(newPassword);
+    await database.$transaction([
+      role === "mhs"
+        ? database.mahasiswa.update({ where: { id: account.id }, data: { password: hashed } })
+        : database.$executeRaw(
+            Prisma.sql`UPDATE public.${Prisma.raw(`"${passwordTables[role]}"`)}
+              SET "Password" = ${hashed}
+              WHERE "ID" = ${account.id}`,
+          ),
+      // Keluarkan sesi lama akun ini agar sandi lama tidak bisa dipakai lagi lewat sesi aktif.
+      database.sesi.deleteMany({
+        where: {
+          AND: [
+            { profile: { path: ["role"], equals: role } },
+            { profile: { path: ["id"], equals: account.id } },
+          ],
+        },
+      }),
+    ]);
+    response.json({ message: "Kata sandi berhasil diubah. Silakan masuk dengan kata sandi baru." });
+  } catch (error) {
+    console.error("Gagal mengubah kata sandi:", error);
+    response.status(503).json({ message: "Layanan ubah kata sandi sedang tidak tersedia." });
   }
 });
 
@@ -529,12 +598,12 @@ authRouter.get("/admin/monitoring", requireRole(["admin"], "Hanya admin kemahasi
         predikat: getScorePredicate(student.pointScore),
         pelanggaran: violations.get(student.id) ?? [],
         dosenPa: student.dosenPa
-          ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk.toString() }
+          ? { ...student.dosenPa, nuptk: student.dosenPa.nuptk ? student.dosenPa.nuptk.toString() : "-" }
           : null,
       })),
       lecturers: lecturers.map(({ laporanDikonfirmasi, ...lecturer }) => ({
         ...lecturer,
-        nuptk: lecturer.nuptk.toString(),
+        nuptk: lecturer.nuptk ? lecturer.nuptk.toString() : "-",
         laporanBelumDikonfirmasi: pendingReports
           .filter((report) => report.terlapor?.dosenPaId === lecturer.id)
           .map(({ terlapor, ...report }) => ({
@@ -928,7 +997,10 @@ async function findImpersonationProfile(
     name: lecturer.nama,
     identity: email || String(lecturer.nuptk),
     identityLabel: email ? "Email" : "NUPTK",
-    details: [email ? { label: "Email", value: email } : { label: "NUPTK", value: String(lecturer.nuptk) }],
+    details: [
+      ...(email ? [{ label: "Email", value: email }] : []),
+      { label: "NUPTK", value: lecturer.nuptk ? lecturer.nuptk.toString() : "-" },
+    ],
     createdAt: lecturer.timestamp.toISOString(),
   };
 }

@@ -126,8 +126,8 @@ Setelah login Akademik, setiap menu upload hanya menerima file yang memuat
 - **Upload Absensi**: `NO`, `Matakuliah`, `Kelas`, `NIM`, `Nama Mahasiswa`,
   `Jumlah Kehadiran`, `Kehadiran`, `Sakit`, `Ijin`, `Alpa`. Baris dengan
   kombinasi mata kuliah, kelas, dan NIM yang sudah ada akan dilewati.
-- **Upload Data Mahasiswa**: `No.`, `NIM`, `Nama Lengkap`, `Program Studi`,
-  `Angkatan`, `Nama SMTA`, `Email`, `No Handphone`, `Kata Sandi`.
+- **Upload Data Mahasiswa**: `No`, `NIM`, `Nama Lengkap`, `No Handphone`,
+  `Email`, `Program Studi`, `Angkatan`, `Nama SMTA`, `Kata Sandi`.
 - **Upload Data Dosen**: `No`, `Nama Dosen`, `Email`, `NUPTK`, `PRODI`,
   `Password`; NUPTK dan email yang sudah terdaftar dilewati.
 - **Pembagian Mahasiswa Bimbingan**: `No.`, `NIM`, `Nama Lengkap`,

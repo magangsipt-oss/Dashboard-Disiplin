@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import {
   CheckCircle2,
   FileText,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 import { studentApi } from "@/lib/api";
@@ -107,20 +106,6 @@ export default function LaporSatgas({ onCheckReports }) {
 
   return (
     <section data-scroll-reveal className="space-y-5">
-      <article className="rounded-2xl border border-amber-200 bg-amber-50/95 p-5 shadow-lg sm:p-6">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="font-bold text-amber-950">Kerahasiaan Pelapor</h2>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900">
-              Semua civitas kampus dapat menjadi satgas. Identitas pelapor dirahasiakan dan tidak ditampilkan kepada Dosen PA maupun Kemahasiswaan. Laporan diverifikasi sebelum berdampak pada poin siapa pun. Laporan palsu dapat merugikan orang lain.
-            </p>
-          </div>
-        </div>
-      </article>
-
       {isSubmitted ? (
         <article className="rounded-2xl border border-emerald-200 bg-white/95 p-6 shadow-lg">
           <CheckCircle2 className="h-8 w-8 text-emerald-700" />
@@ -177,7 +162,7 @@ export default function LaporSatgas({ onCheckReports }) {
                   {
                     value: "DIKETAHUI",
                     title: "Saya tahu nama dan NIM terlapor",
-                    description: "Data dicek otomatis. Jika cocok, terlapor dan Dosen PA-nya diberi tahu. Jika tidak ditemukan, laporan diteruskan ke Kemahasiswaan.",
+                    description: "Nama wajib, NIM opsional. Data dicek otomatis. Jika cocok dengan tepat satu mahasiswa, terlapor dan Dosen PA-nya diberi tahu. Jika tidak ditemukan atau lebih dari satu, laporan diteruskan ke Kemahasiswaan.",
                   },
                   {
                     value: "TIDAK_DIKETAHUI",
@@ -212,12 +197,12 @@ export default function LaporSatgas({ onCheckReports }) {
             {form.modeTerlapor === "DIKETAHUI" ? (
               <>
                 <label className="text-sm font-semibold text-slate-700">
-                  Nama lengkap terlapor
+                  Nama terlapor
                   <input required name="terlaporNama" value={form.terlaporNama} onChange={updateField} maxLength={200} autoComplete="off" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                 </label>
                 <label className="text-sm font-semibold text-slate-700">
-                  NIM terlapor
-                  <input required name="terlaporNim" value={form.terlaporNim} onChange={updateField} inputMode="numeric" pattern="\d{4,15}" maxLength={15} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+                  NIM terlapor (opsional)
+                  <input name="terlaporNim" value={form.terlaporNim} onChange={updateField} inputMode="numeric" pattern="\d{4,15}" maxLength={15} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
                 </label>
               </>
             ) : (

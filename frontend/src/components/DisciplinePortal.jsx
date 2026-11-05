@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LaporSatgas from './student/LaporSatgas';
 import CekLaporan from './student/CekLaporan';
@@ -21,6 +21,7 @@ import FilePreviewModal from './modals/FilePreviewModal';
 import KemahasiswaanSwitcher from './KemahasiswaanSwitcher';
 import NotificationBell from './NotificationBell';
 import TemplatePreviewModal from './modals/TemplatePreviewModal';
+import AcademicFileHistory from './tables/AcademicFileHistory';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -46,9 +47,17 @@ import {
   Phone,
   X,
   Users,
-  Eye,
-  Download,
   Upload,
+  LayoutDashboard,
+  Megaphone,
+  FileSearch,
+  Inbox,
+  Gavel,
+  SlidersHorizontal,
+  UserCog,
+  Ellipsis,
+  CalendarCheck,
+  CircleCheck,
 } from 'lucide-react';
 
 const disciplinePillars = [
@@ -92,40 +101,232 @@ const heroImages = [
   '/header-student-team.png',
   '/header-vocational-training.png',
 ];
+function StudentIcon({ className }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="12" cy="7" r="4" />
+      <path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z" />
+    </svg>
+  );
+}
+// Kartu sambutan Mahasiswa/Dosen PA. HP: lonceng sebaris badge, profil di bawah.
+// Laptop: lonceng di tengah vertikal, tepat di kiri kotak profil.
+const welcomeCardClassName =
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 [grid-template-areas:'badge_bell'_'heading_heading'_'identity_identity'_'profile_profile'] md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-6 md:[grid-template-areas:'badge_side'_'heading_side'_'identity_side']";
+
+// Badge semester satu baris di semua halaman; terpotong "…" bila layar terlalu sempit.
+function SemesterBadge() {
+  return (
+    <div className="inline-flex max-w-full items-center gap-2 whitespace-nowrap rounded-full border border-red-500/30 bg-red-900/40 px-3 py-1 text-xs font-semibold text-amber-300">
+      <Clock className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">Semester Genap 2026/2027</span>
+    </div>
+  );
+}
+// Urutan kartu pilihan login (juga urutan slide di HP).
+const accessCards = [
+  {
+    role: 'mhs',
+    title: 'Mahasiswa',
+    description: 'Cek rekam jejak kedisiplinan dan presensi yang diunggah tim akademik, ajukan sanggah, serta klaim poin kegiatan non-akademik.',
+    action: 'Masuk via NIM',
+    icon: StudentIcon,
+    reveal: 'left',
+    delay: '80',
+  },
+  {
+    role: 'dosen',
+    title: 'Dosen PA',
+    description: 'Monitoring statistik kedisiplinan mahasiswa bimbingan, verifikasi jadwal konseling, dan berikan catatan bimbingan.',
+    action: 'Masuk via Email',
+    icon: GraduationCap,
+    reveal: 'zoom',
+    delay: '160',
+  },
+  {
+    role: 'akademik',
+    title: 'Akademik',
+    description: 'Masuk ke portal Akademik menggunakan email dan kata sandi akun Akademik.',
+    action: 'Masuk via Email',
+    icon: BookOpen,
+    reveal: 'right',
+    delay: '240',
+  },
+  {
+    role: 'admin',
+    title: 'Kemahasiswaan',
+    description: 'Masuk menggunakan email untuk memverifikasi klaim sertifikat, kegiatan non-akademik, dan sanggahan presensi.',
+    action: 'Masuk via Email',
+    icon: ShieldCheck,
+    reveal: 'right',
+    delay: '320',
+  },
+];
 const navigationByRole = {
   mhs: [
-    { id: 'dashboard', label: 'Ringkasan', description: 'Ringkasan skor kedisiplinan, presensi, dan riwayat perubahan poin Anda.' },
-    { id: 'sanggah', label: 'Sanggah Pelanggaran', description: 'Ajukan keberatan atas pengurangan poin yang menurut Anda tidak sesuai, lengkap dengan alasan dan bukti.' },
-    { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
-    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
-    { id: 'tindak-lanjut', label: 'Tindak Lanjut', description: 'Lihat tugas pembinaan dari pelanggaran yang dikonfirmasi dan unggah bukti penyelesaian untuk memulihkan poin.' },
-    { id: 'klaim', label: 'Klaim Kegiatan', description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
+    { id: 'dashboard', label: 'Ringkasan', short: 'Ringkasan', icon: LayoutDashboard, description: 'Ringkasan skor kedisiplinan, presensi, dan riwayat perubahan poin Anda.' },
+    { id: 'sanggah', label: 'Sanggah Pelanggaran', short: 'Sanggah', icon: Scale, description: 'Ajukan keberatan atas pengurangan poin yang menurut Anda tidak sesuai, lengkap dengan alasan dan bukti.' },
+    { id: 'lapor', label: 'Lapor Satgas', short: 'Lapor', icon: Megaphone, description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', short: 'Cek Laporan', icon: FileSearch, description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
+    { id: 'tindak-lanjut', label: 'Tindak Lanjut', short: 'Tindak Lanjut', icon: ClipboardCheck, description: 'Lihat tugas pembinaan dari pelanggaran yang dikonfirmasi dan unggah bukti penyelesaian untuk memulihkan poin.' },
+    { id: 'klaim', label: 'Klaim Kegiatan', short: 'Klaim', icon: Award, description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
   ],
   dosen: [
-    { id: 'bimbingan', label: 'Ringkasan', description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
-    { id: 'laporan-dpa', label: 'Konfirmasi Laporan', description: 'Tinjau laporan pelanggaran mahasiswa bimbingan Anda, lalu konfirmasi atau tolak.' },
-    { id: 'konseling', label: 'Catatan & Konseling', description: 'Catat pembinaan dan jadwalkan panggilan konseling untuk mahasiswa bimbingan.' },
-    { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
-    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
+    { id: 'bimbingan', label: 'Ringkasan', short: 'Ringkasan', icon: LayoutDashboard, description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
+    { id: 'laporan-dpa', label: 'Konfirmasi Laporan', short: 'Konfirmasi', icon: CircleCheck, description: 'Tinjau laporan pelanggaran mahasiswa bimbingan Anda, lalu konfirmasi atau tolak.' },
+    { id: 'konseling', label: 'Catatan & Konseling', short: 'Konseling', icon: MessageSquare, description: 'Catat pembinaan dan jadwalkan panggilan konseling untuk mahasiswa bimbingan.' },
+    { id: 'lapor', label: 'Lapor Satgas', short: 'Lapor', icon: Megaphone, description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', short: 'Cek Laporan', icon: FileSearch, description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
   admin: [
-    { id: 'dashboard', label: 'Ringkasan', description: 'Ringkasan pemantauan kedisiplinan seluruh mahasiswa.' },
-    { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan', description: 'Telusuri laporan satgas yang masuk dan teruskan ke Dosen PA untuk dikonfirmasi.' },
-    { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan', description: 'Verifikasi klaim poin kegiatan yang diajukan mahasiswa.' },
-    { id: 'punishment', label: 'Punishment', description: 'Tetapkan tindak lanjut edukatif untuk pelanggaran yang sudah dikonfirmasi.' },
-    { id: 'pengaturan-poin', label: 'Pengaturan Poin', description: 'Atur aturan poin kedisiplinan mahasiswa.' },
-    { id: 'data-poin', label: 'Monitoring Mahasiswa', description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
-    { id: 'monitoring-dpa', label: 'Monitoring DPA', description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
+    { id: 'dashboard', label: 'Ringkasan', short: 'Ringkasan', icon: LayoutDashboard, description: 'Ringkasan pemantauan kedisiplinan seluruh mahasiswa.' },
+    { id: 'laporan-kemahasiswaan', label: 'Antrean Laporan', short: 'Antrean', icon: Inbox, description: 'Telusuri laporan satgas yang masuk dan teruskan ke Dosen PA untuk dikonfirmasi.' },
+    { id: 'klaim-kemahasiswaan', label: 'Klaim Kegiatan', short: 'Klaim', icon: Award, description: 'Verifikasi klaim poin kegiatan yang diajukan mahasiswa.' },
+    { id: 'punishment', label: 'Punishment', short: 'Punishment', icon: Gavel, description: 'Tetapkan tindak lanjut edukatif untuk pelanggaran yang sudah dikonfirmasi.' },
+    { id: 'pengaturan-poin', label: 'Pengaturan Poin', short: 'Atur Poin', icon: SlidersHorizontal, description: 'Atur aturan poin kedisiplinan mahasiswa.' },
+    { id: 'data-poin', label: 'Monitoring Mahasiswa', short: 'Mahasiswa', icon: Users, description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
+    { id: 'monitoring-dpa', label: 'Monitoring DPA', short: 'Monitor DPA', icon: UserCheck, description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
   ],
   akademik: [
-    { id: 'upload-absensi', label: 'Upload Absensi', description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },
-    { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa', description: 'Unggah data mahasiswa agar akun dan profil tersinkron dengan sistem.' },
-    { id: 'upload-dosen', label: 'Upload Data Dosen', description: 'Unggah data dosen agar akun dan profil tersinkron dengan sistem.' },
-    { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan', description: 'Tetapkan dosen pembimbing akademik untuk setiap mahasiswa.' },
-    { id: 'lapor', label: 'Lapor Satgas', description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
-    { id: 'cek-laporan', label: 'Cek Laporan', description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
+    { id: 'upload-absensi', label: 'Upload Absensi', short: 'Absensi', icon: CalendarCheck, description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },
+    { id: 'upload-mahasiswa', label: 'Upload Data Mahasiswa', short: 'Data Mhs', icon: Users, description: 'Unggah data mahasiswa agar akun dan profil tersinkron dengan sistem.' },
+    { id: 'upload-dosen', label: 'Upload Data Dosen', short: 'Data Dosen', icon: GraduationCap, description: 'Unggah data dosen agar akun dan profil tersinkron dengan sistem.' },
+    { id: 'pembagian-bimbingan', label: 'Pembagian Mahasiswa Bimbingan', short: 'Bimbingan', icon: UserCog, description: 'Tetapkan dosen pembimbing akademik untuk setiap mahasiswa.' },
+    { id: 'lapor', label: 'Lapor Satgas', short: 'Lapor', icon: Megaphone, description: 'Laporkan pelanggaran disiplin yang Anda temui di lingkungan kampus. Identitas pelapor dirahasiakan.' },
+    { id: 'cek-laporan', label: 'Cek Laporan', short: 'Cek Laporan', icon: FileSearch, description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
   ],
 };
+
+// Bar navigasi bawah khusus HP. Maksimal 5 slot: bila menu lebih dari 5,
+// 4 menu pertama tampil dan sisanya masuk lembar "Lainnya".
+// Penanda asal pembukaan dashboard (dibaca sekali setelah reload/login) untuk menyusun riwayat back.
+const HISTORY_ENTRY_KEY = 'sigma-history-entry';
+function markHistoryEntry(value) {
+  try {
+    window.sessionStorage.setItem(HISTORY_ENTRY_KEY, value);
+  } catch {
+    // Penyimpanan diblokir: riwayat memakai susunan bawaan.
+  }
+}
+function readHistoryEntry() {
+  try {
+    const value = window.sessionStorage.getItem(HISTORY_ENTRY_KEY);
+    window.sessionStorage.removeItem(HISTORY_ENTRY_KEY);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function MobileBottomNav({ items, activeTab, onSelect }) {
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const hasMore = items.length > 5;
+  const mainItems = hasMore ? items.slice(0, 4) : items;
+  const moreItems = hasMore ? items.slice(4) : [];
+  const isMoreActive = moreItems.some((item) => item.id === activeTab);
+
+  const select = (id) => {
+    onSelect(id);
+    setIsMoreOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const slotClassName = (isActive) =>
+    `relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 text-[10px] font-semibold transition-colors ${
+      isActive ? 'text-amber-300' : 'text-red-100/70 active:text-white'
+    }`;
+  const iconWrapClassName = (isActive) =>
+    `flex h-8 w-12 items-center justify-center rounded-full transition-all ${
+      isActive ? 'bg-red-700 text-white shadow-md shadow-red-950/50' : ''
+    }`;
+
+  return (
+    <div className="sm:hidden">
+      {isMoreOpen && (
+        <button
+          type="button"
+          aria-label="Tutup menu lainnya"
+          onClick={() => setIsMoreOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-[1px]"
+        />
+      )}
+      {isMoreOpen && (
+        <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 rounded-2xl border border-red-800/60 bg-[#450a0a]/95 p-2 shadow-2xl backdrop-blur-md">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-red-200">Menu lainnya</p>
+          {moreItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => select(item.id)}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-colors ${
+                activeTab === item.id ? 'bg-red-700 text-white' : 'text-slate-100 active:bg-red-900/60'
+              }`}
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <nav
+        aria-label="Menu utama"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-red-800/60 bg-[#450a0a]/95 px-2 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md"
+      >
+        <div className="flex items-stretch gap-1">
+          {mainItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => select(item.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={slotClassName(isActive)}
+              >
+                <span className={iconWrapClassName(isActive)}>
+                  <item.icon className="h-5 w-5" />
+                </span>
+                <span className="max-w-full truncate">{item.short}</span>
+              </button>
+            );
+          })}
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => setIsMoreOpen((open) => !open)}
+              aria-expanded={isMoreOpen}
+              className={slotClassName(isMoreActive || isMoreOpen)}
+            >
+              <span className={iconWrapClassName(isMoreActive || isMoreOpen)}>
+                {isMoreOpen ? <X className="h-5 w-5" /> : <Ellipsis className="h-5 w-5" />}
+              </span>
+              <span>Lainnya</span>
+            </button>
+          )}
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+function WelcomeHeading({ name, className = '' }) {
+  return (
+    <h2 className={`min-w-0 text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-3xl ${className}`}>
+      <span className="block">Selamat Datang,</span>
+      <span className="block">{name}</span>
+    </h2>
+  );
+}
 
 function MenuHeader({ item, roleLabel }) {
   if (!item) return null;
@@ -172,8 +373,68 @@ export default function App({ hasSessionCookie = false }) {
   const router = useRouter();
   // Jika cookie sesi ada, tahan render sampai sesi diperiksa agar landing tidak berkedip.
   const [activePage, setActivePage] = useState(hasSessionCookie ? 'checking' : 'landing');
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabState] = useState('dashboard');
+  const activeTabRef = useRef(activeTab);
+  const authenticatedUserRef = useRef(null);
+  // Setiap pindah menu dicatat ke riwayat browser agar tombol back HP kembali ke menu sebelumnya.
+  const setActiveTab = useCallback((tab, { replace = false } = {}) => {
+    if (!replace && tab === activeTabRef.current) return;
+    activeTabRef.current = tab;
+    const state = { ...window.history.state, sigmaTab: tab, sigmaPage: undefined };
+    if (replace) {
+      window.history.replaceState(state, '');
+    } else {
+      window.history.pushState(state, '');
+    }
+    setActiveTabState(tab);
+  }, []);
+
+  // Susun riwayat saat dashboard dibuka. Urutan back yang dituju:
+  // menu → Ringkasan → (Kemahasiswaan, bila sedang masuk sebagai akun lain) → halaman utama → keluar.
+  const initDashboardHistory = useCallback((homeTab, profile) => {
+    const entry = readHistoryEntry();
+    const base = window.history.state;
+    if (profile.impersonator) {
+      window.history.replaceState({ ...base, sigmaTab: undefined, sigmaPage: 'kemahasiswaan' }, '');
+      window.history.pushState({ ...base, sigmaTab: homeTab, sigmaPage: undefined }, '');
+    } else if (entry === 'from-landing' || entry === 'return-kemahasiswaan') {
+      // Entri sebelumnya sudah halaman utama, cukup ganti entri ini menjadi Ringkasan.
+      window.history.replaceState({ ...base, sigmaTab: homeTab, sigmaPage: undefined }, '');
+    } else {
+      window.history.replaceState({ ...base, sigmaTab: undefined, sigmaPage: 'landing' }, '');
+      window.history.pushState({ ...base, sigmaTab: homeTab, sigmaPage: undefined }, '');
+    }
+    activeTabRef.current = homeTab;
+    setActiveTabState(homeTab);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const user = authenticatedUserRef.current;
+      const tab = event.state?.sigmaTab;
+      const isKnownTab = user && (navigationByRole[user.role] ?? []).some((item) => item.id === tab);
+      if (isKnownTab) {
+        activeTabRef.current = tab;
+        setActiveTabState(tab);
+        setActivePage('dashboard');
+        window.scrollTo({ top: 0 });
+        return;
+      }
+      if (event.state?.sigmaPage === 'kemahasiswaan' && user?.impersonator) {
+        // Kembali ke halaman Kemahasiswaan: akhiri mode masuk sebagai akun lain.
+        markHistoryEntry('return-kemahasiswaan');
+        fetch('/api/auth/impersonation', { method: 'DELETE' }).finally(() => window.location.reload());
+        return;
+      }
+      // Entri lain (halaman utama atau riwayat sebelum dashboard): tampilkan halaman utama.
+      setActivePage((current) => (current === 'dashboard' ? 'landing' : current));
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const [activeHeroImage, setActiveHeroImage] = useState(0);
+  const [activeAccessSlide, setActiveAccessSlide] = useState(0);
 
   const [selectedAppealChangeId, setSelectedAppealChangeId] = useState(null);
 
@@ -231,6 +492,7 @@ export default function App({ hasSessionCookie = false }) {
 
   const dashboardNavigation =
     navigationByRole[authenticatedUser?.role] ?? navigationByRole.mhs;
+  const hasRoleSwitcher = authenticatedUser?.role === 'admin' || Boolean(authenticatedUser?.impersonator);
   const homeTab = dashboardNavigation[0].id;
   const activeMenu = dashboardNavigation.find((item) => item.id === activeTab);
   // Menu konseling dosen hanya menampilkan mahasiswa yang pernah mengajukan sanggahan.
@@ -254,12 +516,10 @@ export default function App({ hasSessionCookie = false }) {
       .then((data) => {
         if (isMounted && data?.profile) {
           setAuthenticatedUser(data.profile);
-          setActiveTab(
-            data.profile.role === 'dosen'
-              ? 'bimbingan'
-              : data.profile.role === 'akademik'
-                ? 'upload-absensi'
-                : 'dashboard',
+          authenticatedUserRef.current = data.profile;
+          initDashboardHistory(
+            (navigationByRole[data.profile.role] ?? navigationByRole.mhs)[0].id,
+            data.profile,
           );
           setActivePage('dashboard');
           if (data.profile.role === 'mhs') {
@@ -328,7 +588,7 @@ export default function App({ hasSessionCookie = false }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [initDashboardHistory]);
 
   useEffect(() => {
     const revealElements = document.querySelectorAll('[data-scroll-reveal]');
@@ -552,6 +812,11 @@ export default function App({ hasSessionCookie = false }) {
     }
   };
 
+  const handleAcademicFilesDeleted = (ids) => {
+    const deletedIds = new Set(ids);
+    setAcademicFiles((current) => current.filter((file) => !deletedIds.has(file.id)));
+  };
+
   useEffect(() => {
     if (activePage !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return undefined;
@@ -565,6 +830,7 @@ export default function App({ hasSessionCookie = false }) {
   }, [activePage]);
 
   const handleSelectRole = (role) => {
+    markHistoryEntry('from-landing');
     router.push(`/login?role=${role}`);
   };
 
@@ -669,10 +935,13 @@ export default function App({ hasSessionCookie = false }) {
       setLoginError('Koneksi logout gagal. Muat ulang halaman untuk memeriksa sesi.');
     } finally {
       setAuthenticatedUser(null);
+      authenticatedUserRef.current = null;
       setStudentPoints(null);
       setAdvisor(null);
       setAdvisorError('');
-      setActiveTab('dashboard');
+      activeTabRef.current = 'dashboard';
+      setActiveTabState('dashboard');
+      window.history.replaceState({ ...window.history.state, sigmaTab: undefined, sigmaPage: 'landing' }, '');
       setActivePage('landing');
     }
   };
@@ -774,30 +1043,31 @@ export default function App({ hasSessionCookie = false }) {
                 </div>
                 <div>
                   <h1 className="font-extrabold text-slate-900 text-lg leading-none tracking-tight">SIGMA</h1>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">Politeknik Sinar Mas Berau Coal — Tanjung Redeb, Berau</p>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">Politeknik Sinar Mas Berau Coal</p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4 text-xs">
-                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl">
-                  <div className="w-8 h-8 rounded-lg bg-red-100 text-red-800 flex items-center justify-center font-bold">
+              {/* HP: satu kartu bertumpuk selebar layar. Layar lebar: kartu terpisah sejajar. */}
+              <div className="flex w-full flex-col divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50 text-xs sm:w-auto sm:flex-row sm:gap-4 sm:divide-y-0 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
+                <a href="tel:+628115443118" className="flex min-w-0 items-center gap-3 px-3.5 py-2.5 hover:bg-slate-100 sm:rounded-xl sm:border sm:border-slate-200/80 sm:bg-slate-50 sm:py-2">
+                  <div className="w-8 h-8 shrink-0 rounded-lg bg-red-100 text-red-800 flex items-center justify-center font-bold">
                     <Phone className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-bold text-slate-900">0811-5443-118</p>
                     <p className="text-[11px] text-slate-500">Senin - Jumat (08:00 - 16:00 WITA)</p>
                   </div>
-                </div>
+                </a>
 
-                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl">
-                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center font-bold">
+                <a href="mailto:kemahasiswaan@polteksimasberau.ac.id" className="flex min-w-0 items-center gap-3 px-3.5 py-2.5 hover:bg-slate-100 sm:rounded-xl sm:border sm:border-slate-200/80 sm:bg-slate-50 sm:py-2">
+                  <div className="w-8 h-8 shrink-0 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center font-bold">
                     <Mail className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-bold text-slate-900">Humas & Layanan</p>
-                    <p className="text-[11px] text-slate-500">kemahasiswaan@polteksimasberau.ac.id</p>
+                    <p className="truncate text-[11px] text-slate-500">kemahasiswaan@polteksimasberau.ac.id</p>
                   </div>
-                </div>
+                </a>
               </div>
             </div>
           </header>
@@ -856,111 +1126,63 @@ export default function App({ hasSessionCookie = false }) {
             <div className="absolute inset-0 z-0 bg-slate-950/55 backdrop-blur-[2px]"></div>
 
             <div className="max-w-7xl mx-auto w-full relative z-10">
-              <div className="text-center mb-10">
-                <h3 data-scroll-reveal data-reveal="text" className="text-3xl font-extrabold text-white tracking-tight drop-shadow-md">Pilih Akses Masuk Portal</h3>
-                <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-100 text-sm mt-2 font-medium drop-shadow-sm">Silakan pilih peran Anda untuk melanjutkan ke halaman login</p>
+              <div className="mx-auto mb-6 max-w-sm text-center sm:mb-10 sm:max-w-none">
+                <h3 data-scroll-reveal data-reveal="text" className="text-2xl font-extrabold leading-tight tracking-tight text-balance text-white drop-shadow-md sm:text-3xl">Pilih Akses Masuk Portal</h3>
+                <span aria-hidden="true" className="mx-auto mt-3 block h-1 w-12 rounded-full bg-amber-300" />
+                <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="mt-3 text-sm font-medium leading-relaxed text-balance text-slate-100 drop-shadow-sm">Silakan pilih peran Anda untuk melanjutkan ke halaman login</p>
               </div>
 
-              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 xl:grid-cols-4">
-                <button
-                  type="button"
-                  data-scroll-reveal
-                  data-reveal="left"
-                  data-reveal-delay="80"
-                  onClick={() => handleSelectRole('mhs')}
-                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
-                >
-                  <div>
-                    <div className="w-14 h-14 bg-red-50 text-red-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-800 group-hover:text-white transition-all shadow-sm">
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="w-8 h-8"
-                      >
-                        <circle cx="12" cy="7" r="4" />
-                        <path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z" />
-                      </svg>
+              {/* HP: slide satu kartu penuh per geser. Layar lebar: grid. gap-12 = 2× padding agar kartu sebelah tidak mengintip. */}
+              <div
+                id="access-slides"
+                onScroll={(event) => {
+                  const { scrollLeft, clientWidth } = event.currentTarget;
+                  setActiveAccessSlide(Math.round(scrollLeft / clientWidth));
+                }}
+                className="-mx-6 flex snap-x snap-mandatory gap-12 overflow-x-auto px-6 pt-2 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-8 sm:overflow-visible sm:p-0 xl:grid-cols-4"
+              >
+                {/* Warna seragam mengikuti kartu Mahasiswa. HP: tampil berwarna terus. Layar lebar: berwarna saat hover. */}
+                {accessCards.map((card) => (
+                  <button
+                    key={card.role}
+                    type="button"
+                    data-scroll-reveal
+                    data-reveal={card.reveal}
+                    data-reveal-delay={card.delay}
+                    onClick={() => handleSelectRole(card.role)}
+                    className="w-full shrink-0 snap-center snap-always appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
+                  >
+                    <div>
+                      <div className="w-14 h-14 bg-red-800 text-white sm:bg-red-50 sm:text-red-800 sm:group-hover:bg-red-800 sm:group-hover:text-white rounded-2xl flex items-center justify-center mb-5 transition-all shadow-sm">
+                        <card.icon className="w-8 h-8" />
+                      </div>
+                      <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-red-800 sm:text-slate-900 sm:group-hover:text-red-800 transition-colors">{card.title}</h4>
+                      <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
+                        {card.description}
+                      </p>
                     </div>
-                    <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Mahasiswa</h4>
-                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Cek rekam jejak kedisiplinan dan presensi yang diunggah tim akademik, ajukan sanggah, serta klaim poin kegiatan non-akademik.
-                    </p>
-                  </div>
-                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk via NIM
-                  </span>
-                </button>
+                    <span className="mt-8 w-full py-3 bg-red-800 text-white sm:bg-slate-100 sm:text-slate-800 sm:group-hover:bg-red-800 sm:group-hover:text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
+                      {card.action}
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-                <button
-                  type="button"
-                  data-scroll-reveal
-                  data-reveal="zoom"
-                  data-reveal-delay="160"
-                  onClick={() => handleSelectRole('dosen')}
-                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-rose-500/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
-                >
-                  <div>
-                    <div className="w-14 h-14 bg-rose-50 text-rose-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-rose-800 group-hover:text-white transition-all shadow-sm">
-                      <GraduationCap className="w-8 h-8" />
-                    </div>
-                    <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-rose-800 transition-colors">Akses Dosen PA</h4>
-                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Monitoring statistik kedisiplinan mahasiswa bimbingan, verifikasi jadwal konseling, dan berikan catatan bimbingan.
-                    </p>
-                  </div>
-                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-rose-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk via Email
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  data-scroll-reveal
-                  data-reveal="right"
-                  data-reveal-delay="240"
-                  onClick={() => handleSelectRole('admin')}
-                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
-                >
-                  <div>
-                    <div className="w-14 h-14 bg-red-50 text-red-900 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-900 group-hover:text-white transition-all shadow-sm">
-                      <ShieldCheck className="w-8 h-8" />
-                    </div>
-                    <h4 data-scroll-reveal data-reveal="text" className="text-2xl font-bold text-slate-900 group-hover:text-red-900 transition-colors">Akses Kemahasiswaan</h4>
-                    <p data-scroll-reveal data-reveal="text" data-reveal-delay="80" className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Masuk menggunakan email untuk memverifikasi klaim sertifikat, kegiatan non-akademik, dan sanggahan presensi.
-                    </p>
-                  </div>
-                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-900 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk via Email
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  data-scroll-reveal
-                  data-reveal="right"
-                  data-reveal-delay="320"
-                  onClick={() => handleSelectRole('akademik')}
-                  className="w-full appearance-none text-left font-sans bg-white/95 backdrop-blur-md rounded-2xl p-7 border border-white/80 shadow-2xl hover:shadow-red-600/25 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group flex flex-col justify-between focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-400"
-                >
-                  <div>
-                    <div className="w-14 h-14 bg-red-50 text-red-800 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-red-800 group-hover:text-white transition-all shadow-sm">
-                      <BookOpen className="w-8 h-8" />
-                    </div>
-                    <h4 className="text-2xl font-bold text-slate-900 group-hover:text-red-800 transition-colors">Akses Akademik</h4>
-                    <p className="text-slate-600 text-sm mt-3 leading-relaxed font-normal">
-                      Masuk ke portal Akademik menggunakan email dan kata sandi akun Akademik.
-                    </p>
-                  </div>
-                  <span className="mt-8 w-full py-3 bg-slate-100 group-hover:bg-red-800 group-hover:text-white text-slate-800 font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                    Masuk via Email
-                  </span>
-                </button>
+              <div className="mt-1 flex justify-center gap-2 sm:hidden">
+                {accessCards.map(({ title: label }, index) => (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-label={`Tampilkan ${label}`}
+                    onClick={() => {
+                      const slides = document.getElementById('access-slides');
+                      slides?.scrollTo({ left: index * slides.clientWidth, behavior: 'smooth' });
+                    }}
+                    className={`h-2 rounded-full transition-all ${
+                      activeAccessSlide === index ? 'w-6 bg-amber-300' : 'w-2 bg-white/60'
+                    }`}
+                  />
+                ))}
               </div>
             </div>
           </main>
@@ -1197,7 +1419,7 @@ export default function App({ hasSessionCookie = false }) {
           </section>
 
           <footer className="bg-slate-950 text-slate-400 py-6 text-center text-xs border-t border-slate-800 relative z-20">
-            © 2026 Sentra Inovasi dan Penelitian Penerapan (SIPT)
+            © 2026 Sentra Inovasi dan Penelitian Terapan (SIPT)
           </footer>
         </div>
       )}
@@ -1209,9 +1431,11 @@ export default function App({ hasSessionCookie = false }) {
         >
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"></div>
 
-          <div className="relative z-10 min-h-screen flex flex-col">
+          <div className="relative z-10 min-h-screen flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:pb-0">
+            <MobileBottomNav items={dashboardNavigation} activeTab={activeTab} onSelect={setActiveTab} />
             <header className="bg-[#450a0a]/95 backdrop-blur-sm text-white border-b border-red-950 sticky top-0 z-30 shadow-md">
-              <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col items-start gap-4">
+              <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 sm:py-4 flex flex-col items-start gap-3 sm:gap-4">
+                <div className="flex w-full items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 bg-white p-0.5 rounded-xl flex items-center justify-center shadow-lg">
                     {/* eslint-disable-next-line @next/next/no-img-element -- logo kecil dengan fallback onError */}
@@ -1231,9 +1455,19 @@ export default function App({ hasSessionCookie = false }) {
                     <p className="text-xs text-red-200">Politeknik Sinar Mas Berau Coal</p>
                   </div>
                 </div>
+                {/* HP: logout selalu di pojok kanan atas untuk semua role. */}
+                <button
+                  onClick={handleLogout}
+                  className="shrink-0 rounded-lg p-2 text-slate-200 transition-colors hover:bg-red-900/40 hover:text-red-200 sm:hidden"
+                  title="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+                </div>
 
-                <div className="flex w-full flex-wrap items-stretch gap-3">
-                  <div className="flex w-fit max-w-full flex-wrap items-center justify-start gap-1 rounded-xl border border-red-800/50 bg-[#581c1c]/90 p-1">
+                {/* HP: menu pindah ke bar navigasi bawah; baris ini hanya tampil untuk pengalih Kemahasiswaan. */}
+                <div className={`w-full flex-wrap items-stretch gap-3 lg:flex-nowrap ${hasRoleSwitcher ? 'flex' : 'hidden sm:flex'}`}>
+                  <div className="hidden w-fit max-w-full flex-wrap items-center justify-start gap-1 rounded-xl border border-red-800/50 bg-[#581c1c]/90 p-1 sm:flex lg:shrink-0 lg:flex-nowrap">
                     {dashboardNavigation.map((item) => (
                       <button
                         key={item.id}
@@ -1249,26 +1483,30 @@ export default function App({ hasSessionCookie = false }) {
                     ))}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    {authenticatedUser?.role === 'admin' || authenticatedUser?.impersonator ? (
-                      <KemahasiswaanSwitcher profile={authenticatedUser} />
-                    ) : (
-                      <div className="flex h-full items-center gap-1.5 rounded-lg border border-red-800/50 bg-[#581c1c]/90 px-3 text-xs text-red-200">
-                        <span className="font-semibold">Role :</span>
-                        <span className="font-bold">
-                          {authenticatedUser?.roleLabel ?? 'Belum login'}
-                        </span>
-                      </div>
-                    )}
+                  {/* Pengalih Role hanya untuk Kemahasiswaan; role lain cukup tombol logout di samping menu. */}
+                  {hasRoleSwitcher ? (
+                  <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:justify-start lg:min-w-0 lg:flex-nowrap">
+                    <KemahasiswaanSwitcher profile={authenticatedUser} />
 
-                    <button 
+                    <button
                       onClick={handleLogout}
-                      className="p-2 text-slate-200 hover:text-red-200 hover:bg-red-900/40 rounded-lg transition-colors"
+                      className="hidden shrink-0 p-2 sm:block text-slate-200 hover:text-red-200 hover:bg-red-900/40 rounded-lg transition-colors"
                       title="Logout"
                     >
                       <LogOut className="w-5 h-5" />
                     </button>
                   </div>
+                  ) : (
+                  <div className="flex shrink-0 items-center">
+                    <button
+                      onClick={handleLogout}
+                      className="shrink-0 rounded-lg p-2 text-slate-200 transition-colors hover:bg-red-900/40 hover:text-red-200"
+                      title="Logout"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </div>
+                  )}
                 </div>
               </div>
             </header>
@@ -1312,26 +1550,19 @@ export default function App({ hasSessionCookie = false }) {
             )}
 
             {authenticatedUser?.role === 'mhs' && !['lapor', 'cek-laporan'].includes(activeTab) && (
-            <main className="max-w-7xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6 flex-1 w-full">
               {activeTab === homeTab ? (
-              <div data-scroll-reveal className="bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-red-600/30">
-                <div className="space-y-2 z-10">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-900/40 rounded-full text-amber-300 text-xs font-semibold border border-red-500/30">
-                    <Clock className="w-3.5 h-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                      Selamat Datang, {authenticatedUser?.name || 'Pengguna'}
-                    </h2>
-                    <NotificationBell endpoint="/api/mahasiswa/pemberitahuan" />
-                  </div>
-                  <p className="text-red-100 text-sm" data-testid="database-profile">
-                    {authenticatedUser?.identityLabel}: {authenticatedUser?.identity}
-                    {authenticatedUser?.details?.map((detail) => ` • ${detail.label}: ${detail.value}`)}
-                  </p>
-                </div>
+              <div data-scroll-reveal className={`${welcomeCardClassName} bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 backdrop-blur-sm text-white rounded-3xl p-5 sm:p-8 shadow-2xl relative overflow-hidden border border-red-600/30`}>
+                <div className="[grid-area:badge] min-w-0"><SemesterBadge /></div>
+                <WelcomeHeading name={authenticatedUser?.name || 'Pengguna'} className="[grid-area:heading]" />
+                <p className="[grid-area:identity] truncate text-red-100 text-xs sm:text-sm" data-testid="database-profile">
+                  {authenticatedUser?.identity}
+                  {authenticatedUser?.details?.map((detail) => ` • ${detail.value}`)}
+                </p>
 
-                <div className="bg-[#581c1c]/95 backdrop-blur-sm border border-red-800/60 rounded-2xl p-4 sm:p-5 flex items-center gap-4 min-w-[280px]">
+                <div className="contents md:flex md:items-center md:gap-6 md:self-center md:[grid-area:side]">
+                  <div className="[grid-area:bell] self-center"><NotificationBell endpoint="/api/mahasiswa/pemberitahuan" className="md:h-24 md:w-24 md:rounded-2xl" iconClassName="h-5 w-5 md:h-10 md:w-10" badgeClassName="-right-1.5 -top-1.5 h-5 min-w-5 px-1 text-[10px] md:-right-2 md:-top-2 md:h-7 md:min-w-7 md:px-1.5 md:text-sm" /></div>
+                  <div className="[grid-area:profile] mt-4 md:mt-0 md:h-24 bg-[#581c1c]/95 backdrop-blur-sm border border-red-800/60 rounded-2xl p-4 sm:p-5 flex items-center gap-4 md:min-w-[280px]">
                   <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center border border-emerald-500/30 flex-shrink-0">
                     <UserCheck className="w-7 h-7" />
                   </div>
@@ -1347,6 +1578,7 @@ export default function App({ hasSessionCookie = false }) {
                     </p>
                   </div>
                 </div>
+                </div>
               </div>
               ) : (
                 <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
@@ -1354,10 +1586,6 @@ export default function App({ hasSessionCookie = false }) {
 
               {activeTab === 'dashboard' && (
                 <>
-                  <p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900 shadow">
-                    Setiap mahasiswa memulai dengan 100 poin. Poin akan berkurang jika ada pelanggaran pada 5 pilar disiplin: Waktu, Akademik, Tata Tertib dan Etika, Prosedur dan Keselamatan (K3), serta Lingkungan. Poin bisa bertambah dari lomba atau kegiatan non-akademik yang sudah diverifikasi, hingga maksimal 200 poin.
-                  </p>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 <div data-scroll-reveal data-reveal-delay="80" className="sm:col-span-2 lg:col-span-1 bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex justify-between items-start mb-3">
@@ -1673,9 +1901,7 @@ export default function App({ hasSessionCookie = false }) {
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
                     Portal Akademik
                   </p>
-                  <h2 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
-                    Selamat Datang, {authenticatedUser.name || 'Pengguna'}
-                  </h2>
+                  <WelcomeHeading name={authenticatedUser.name || 'Pengguna'} className="mt-2" />
                   <p className="mt-2 text-sm text-red-100">
                     Login Akademik berhasil. Akun Anda terhubung sebagai petugas Akademik.
                   </p>
@@ -1788,100 +2014,15 @@ export default function App({ hasSessionCookie = false }) {
                       </div>
                     )}
 
-                    {/* Lampiran Riwayat File Absensi */}
-                    <div className="mt-8 border-t border-slate-200 pt-6">
-                      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <h4 className="flex items-center gap-2 text-base font-extrabold text-slate-900">
-                            <FileText className="h-5 w-5 text-red-800" />
-                            Lampiran File Absensi yang Pernah Diunggah
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            Klik nama file atau tombol preview untuk melihat isi data file secara langsung.
-                          </p>
-                        </div>
-                        <span className="self-start sm:self-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {academicFiles.filter((f) => f.category === 'attendance').length} File Terlampir
-                        </span>
-                      </div>
-
-                      {isLoadingAcademicFiles ? (
-                        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-500">
-                          <Clock className="mr-2 h-4 w-4 animate-spin text-red-800" /> Memuat daftar file...
-                        </div>
-                      ) : academicFiles.filter((f) => f.category === 'attendance').length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
-                          <FileText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                          Belum ada file absensi yang diunggah.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
-                          <table className="w-full text-left text-sm">
-                            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                              <tr>
-                                <th className="px-4 py-3">Nama File</th>
-                                <th className="px-4 py-3">Waktu Upload</th>
-                                <th className="px-4 py-3">Ukuran</th>
-                                <th className="px-4 py-3">Pengunggah</th>
-                                <th className="px-4 py-3 text-left">Aksi</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 bg-white">
-                              {academicFiles
-                                .filter((f) => f.category === 'attendance')
-                                .map((file) => (
-                                  <tr
-                                    key={file.id}
-                                    onClick={() => handleOpenFilePreview(file.id)}
-                                    className="cursor-pointer transition hover:bg-red-50/60"
-                                  >
-                                    <td className="px-4 py-3.5 font-semibold text-slate-900">
-                                      <div className="flex items-center gap-2">
-                                        <span className="rounded-lg bg-emerald-100 px-2 py-1 text-emerald-800 font-mono text-[10px] font-extrabold uppercase">
-                                          {file.fileName.split('.').pop() || 'FILE'}
-                                        </span>
-                                        <span className="hover:underline">{file.fileName}</span>
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
-                                      {new Date(file.uploadedAt).toLocaleString('id-ID', {
-                                        dateStyle: 'medium',
-                                        timeStyle: 'short',
-                                      })}
-                                    </td>
-                                    <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                                      {(file.fileSize / 1024).toFixed(1)} KB
-                                    </td>
-                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
-                                      {file.uploadedBy || 'Akademik'}
-                                    </td>
-                                    <td className="px-4 py-3.5 text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                      <div className="inline-flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenFilePreview(file.id)}
-                                          className="inline-flex items-center gap-1.5 rounded-xl bg-red-100 px-3 py-1.5 text-xs font-bold text-red-900 hover:bg-red-200 transition"
-                                        >
-                                          <Eye className="h-3.5 w-3.5" />
-                                          Preview
-                                        </button>
-                                        <a
-                                          href={`/api/auth/academic/files/${file.id}/download`}
-                                          download={file.fileName}
-                                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-                                        >
-                                          <Download className="h-3.5 w-3.5" />
-                                          Unduh
-                                        </a>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                    <AcademicFileHistory
+                      files={academicFiles.filter((f) => f.category === 'attendance')}
+                      isLoading={isLoadingAcademicFiles}
+                      title="Lampiran File Absensi yang Pernah Diunggah"
+                      description="Klik nama file atau tombol preview untuk melihat isi data file secara langsung."
+                      emptyText="Belum ada file absensi yang diunggah."
+                      onPreview={handleOpenFilePreview}
+                      onDeleted={handleAcademicFilesDeleted}
+                    />
                   </section>
                 )}
 
@@ -2051,128 +2192,36 @@ export default function App({ hasSessionCookie = false }) {
                       </p>
                     )}
 
-                    {/* Lampiran Riwayat File Pembagian DPA */}
-                    <div className="mt-8 border-t border-slate-200 pt-6">
-                      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <h4 className="flex items-center gap-2 text-base font-extrabold text-slate-900">
-                            <FileText className="h-5 w-5 text-red-800" />
-                            Lampiran File Pembagian DPA yang Pernah Diunggah
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            Klik nama file atau tombol preview untuk melihat isi pembagian DPA di dalam file.
-                          </p>
-                        </div>
-                        <span className="self-start sm:self-auto rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {academicFiles.filter((f) => f.category === 'advisors').length} File Terlampir
-                        </span>
-                      </div>
-
-                      {isLoadingAcademicFiles ? (
-                        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-500">
-                          <Clock className="mr-2 h-4 w-4 animate-spin text-red-800" /> Memuat daftar file...
-                        </div>
-                      ) : academicFiles.filter((f) => f.category === 'advisors').length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
-                          <FileText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                          Belum ada file pembagian DPA yang diunggah.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
-                          <table className="w-full text-left text-sm">
-                            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                              <tr>
-                                <th className="px-4 py-3">Nama File</th>
-                                <th className="px-4 py-3">Waktu Upload</th>
-                                <th className="px-4 py-3">Ukuran</th>
-                                <th className="px-4 py-3">Pengunggah</th>
-                                <th className="px-4 py-3 text-left">Aksi</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 bg-white">
-                              {academicFiles
-                                .filter((f) => f.category === 'advisors')
-                                .map((file) => (
-                                  <tr
-                                    key={file.id}
-                                    onClick={() => handleOpenFilePreview(file.id)}
-                                    className="cursor-pointer transition hover:bg-red-50/60"
-                                  >
-                                    <td className="px-4 py-3.5 font-semibold text-slate-900">
-                                      <div className="flex items-center gap-2">
-                                        <span className="rounded-lg bg-emerald-100 px-2 py-1 text-emerald-800 font-mono text-[10px] font-extrabold uppercase">
-                                          {file.fileName.split('.').pop() || 'FILE'}
-                                        </span>
-                                        <span className="hover:underline">{file.fileName}</span>
-                                      </div>
-                                    </td>
-                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
-                                      {new Date(file.uploadedAt).toLocaleString('id-ID', {
-                                        dateStyle: 'medium',
-                                        timeStyle: 'short',
-                                      })}
-                                    </td>
-                                    <td className="px-4 py-3.5 text-xs text-slate-500 whitespace-nowrap">
-                                      {(file.fileSize / 1024).toFixed(1)} KB
-                                    </td>
-                                    <td className="px-4 py-3.5 text-xs text-slate-600 whitespace-nowrap">
-                                      {file.uploadedBy || 'Akademik'}
-                                    </td>
-                                    <td className="px-4 py-3.5 text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                      <div className="inline-flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenFilePreview(file.id)}
-                                          className="inline-flex items-center gap-1.5 rounded-xl bg-red-100 px-3 py-1.5 text-xs font-bold text-red-900 hover:bg-red-200 transition"
-                                        >
-                                          <Eye className="h-3.5 w-3.5" />
-                                          Preview
-                                        </button>
-                                        <a
-                                          href={`/api/auth/academic/files/${file.id}/download`}
-                                          download={file.fileName}
-                                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-                                        >
-                                          <Download className="h-3.5 w-3.5" />
-                                          Unduh
-                                        </a>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                    <AcademicFileHistory
+                      files={academicFiles.filter((f) => f.category === 'advisors')}
+                      isLoading={isLoadingAcademicFiles}
+                      title="Lampiran File Pembagian DPA yang Pernah Diunggah"
+                      description="Klik nama file atau tombol preview untuk melihat isi pembagian DPA di dalam file."
+                      emptyText="Belum ada file pembagian DPA yang diunggah."
+                      onPreview={handleOpenFilePreview}
+                      onDeleted={handleAcademicFilesDeleted}
+                    />
                   </section>
                 )}
               </main>
             )}
 
             {authenticatedUser?.role === 'dosen' && !['lapor', 'cek-laporan', 'laporan-dpa'].includes(activeTab) && (
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
                 {activeTab === homeTab ? (
-                <section data-scroll-reveal className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl md:flex-row md:items-center sm:p-8">
-                  <div className="z-10 space-y-2">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-900/40 px-3 py-1 text-xs font-semibold text-amber-300">
-                      <Clock className="h-3.5 w-3.5" /> Semester Genap 2026/2027 • Poltek Simas Berau
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-                        Selamat Datang, {authenticatedUser?.name || 'Dosen'}
-                      </h2>
-                      <NotificationBell endpoint="/api/dosen/pemberitahuan" />
-                    </div>
-                    <p className="text-sm text-red-100" data-testid="database-profile">
-                      {authenticatedUser?.details
-                        ?.filter((detail) => detail.label === 'Email')
-                        .map((detail) => `${detail.label}: ${detail.value}`)
-                        .join(' • ')}
-                    </p>
-                  </div>
+                <section data-scroll-reveal className={`${welcomeCardClassName} relative overflow-hidden rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-5 text-white shadow-2xl sm:p-8`}>
+                  <div className="[grid-area:badge] min-w-0"><SemesterBadge /></div>
+                  <WelcomeHeading name={authenticatedUser?.name || 'Dosen'} className="[grid-area:heading]" />
+                  <p className="[grid-area:identity] truncate text-xs text-red-100 sm:text-sm" data-testid="database-profile">
+                    {authenticatedUser?.details
+                      ?.filter((detail) => detail.label === 'NUPTK')
+                      .map((detail) => `${detail.label}: ${detail.value}`)
+                      .join(' • ')}
+                  </p>
 
-                  <div className="flex min-w-[280px] items-center gap-4 rounded-2xl border border-red-800/60 bg-[#581c1c]/95 p-4 backdrop-blur-sm sm:p-5">
+                  <div className="contents md:flex md:items-center md:gap-6 md:self-center md:[grid-area:side]">
+                    <div className="[grid-area:bell] self-center"><NotificationBell endpoint="/api/dosen/pemberitahuan" className="md:h-24 md:w-24 md:rounded-2xl" iconClassName="h-5 w-5 md:h-10 md:w-10" badgeClassName="-right-1.5 -top-1.5 h-5 min-w-5 px-1 text-[10px] md:-right-2 md:-top-2 md:h-7 md:min-w-7 md:px-1.5 md:text-sm" /></div>
+                    <div className="[grid-area:profile] mt-4 flex items-center gap-4 rounded-2xl border border-red-800/60 bg-[#581c1c]/95 p-4 backdrop-blur-sm sm:p-5 md:mt-0 md:h-24 md:min-w-[280px]">
                     <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
                       <GraduationCap className="h-7 w-7" />
                     </div>
@@ -2188,14 +2237,11 @@ export default function App({ hasSessionCookie = false }) {
                       </p>
                     </div>
                   </div>
+                  </div>
                 </section>
                 ) : (
                   <MenuHeader item={activeMenu} roleLabel={authenticatedUser?.roleLabel} />
                 )}
-
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-                  Data presensi akan tersedia setelah tim akademik mengunggah file Excel/CSV melalui Akses Akademik.
-                </p>
 
                 <section className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                   {[
@@ -2483,17 +2529,15 @@ export default function App({ hasSessionCookie = false }) {
             )}
 
             {authenticatedUser?.role === 'admin' && !['lapor', 'cek-laporan', 'laporan-kemahasiswaan', 'klaim-kemahasiswaan', 'punishment', 'pengaturan-poin', 'data-poin'].includes(activeTab) && (
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-6 py-8">
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
                 {activeTab === homeTab ? (
-                <section data-scroll-reveal className="rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-6 text-white shadow-2xl sm:p-8">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Tim Kemahasiswaan & Administrasi</p>
-                  <div className="mt-2 flex items-center gap-3">
-                    <h2 className="text-2xl font-extrabold sm:text-3xl">
-                      Dashboard Monitoring Kedisiplinan Mahasiswa
-                    </h2>
-                    <NotificationBell endpoint="/api/admin/pemberitahuan" />
+                <section data-scroll-reveal className={`${welcomeCardClassName} rounded-3xl border border-red-600/30 bg-gradient-to-r from-[#450a0a]/95 via-[#7f1d1d]/95 to-[#991b1b]/95 p-5 text-white shadow-2xl sm:p-8`}>
+                  <div className="[grid-area:badge] min-w-0"><SemesterBadge /></div>
+                  <div className="[grid-area:bell] self-center md:[grid-area:side]">
+                    <NotificationBell endpoint="/api/admin/pemberitahuan" className="md:h-24 md:w-24 md:rounded-2xl" iconClassName="h-5 w-5 md:h-10 md:w-10" badgeClassName="-right-1.5 -top-1.5 h-5 min-w-5 px-1 text-[10px] md:-right-2 md:-top-2 md:h-7 md:min-w-7 md:px-1.5 md:text-sm" />
                   </div>
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-100">
+                  <WelcomeHeading name="Tim Kedisiplinan Mahasiswa" className="[grid-area:heading]" />
+                  <p className="[grid-area:identity] max-w-2xl text-sm leading-relaxed text-red-100">
                     Pantau data mahasiswa dan dosen PA, telusuri laporan anonim, dan tetapkan tindak lanjut edukatif setelah laporan dikonfirmasi Dosen PA.
                   </p>
                 </section>

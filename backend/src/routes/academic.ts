@@ -6,6 +6,7 @@ import {
   listAcademicUploads,
   getAcademicUploadPreview,
   getAcademicUploadFilePath,
+  deleteAcademicUploads,
 } from "../academic-files";
 import {
   AcademicImportValidationError,
@@ -177,40 +178,58 @@ academicRouter.post(
         request.file.buffer,
         request.file.originalname,
       );
+      const nonNullNuptks = rows
+        .map((row) => row.nuptk)
+        .filter((n): n is bigint => n !== null);
+      const nonNullEmails = rows
+        .map((row) => row.email)
+        .filter((e): e is string => e !== null);
+
       const [existingIdentities, matchingEmails] = await Promise.all([
-        database.dosen.findMany({
-          where: {
-            OR: [
-              { nuptk: { in: rows.map((row) => row.nuptk) } },
-            ],
-          },
-          select: { nuptk: true },
-        }),
-        database.dosen.findMany({
-          where: {
-            email: {
-              in: rows.map((row) => row.email),
-              mode: "insensitive",
-            },
-          },
-          select: { email: true },
-        }),
+        nonNullNuptks.length > 0
+          ? database.dosen.findMany({
+              where: {
+                nuptk: { in: nonNullNuptks },
+              },
+              select: { nuptk: true },
+            })
+          : Promise.resolve([]),
+        nonNullEmails.length > 0
+          ? database.dosen.findMany({
+              where: {
+                email: {
+                  in: nonNullEmails,
+                  mode: "insensitive",
+                },
+              },
+              select: { email: true },
+            })
+          : Promise.resolve([]),
       ]);
       const existingNuptks = new Set(
-        existingIdentities.map((lecturer) => lecturer.nuptk.toString()),
+        existingIdentities
+          .map((lecturer) => lecturer.nuptk?.toString())
+          .filter(Boolean),
       );
       const existingEmails = new Set(
-        matchingEmails.map((lecturer) => lecturer.email?.toLowerCase()),
+        matchingEmails
+          .map((lecturer) => lecturer.email?.toLowerCase())
+          .filter(Boolean),
       );
       const newRows = rows.filter(
         (row) =>
-          !existingNuptks.has(row.nuptk.toString()) &&
-          !existingEmails.has(row.email.toLowerCase()),
+          (row.nuptk === null || !existingNuptks.has(row.nuptk.toString())) &&
+          (row.email === null || !existingEmails.has(row.email.toLowerCase())),
       );
       const hashedRows = await hashImportedPasswords(newRows);
       const result = await database.$transaction((transaction) =>
         transaction.dosen.createMany({
-          data: hashedRows,
+          data: hashedRows.map((row) => ({
+            nama: row.nama,
+            nuptk: row.nuptk,
+            email: row.email,
+            password: row.password,
+          })),
           skipDuplicates: true,
         }),
       );
@@ -533,6 +552,7 @@ academicRouter.post(
 
       const advisorByNuptk = new Map(
         allAdvisors
+          .filter((advisor) => advisor.nuptk !== null)
           .map((advisor) => [String(advisor.nuptk), advisor]),
       );
 
@@ -565,6 +585,13 @@ academicRouter.post(
         return null;
       }
 
+      const rowsWithAdvisor = rows.filter(
+        (row) => row.dpa !== null || Boolean(row.nuptk),
+      );
+      const rowsWithoutAdvisor = rows.filter(
+        (row) => row.dpa === null && !row.nuptk,
+      );
+
       const missingNims = nims.filter((nim) => !studentByNim.has(nim));
       const mismatchedPrograms = rows.filter((row) => {
         const student = studentByNim.get(row.nim);
@@ -574,7 +601,7 @@ academicRouter.post(
             normalizeProgramStudi(row.programStudi)
         );
       });
-      const unresolvableRows = rows.filter((row) => !resolveAdvisorForRow(row));
+      const unresolvableRows = rowsWithAdvisor.filter((row) => !resolveAdvisorForRow(row));
 
       if (
         missingNims.length > 0 ||
@@ -604,7 +631,7 @@ academicRouter.post(
         return;
       }
 
-      const resolvedAssignments = rows.map((row) => {
+      const resolvedAssignments = rowsWithAdvisor.map((row) => {
         const student = studentByNim.get(row.nim);
         const advisor = resolveAdvisorForRow(row);
         if (!student || !advisor) {
@@ -613,8 +640,22 @@ academicRouter.post(
         return { studentId: student.id, dosenId: advisor.id };
       });
 
+      const unassignedStudentIds = rowsWithoutAdvisor
+        .map((row) => studentByNim.get(row.nim)?.id)
+        .filter((id): id is number => id !== undefined);
+
       const now = new Date();
       await database.$transaction(async (transaction) => {
+        if (unassignedStudentIds.length > 0) {
+          await transaction.mahasiswa.updateMany({
+            where: { id: { in: unassignedStudentIds } },
+            data: { dosenPaId: null },
+          });
+          await transaction.advisorRequest.deleteMany({
+            where: { studentId: { in: unassignedStudentIds } },
+          });
+        }
+
         const assignmentsByAdvisor = new Map<number, number[]>();
         for (const assignment of resolvedAssignments) {
           const assignedStudentIds =
@@ -662,20 +703,25 @@ academicRouter.post(
 
       let savedUploadRecord = null;
       try {
+        const summaryText = rowsWithoutAdvisor.length > 0
+          ? `${rowsWithAdvisor.length} mahasiswa dibagikan DPA, ${rowsWithoutAdvisor.length} mahasiswa dikosongkan DPA-nya`
+          : `${rows.length} mahasiswa dibagikan DPA`;
+
         savedUploadRecord = await saveAcademicUpload({
           category: "advisors",
           fileName: request.file.originalname,
           buffer: request.file.buffer,
           uploadedBy: currentSession(response).profile.name || currentSession(response).profile.identity,
           rowCount: rows.length,
-          summary: `${rows.length} mahasiswa dibagikan DPA`,
+          summary: summaryText,
         });
       } catch (err) {
         console.error("Gagal mencatat riwayat file pembagian DPA:", err);
       }
 
       response.json({
-        assigned: rows.length,
+        assigned: rowsWithAdvisor.length,
+        unassigned: rowsWithoutAdvisor.length,
         totalUpdated: rows.length,
         totalStudents,
         fileRecord: savedUploadRecord,
@@ -707,6 +753,30 @@ academicRouter.get(
     } catch (error) {
       console.error("Gagal memuat riwayat file akademik:", error);
       response.status(500).json({ message: "Gagal memuat riwayat file." });
+    }
+  },
+);
+
+academicRouter.delete(
+  "/academic/files",
+  requireAcademicUploadSession,
+  async (request, response) => {
+    const ids: unknown = request.body?.ids;
+    if (
+      !Array.isArray(ids) ||
+      ids.length === 0 ||
+      ids.length > 500 ||
+      !ids.every((id) => typeof id === "string" && id.length > 0 && id.length <= 64)
+    ) {
+      response.status(400).json({ message: "Pilih minimal satu file yang akan dihapus." });
+      return;
+    }
+    try {
+      const deleted = await deleteAcademicUploads(ids as string[]);
+      response.json({ deleted });
+    } catch (error) {
+      console.error("Gagal menghapus file akademik:", error);
+      response.status(500).json({ message: "Gagal menghapus file." });
     }
   },
 );

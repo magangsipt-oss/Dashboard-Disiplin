@@ -63,7 +63,7 @@ function AccountSearch({ profile, accounts, disabled, onSelect }) {
   };
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <input
         type="search"
         role="combobox"
@@ -90,7 +90,7 @@ function AccountSearch({ profile, accounts, disabled, onSelect }) {
         className={`${selectClassName} w-64 max-w-full placeholder:text-red-200/70`}
       />
       {isListVisible && (
-        <div className={`${popupClassName} inset-x-0`}>
+        <div className={`${popupClassName} inset-x-0 min-w-56`}>
           <ul
             id="kemahasiswaan-account-list"
             role="listbox"
@@ -219,15 +219,15 @@ export default function KemahasiswaanSwitcher({ profile }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-800/50 bg-[#581c1c]/60 px-3 py-1.5 text-xs text-red-200">
-      <div className="flex items-center gap-1.5">
-        <span className="font-semibold">Halaman :</span>
+    <div className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-red-800/50 bg-[#581c1c]/60 px-3 py-1.5 text-xs text-red-200 sm:w-auto lg:min-w-0 lg:flex-nowrap">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="font-semibold">Role :</span>
         <PageSelect value={profile.role} disabled={isSwitching} onSelect={handlePageChange} />
       </div>
 
       {isImpersonating && (
         <label className="flex min-w-0 items-center gap-1.5">
-          <span className="font-semibold">Akun :</span>
+          <span className="shrink-0 font-semibold">Akun :</span>
           <AccountSearch
             profile={profile}
             accounts={accounts}

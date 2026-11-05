@@ -445,7 +445,7 @@ model Sesi {
 model Dosen {
   id                  Int                 @id @default(autoincrement()) @map("ID")
   email               String?             @map("Email") @db.VarChar(255)
-  nuptk               BigInt              @unique @map("NUPTK")
+  nuptk               BigInt?             @unique @map("NUPTK")
   nama                String              @map("Nama")
   password            String              @map("Password") @db.VarChar(255)
   timestamp           DateTime            @default(now()) @map("Timestamp")

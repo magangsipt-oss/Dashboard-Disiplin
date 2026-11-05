@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
-import { ArrowLeft, BookOpen, GraduationCap, ShieldCheck } from "lucide-react";
+import { useState, type FormEvent, type InputHTMLAttributes } from "react";
+import { ArrowLeft, BookOpen, Eye, EyeOff, GraduationCap, ShieldCheck } from "lucide-react";
 
 export type LoginRole = "mhs" | "dosen" | "admin" | "akademik";
 
@@ -33,13 +33,108 @@ const roleDetails: Record<
   },
 };
 
+// Reset sandi belum otomatis; arahkan ke pihak yang mengelola akun tiap peran.
+const forgotPasswordContacts: Record<LoginRole, string> = {
+  mhs: "bagian Akademik",
+  dosen: "bagian Akademik",
+  admin: "administrator sistem",
+  akademik: "administrator sistem",
+};
+
+const inputClassName =
+  "w-full rounded-xl border border-slate-200 bg-blue-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600";
+
+// Kolom kata sandi dengan tombol mata yang selalu tampil (ikon bawaan Edge disembunyikan).
+function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "className">) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        className={`${inputClassName} pr-11 [&::-ms-reveal]:hidden`}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((shown) => !shown)}
+        aria-label={visible ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+        aria-pressed={visible}
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600"
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
+
+async function readMessage(response: Response): Promise<string | null> {
+  try {
+    const data: unknown = await response.json();
+    return typeof data === "object" &&
+      data !== null &&
+      "message" in data &&
+      typeof data.message === "string"
+      ? data.message
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function LoginForm({ role }: { role: LoginRole }) {
   const router = useRouter();
+  const [mode, setMode] = useState<"login" | "change-password">("login");
   const [identity, setIdentity] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [showForgotHelp, setShowForgotHelp] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
   const details = roleDetails[role];
+
+  function switchMode(nextMode: "login" | "change-password") {
+    setMode(nextMode);
+    setPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setError("");
+    setNotice("");
+    setShowForgotHelp(false);
+  }
+
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (newPassword !== confirmPassword) {
+      setError("Konfirmasi kata sandi baru tidak sama.");
+      return;
+    }
+    setIsChanging(true);
+    try {
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, identity, password, newPassword }),
+      });
+      const message = await readMessage(response);
+      if (!response.ok) {
+        throw new Error(message ?? "Kata sandi gagal diubah. Coba kembali.");
+      }
+      switchMode("login");
+      setNotice(message ?? "Kata sandi berhasil diubah. Silakan masuk dengan kata sandi baru.");
+    } catch (changeError) {
+      setError(
+        changeError instanceof Error
+          ? changeError.message
+          : "Tidak dapat menghubungi layanan ubah kata sandi.",
+      );
+    } finally {
+      setIsChanging(false);
+    }
+  }
   const RoleIcon =
     role === "dosen"
       ? GraduationCap
@@ -50,6 +145,7 @@ export default function LoginForm({ role }: { role: LoginRole }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setNotice("");
     setIsLoggingIn(true);
 
     try {
@@ -130,14 +226,19 @@ export default function LoginForm({ role }: { role: LoginRole }) {
             />
           )}
           <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-            Login {details.label}
+            {mode === "login" ? "Login" : "Ubah Kata Sandi"} {details.label}
           </h1>
           <p className="mt-1 text-xs text-slate-500 sm:text-sm">
-            Masukkan identitas dan kata sandi Anda
+            {mode === "login"
+              ? "Masukkan identitas dan kata sandi Anda"
+              : "Masukkan kata sandi lama dan kata sandi baru Anda"}
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
+        <form
+          onSubmit={mode === "login" ? handleSubmit : handleChangePassword}
+          className="space-y-3.5 text-left"
+        >
           <div>
             <label
               htmlFor="identity"
@@ -153,7 +254,7 @@ export default function LoginForm({ role }: { role: LoginRole }) {
               placeholder={details.identityPlaceholder}
               value={identity}
               onChange={(event) => setIdentity(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-blue-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
+              className={inputClassName}
             />
           </div>
 
@@ -162,19 +263,88 @@ export default function LoginForm({ role }: { role: LoginRole }) {
               htmlFor="password"
               className="mb-1.5 block text-xs font-bold text-slate-700"
             >
-              Kata Sandi
+              {mode === "login" ? "Kata Sandi" : "Kata Sandi Lama"}
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               required
               autoComplete="current-password"
-              placeholder="Masukkan kata sandi"
+              placeholder={mode === "login" ? "Masukkan kata sandi" : "Masukkan kata sandi lama"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-blue-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-600"
             />
+            {mode === "login" && (
+              <div className="mt-1.5 flex items-center justify-between text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => switchMode("change-password")}
+                  className="text-red-800 hover:text-red-900 hover:underline"
+                >
+                  Ubah Kata Sandi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotHelp((shown) => !shown)}
+                  aria-expanded={showForgotHelp}
+                  className="text-red-800 hover:text-red-900 hover:underline"
+                >
+                  Lupa Kata Sandi
+                </button>
+              </div>
+            )}
           </div>
+
+          {mode === "login" && showForgotHelp && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs text-amber-900" role="status">
+              Hubungi {forgotPasswordContacts[role]} dengan menyebutkan {details.identityLabel.split(" (")[0]} Anda
+              agar kata sandi direset. Setelah menerima kata sandi sementara, gunakan &quot;Ubah Kata Sandi&quot;
+              untuk menggantinya.
+            </p>
+          )}
+
+          {mode === "change-password" && (
+            <>
+              <div>
+                <label htmlFor="new-password" className="mb-1.5 block text-xs font-bold text-slate-700">
+                  Kata Sandi Baru
+                </label>
+                <PasswordInput
+                  id="new-password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder="Minimal 8 karakter"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="confirm-password" className="mb-1.5 block text-xs font-bold text-slate-700">
+                  Konfirmasi Kata Sandi Baru
+                </label>
+                <PasswordInput
+                  id="confirm-password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder="Ulangi kata sandi baru"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {notice && (
+            <p
+              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-medium text-emerald-800"
+              role="status"
+            >
+              {notice}
+            </p>
+          )}
 
           {error && (
             <p
@@ -187,20 +357,33 @@ export default function LoginForm({ role }: { role: LoginRole }) {
 
           <button
             type="submit"
-            disabled={isLoggingIn}
+            disabled={isLoggingIn || isChanging}
             className="mt-1 w-full rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800 disabled:cursor-wait disabled:opacity-60"
           >
-            {isLoggingIn ? "Memeriksa akun..." : "Masuk Dashboard"}
+            {mode === "login"
+              ? isLoggingIn ? "Memeriksa akun..." : "Masuk Dashboard"
+              : isChanging ? "Menyimpan..." : "Simpan Kata Sandi Baru"}
           </button>
         </form>
 
-        <Link
-          href="/"
-          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Kembali ke Menu Utama
-        </Link>
+        {mode === "login" ? (
+          <Link
+            href="/"
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-800 to-red-700 py-2.5 text-sm font-bold text-white shadow-md shadow-red-900/15 transition hover:from-red-900 hover:to-red-800"
+          >
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Kembali ke Menu Utama
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => switchMode("login")}
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white py-2.5 text-sm font-bold text-red-800 transition hover:bg-red-50"
+          >
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Kembali ke Login
+          </button>
+        )}
       </section>
     </main>
   );

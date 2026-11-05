@@ -43,7 +43,7 @@ function DetailList({ title, emptyText, items, renderItem }) {
 
 function LecturerDetails({ lecturer }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
       <DetailList
         title="Laporan belum dikonfirmasi"
         emptyText="Tidak ada laporan yang menunggu."

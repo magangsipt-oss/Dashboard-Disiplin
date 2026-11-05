@@ -60,7 +60,7 @@ export function SummaryCard({ card, isReady, isFailed, delay, onOpen }) {
     <section
       data-scroll-reveal
       data-reveal-delay={delay}
-      className="flex flex-col rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl sm:p-6"
+      className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl sm:p-6"
     >
       <div className="flex items-center gap-3">
         <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${iconTones[card.tone]}`}>

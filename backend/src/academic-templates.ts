@@ -23,8 +23,8 @@ export const academicTemplates: Record<string, AcademicTemplate> = {
     title: "Template Data Mahasiswa",
     fileName: "Template Mahasiswa.xlsx",
     sheetName: "Data Mahasiswa",
-    headers: ["No.", "NIM", "Nama Lengkap", "Program Studi", "Angkatan", "Nama SMTA", "Email", "No Handphone", "Kata Sandi"],
-    rows: [["1", "23401024", "Abin Nabawi", "Teknologi Rekayasa Logistik", "2023", "SMAN 5 BERAU", "abin.nabawi@gmail.com", "081234567890", "Abin2324"]],
+    headers: ["No", "NIM", "Nama Lengkap", "No Handphone", "Email", "Program Studi", "Angkatan", "Nama SMTA", "Kata Sandi"],
+    rows: [["1", "23401024", "Abin Nabawi", "081234567890", "abin.nabawi@gmail.com", "Teknologi Rekayasa Logistik", "2023", "SMAN 5 BERAU", "Abin2324"]],
   },
   lecturers: {
     title: "Template Data Dosen",

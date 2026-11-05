@@ -16,7 +16,12 @@ export function announceNotificationChange() {
 }
 
 // Lonceng di samping judul halaman awal; klik untuk menggulir ke panel pemberitahuan.
-export default function NotificationBell({ endpoint }) {
+export default function NotificationBell({
+  endpoint,
+  className = '',
+  iconClassName = 'h-5 w-5',
+  badgeClassName = '-right-1.5 -top-1.5 h-5 min-w-5 px-1 text-[10px]',
+}) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -58,11 +63,11 @@ export default function NotificationBell({ endpoint }) {
       aria-label={
         unreadCount > 0 ? `Lihat pemberitahuan, ${unreadCount} belum dibuka` : 'Lihat pemberitahuan'
       }
-      className="relative inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-amber-300 transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+      className={`relative inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-amber-300 transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${className}`}
     >
-      <Bell className={`h-5 w-5 ${unreadCount > 0 ? 'animate-pulse' : ''}`} />
+      <Bell className={`${iconClassName} ${unreadCount > 0 ? 'animate-pulse' : ''}`} />
       {unreadCount > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-[#7f1d1d]">
+        <span className={`absolute flex items-center justify-center rounded-full bg-red-600 font-bold text-white ring-2 ring-[#7f1d1d] ${badgeClassName}`}>
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}

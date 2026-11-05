@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, History, Pencil, Plus, Scale, Search } from "lucide-react";
+import { History, Pencil, Plus, Scale, Search } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
 
 // Bobot di API selalu angka negatif (mis. -25 = poin berkurang 25).
@@ -349,11 +349,6 @@ export default function AdminPointRules() {
           </span>
         </div>
       </header>
-
-      <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow">
-        <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-        Perubahan hanya berlaku untuk pelanggaran yang dikonfirmasi setelah perubahan disimpan. Pengurangan poin yang sudah tercatat tidak ikut berubah. Jenis pelanggaran yang sudah dipakai laporan cukup dinonaktifkan agar riwayatnya tetap utuh.
-      </p>
 
       <div className="flex flex-wrap gap-2">
         {categories.map((category, index) => (

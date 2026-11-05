@@ -28,6 +28,10 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const changePasswordSchema = loginSchema.extend({
+  newPassword: z.string().min(8).max(128),
+});
+
 export const impersonateSchema = z.object({
   role: z.enum(["mhs", "dosen"]),
   accountId: z.number().int().positive().max(2_147_483_647).optional(),

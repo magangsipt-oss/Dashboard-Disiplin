@@ -130,6 +130,22 @@ function parseCount(value: unknown, label: string, sourceRow: number): number {
   return count;
 }
 
+// Kolom "% Kehadiran" berisi persentase, mis. "70%", "70", "70,5%", atau "0.7"
+// (nilai pecahan Excel bila sel berformat persen dibaca mentah).
+function parsePercentage(value: unknown, label: string, sourceRow: number): number {
+  if (isBlankOrDash(value)) {
+    return 0;
+  }
+  const text = cellText(value).replace(/\s+/g, "").replace(/%$/, "").replace(",", ".");
+  const parsed = Number(text);
+  if (!/^\d+(\.\d+)?$/.test(text) || !Number.isFinite(parsed) || parsed > 100) {
+    throw new AcademicImportValidationError(
+      `${label} pada baris ${sourceRow} harus berupa persentase antara 0 dan 100.`,
+    );
+  }
+  return parsed;
+}
+
 const NO_ALIASES = ["no", "nomor"] as const;
 
 function parseImportPassword(value: unknown, sourceRow: number): string {
@@ -505,7 +521,7 @@ export function parseAcademicAttendanceFile(
     seenNimNames.set(key, namaMahasiswa);
 
     const jumlahKehadiran = parseCount(row[jumlahKehadiranIndex], "Jumlah Kehadiran", sourceRow);
-    parseCount(row[kehadiranIndex], "Kehadiran", sourceRow);
+    parsePercentage(row[kehadiranIndex], "% Kehadiran", sourceRow);
     const sakit = parseCount(row[sakitIndex], "Sakit", sourceRow);
     const ijin = parseCount(row[ijinIndex], "Ijin", sourceRow);
     const alpa = parseCount(row[alpaIndex], "Alpa", sourceRow);

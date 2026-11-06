@@ -197,7 +197,7 @@ function DrcCard({ activity, now, onUploaded }) {
   );
 }
 
-// Jadwal DRC untuk mahasiswa beserta unggah bukti kehadiran; dibuka juga dari pemberitahuan DRC.
+// Jadwal DLS untuk mahasiswa beserta unggah bukti kehadiran; dibuka juga dari pemberitahuan DLS.
 export default function DrcMahasiswa() {
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -242,13 +242,13 @@ export default function DrcMahasiswa() {
     <div className="space-y-6">
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
-      <DrcSection title="Jadwal Akan Datang" description="Kegiatan DRC yang wajib Anda ikuti. Unggah bukti kehadiran saat kegiatan berlangsung.">
+      <DrcSection title="Jadwal Akan Datang" description="Kegiatan DLS yang wajib Anda ikuti. Unggah bukti kehadiran saat kegiatan berlangsung.">
         {isLoading ? (
-          <p className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat jadwal DRC...</p>
+          <p className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat jadwal DLS...</p>
         ) : upcoming.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
             <CalendarCheck className="mx-auto h-8 w-8 text-slate-400" />
-            <p className="mt-3 text-sm text-slate-600">Belum ada jadwal DRC. Anda akan mendapat pemberitahuan dan email saat jadwal diumumkan.</p>
+            <p className="mt-3 text-sm text-slate-600">Belum ada jadwal DLS. Anda akan mendapat pemberitahuan dan email saat jadwal diumumkan.</p>
           </div>
         ) : (
           upcoming.map((activity) => <DrcCard key={activity.id} activity={activity} now={now} onUploaded={handleUploaded} />)
@@ -257,7 +257,7 @@ export default function DrcMahasiswa() {
 
 
       {past.length > 0 && (
-        <DrcSection title="Riwayat Kegiatan" description="Kegiatan DRC yang sudah selesai.">
+        <DrcSection title="Riwayat Kegiatan" description="Kegiatan DLS yang sudah selesai.">
           {past.map((activity) => <DrcCard key={activity.id} activity={activity} now={now} onUploaded={handleUploaded} />)}
         </DrcSection>
       )}

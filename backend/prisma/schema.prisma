@@ -404,7 +404,7 @@ enum JenisKegiatanDrc {
   KEGIATAN_LAIN
 }
 
-// Kegiatan DRC (Disiplin Refresh Competency) yang wajib diikuti mahasiswa
+// Kegiatan DLS (Discipline Learning System) yang wajib diikuti mahasiswa
 // setiap awal semester. Dikelola Kemahasiswaan; setiap kegiatan baru
 // diumumkan ke seluruh mahasiswa lewat Pemberitahuan (portal + email).
 model KegiatanDrc {
@@ -429,7 +429,7 @@ model KegiatanDrc {
   @@index([tanggal])
 }
 
-// Bukti kehadiran mahasiswa di kegiatan DRC; satu bukti per mahasiswa per
+// Bukti kehadiran mahasiswa di kegiatan DLS; satu bukti per mahasiswa per
 // kegiatan (unggah ulang menggantikan). File disimpan di tabel BuktiFoto.
 model BuktiDrc {
   id            Int         @id @default(autoincrement())

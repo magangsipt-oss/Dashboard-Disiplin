@@ -1,4 +1,4 @@
-// DRC = Disiplin Refresh Competency: kegiatan wajib mahasiswa setiap awal semester.
+// DLS = Discipline Learning System: kegiatan wajib mahasiswa setiap awal semester.
 // Garis besar 5 tema mengikuti materi Seminar Refreshment Kedisiplinan Mahasiswa.
 export const drcThemes = [
   {
@@ -105,8 +105,8 @@ export function DrcActivityDetails({ activity }) {
   );
 }
 
-// Bagian halaman DRC: kartu putih dengan judul dan keterangan di dalamnya,
-// sama seperti kartu formulir "Tambah Kegiatan DRC".
+// Bagian halaman DLS: kartu putih dengan judul dan keterangan di dalamnya,
+// sama seperti kartu formulir "Tambah Kegiatan DLS".
 export function DrcSection({ title, description, children }) {
   return (
     <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

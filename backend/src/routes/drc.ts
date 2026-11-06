@@ -22,14 +22,14 @@ import {
 import { disciplinePillarLabels } from "../points";
 import { drcActivitySchema, drcActivityUpdateSchema, drcEvidenceSchema, parseBody } from "../validation";
 
-// Menu DRC (Disiplin Refresh Competency): Kemahasiswaan mengelola kegiatan,
+// Menu DLS (Discipline Learning System): Kemahasiswaan mengelola kegiatan,
 // mahasiswa melihat jadwal. Setiap pengumuman masuk ke Pemberitahuan mahasiswa
 // sesuai target prodi/angkatan kegiatan dan otomatis dikirim ke email mereka
 // (lihat notification-email.ts).
 export const drcRouter = Router();
 drcRouter.use(
   "/admin/drc",
-  requireRole(["admin"], "Menu DRC hanya dapat dikelola oleh Kemahasiswaan."),
+  requireRole(["admin"], "Menu DLS hanya dapat dikelola oleh Kemahasiswaan."),
 );
 
 const DRC_TAB = "drc";
@@ -180,8 +180,8 @@ drcRouter.get("/admin/drc", async (_request, response) => {
       jumlahMahasiswaEmail: semua.denganEmail,
     });
   } catch (error) {
-    console.error("Gagal memuat kegiatan DRC:", error);
-    response.status(500).json({ message: "Data kegiatan DRC gagal dimuat." });
+    console.error("Gagal memuat kegiatan DLS:", error);
+    response.status(500).json({ message: "Data kegiatan DLS gagal dimuat." });
   }
 });
 
@@ -195,7 +195,7 @@ drcRouter.get("/admin/drc/penerima", async (request, response) => {
   try {
     response.json(await countRecipients(target));
   } catch (error) {
-    console.error("Gagal menghitung penerima DRC:", error);
+    console.error("Gagal menghitung penerima DLS:", error);
     response.status(500).json({ message: "Jumlah penerima gagal dihitung." });
   }
 });
@@ -218,8 +218,8 @@ drcRouter.post("/admin/drc", async (request, response) => {
     });
     response.status(201).json({ kegiatan: serialize(result.activity), notifikasi: result.notifikasi });
   } catch (error) {
-    console.error("Gagal menambah kegiatan DRC:", error);
-    response.status(500).json({ message: "Kegiatan DRC gagal disimpan." });
+    console.error("Gagal menambah kegiatan DLS:", error);
+    response.status(500).json({ message: "Kegiatan DLS gagal disimpan." });
   }
 });
 
@@ -247,13 +247,13 @@ drcRouter.patch("/admin/drc/:id", async (request, response) => {
       return { activity, notifikasi };
     });
     if (!result) {
-      response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
+      response.status(404).json({ message: "Kegiatan DLS tidak ditemukan." });
       return;
     }
     response.json({ kegiatan: serialize(result.activity), notifikasi: result.notifikasi });
   } catch (error) {
-    console.error("Gagal mengubah kegiatan DRC:", error);
-    response.status(500).json({ message: "Perubahan kegiatan DRC gagal disimpan." });
+    console.error("Gagal mengubah kegiatan DLS:", error);
+    response.status(500).json({ message: "Perubahan kegiatan DLS gagal disimpan." });
   }
 });
 
@@ -262,7 +262,7 @@ drcRouter.delete("/admin/drc/:id", async (request, response) => {
   const session = currentSession(response);
   const id = activityId(request.params.id);
   if (!id) {
-    response.status(400).json({ message: "Kegiatan DRC tidak valid." });
+    response.status(400).json({ message: "Kegiatan DLS tidak valid." });
     return;
   }
   try {
@@ -283,13 +283,13 @@ drcRouter.delete("/admin/drc/:id", async (request, response) => {
         : await notifyTargetStudents(transaction, "DIBATALKAN", activity);
     });
     if (!result) {
-      response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
+      response.status(404).json({ message: "Kegiatan DLS tidak ditemukan." });
       return;
     }
     response.json({ notifikasi: result });
   } catch (error) {
-    console.error("Gagal menghapus kegiatan DRC:", error);
-    response.status(500).json({ message: "Kegiatan DRC gagal dihapus." });
+    console.error("Gagal menghapus kegiatan DLS:", error);
+    response.status(500).json({ message: "Kegiatan DLS gagal dihapus." });
   }
 });
 
@@ -300,13 +300,13 @@ const evidenceSelect = { id: true, catatan: true, createdAt: true, updatedAt: tr
 drcRouter.get("/admin/drc/:id/peserta", async (request, response) => {
   const id = activityId(request.params.id);
   if (!id) {
-    response.status(400).json({ message: "Kegiatan DRC tidak valid." });
+    response.status(400).json({ message: "Kegiatan DLS tidak valid." });
     return;
   }
   try {
     const activity = await database.kegiatanDrc.findUnique({ where: { id } });
     if (!activity) {
-      response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
+      response.status(404).json({ message: "Kegiatan DLS tidak ditemukan." });
       return;
     }
     const studentSelect = { id: true, nim: true, nama: true, jurusan: true, angkatan: true } as const;
@@ -336,14 +336,14 @@ drcRouter.get("/admin/drc/:id/peserta", async (request, response) => {
       jumlahTarget: targeted.length,
     });
   } catch (error) {
-    console.error("Gagal memuat peserta DRC:", error);
-    response.status(500).json({ message: "Data peserta DRC gagal dimuat." });
+    console.error("Gagal memuat peserta DLS:", error);
+    response.status(500).json({ message: "Data peserta DLS gagal dimuat." });
   }
 });
 
 drcRouter.get(
   "/drc",
-  requireRole(["mhs"], "Jadwal DRC hanya tersedia untuk akun mahasiswa."),
+  requireRole(["mhs"], "Jadwal DLS hanya tersedia untuk akun mahasiswa."),
   async (_request, response) => {
     const session = currentSession(response);
     try {
@@ -369,8 +369,8 @@ drcRouter.get(
       );
       response.json({ kegiatan, tema: themeOptions });
     } catch (error) {
-      console.error("Gagal memuat jadwal DRC mahasiswa:", error);
-      response.status(500).json({ message: "Jadwal DRC gagal dimuat." });
+      console.error("Gagal memuat jadwal DLS mahasiswa:", error);
+      response.status(500).json({ message: "Jadwal DLS gagal dimuat." });
     }
   },
 );
@@ -379,7 +379,7 @@ drcRouter.get(
 // berlangsung hingga 30 menit setelah selesai. Unggah ulang menggantikan bukti sebelumnya.
 drcRouter.post(
   "/drc/:id/bukti",
-  requireRole(["mhs"], "Bukti DRC hanya dapat diunggah oleh mahasiswa."),
+  requireRole(["mhs"], "Bukti DLS hanya dapat diunggah oleh mahasiswa."),
   receiveEvidenceFile("bukti"),
   async (request, response) => {
     const session = currentSession(response);
@@ -403,7 +403,7 @@ drcRouter.post(
         }),
       ]);
       if (!activity || !student || !isDrcTargetedTo(activity, student)) {
-        response.status(404).json({ message: "Kegiatan DRC tidak ditemukan." });
+        response.status(404).json({ message: "Kegiatan DLS tidak ditemukan." });
         return;
       }
       const evidenceStatus = drcEvidenceStatus(activity);
@@ -442,13 +442,13 @@ drcRouter.post(
         response.status(409).json({ message: "Bukti sedang diproses. Muat ulang dan coba lagi." });
         return;
       }
-      console.error("Gagal menyimpan bukti DRC:", error);
-      response.status(500).json({ message: "Bukti DRC gagal diunggah. Silakan coba kembali." });
+      console.error("Gagal menyimpan bukti DLS:", error);
+      response.status(500).json({ message: "Bukti DLS gagal diunggah. Silakan coba kembali." });
     }
   },
 );
 
-// File bukti DRC hanya untuk mahasiswa pemilik dan Kemahasiswaan.
+// File bukti DLS hanya untuk mahasiswa pemilik dan Kemahasiswaan.
 drcRouter.get(
   "/drc/bukti/:id",
   requireRole(["mhs", "admin"], "Anda tidak berhak melihat bukti ini."),
@@ -476,7 +476,7 @@ drcRouter.get(
       }
       sendEvidenceFile(response, file, evidence!.buktiFileName, `bukti-drc-${id}`);
     } catch (error) {
-      console.error("Gagal memuat bukti DRC:", error);
+      console.error("Gagal memuat bukti DLS:", error);
       response.status(500).json({ message: "Bukti gagal dimuat." });
     }
   },

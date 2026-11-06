@@ -186,7 +186,7 @@ const navigationByRole = {
     { id: 'cek-laporan', label: 'Cek Laporan', short: 'Cek Laporan', icon: FileSearch, description: 'Lihat semua laporan yang sudah Anda kirim beserta status prosesnya.' },
     { id: 'tindak-lanjut', label: 'Tindak Lanjut', short: 'Tindak Lanjut', icon: ClipboardCheck, description: 'Lihat tugas pembinaan dari pelanggaran yang dikonfirmasi dan unggah bukti penyelesaian untuk memulihkan poin.' },
     { id: 'klaim', label: 'Klaim Kegiatan', short: 'Klaim', icon: Award, description: 'Ajukan klaim poin tambahan dari lomba, sertifikasi, atau kegiatan non-akademik untuk diverifikasi.' },
-    { id: 'drc', label: 'DRC', short: 'DRC', icon: CalendarDays, description: 'Lihat jadwal Disiplin Refresh Competency (DRC) yang wajib diikuti setiap awal semester.' },
+    { id: 'drc', label: 'DLS', short: 'DLS', icon: CalendarDays, description: 'Lihat jadwal Discipline Learning System (DLS) yang wajib diikuti setiap awal semester.' },
   ],
   dosen: [
     { id: 'bimbingan', label: 'Ringkasan', short: 'Ringkasan', icon: LayoutDashboard, description: 'Daftar mahasiswa bimbingan beserta skor dan status kedisiplinannya.' },
@@ -204,7 +204,7 @@ const navigationByRole = {
     { id: 'data-poin', label: 'Monitoring Mahasiswa', short: 'Mahasiswa', icon: Users, description: 'Pantau skor dan riwayat kedisiplinan setiap mahasiswa.' },
     { id: 'monitoring-dpa', label: 'Monitoring DPA', short: 'Monitor DPA', icon: UserCheck, description: 'Pantau keaktifan Dosen PA dalam menindaklanjuti laporan dan pembinaan.' },
     { id: 'data-password', label: 'Data Password', short: 'Password', icon: KeyRound, description: 'Lihat password akun Mahasiswa, Dosen PA, Kemahasiswaan, dan Akademik untuk membantu pengguna yang lupa password.' },
-    { id: 'drc', label: 'DRC', short: 'DRC', icon: CalendarDays, description: 'Umumkan seminar atau kegiatan Disiplin Refresh Competency (DRC) yang wajib diikuti mahasiswa setiap awal semester.' },
+    { id: 'drc', label: 'DLS', short: 'DLS', icon: CalendarDays, description: 'Umumkan seminar atau kegiatan Discipline Learning System (DLS) yang wajib diikuti mahasiswa setiap awal semester.' },
   ],
   akademik: [
     { id: 'upload-absensi', label: 'Upload Absensi', short: 'Absensi', icon: CalendarCheck, description: 'Unggah file presensi Excel/CSV untuk diproses menjadi catatan kedisiplinan.' },

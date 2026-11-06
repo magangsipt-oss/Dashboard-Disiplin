@@ -142,8 +142,8 @@ function formFromActivity(activity) {
 }
 
 function describeNotification(notifikasi, action) {
-  if (!notifikasi?.penerima) return `Kegiatan DRC berhasil ${action}.`;
-  return `Kegiatan DRC berhasil ${action}. Pemberitahuan dikirim ke ${notifikasi.penerima} mahasiswa (${notifikasi.denganEmail} lewat email).`;
+  if (!notifikasi?.penerima) return `Kegiatan DLS berhasil ${action}.`;
+  return `Kegiatan DLS berhasil ${action}. Pemberitahuan dikirim ke ${notifikasi.penerima} mahasiswa (${notifikasi.denganEmail} lewat email).`;
 }
 
 function DrcForm({ editing, options, onSaved, onCancel }) {
@@ -173,7 +173,7 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
   async function submit(event) {
     event.preventDefault();
     if (form.tema.length === 0) {
-      setError("Pilih minimal satu tema DRC.");
+      setError("Pilih minimal satu tema DLS.");
       return;
     }
     if (form.jamMulai >= form.jamSelesai) {
@@ -204,7 +204,7 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
   return (
     <form onSubmit={submit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div>
-        <h3 className="text-lg font-bold text-slate-900">{editing ? "Ubah Kegiatan DRC" : "Tambah Kegiatan DRC"}</h3>
+        <h3 className="text-lg font-bold text-slate-900">{editing ? "Ubah Kegiatan DLS" : "Tambah Kegiatan DLS"}</h3>
         <p className="mt-1 text-sm text-slate-600">
           {editing
             ? "Perbarui informasi kegiatan. Mahasiswa dapat diberi tahu tentang perubahannya."
@@ -452,8 +452,8 @@ function AdminDrcCard({ activity, onEdit, onDeleted }) {
       const result = await studentApi(`/api/admin/drc/${activity.id}`, { method: "DELETE" });
       await onDeleted(
         result.notifikasi?.penerima
-          ? `Kegiatan DRC dihapus. Pemberitahuan pembatalan dikirim ke ${result.notifikasi.penerima} mahasiswa.`
-          : "Kegiatan DRC dihapus.",
+          ? `Kegiatan DLS dihapus. Pemberitahuan pembatalan dikirim ke ${result.notifikasi.penerima} mahasiswa.`
+          : "Kegiatan DLS dihapus.",
       );
     } catch (deleteError) {
       setError(deleteError.message);
@@ -555,9 +555,9 @@ export default function AdminDrc() {
     <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-6 py-8">
       <header className="rounded-3xl bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#991b1b] p-6 text-white shadow-xl sm:p-8">
         <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Kemahasiswaan</p>
-        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">DRC – Disiplin Refresh Competency</h2>
+        <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">DLS – Discipline Learning System</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-red-100">
-          Umumkan seminar atau kegiatan DRC yang wajib diikuti mahasiswa setiap awal semester. Pilih prodi dan angkatan peserta; mereka langsung menerima pemberitahuan portal dan email.
+          Umumkan seminar atau kegiatan DLS yang wajib diikuti mahasiswa setiap awal semester. Pilih prodi dan angkatan peserta; mereka langsung menerima pemberitahuan portal dan email.
         </p>
         <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold">
           <span className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2">
@@ -580,10 +580,10 @@ export default function AdminDrc() {
 
       <DrcSection title="Kegiatan Akan Datang" description="Kegiatan yang sedang atau akan berlangsung beserta peserta wajibnya.">
         {isLoading ? (
-          <p className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat kegiatan DRC...</p>
+          <p className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">Memuat kegiatan DLS...</p>
         ) : upcoming.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
-            Belum ada kegiatan DRC yang dijadwalkan.
+            Belum ada kegiatan DLS yang dijadwalkan.
           </p>
         ) : (
           upcoming.map((activity) => (
@@ -593,7 +593,7 @@ export default function AdminDrc() {
       </DrcSection>
 
       {past.length > 0 && (
-        <DrcSection title="Riwayat Kegiatan" description="Kegiatan DRC yang sudah selesai.">
+        <DrcSection title="Riwayat Kegiatan" description="Kegiatan DLS yang sudah selesai.">
           {past.map((activity) => (
             <AdminDrcCard key={activity.id} activity={activity} onEdit={startEditing} onDeleted={handleChanged} />
           ))}

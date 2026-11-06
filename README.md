@@ -77,19 +77,19 @@ sampai tabel dan API untuk data tersebut dibuat. Catatan konseling disimpan
 oleh Dosen PA dan ditampilkan sebagai riwayat baca-saja pada dashboard
 mahasiswa.
 
-### Menu DRC (Disiplin Refresh Competency)
+### Menu DLS (Discipline Learning System)
 
-DRC adalah kegiatan wajib mahasiswa setiap awal semester yang membahas 5 tema
+DLS adalah kegiatan wajib mahasiswa setiap awal semester yang membahas 5 tema
 disiplin (Waktu, Akademik, Tata Tertib dan Etika, Prosedur & Keselamatan,
 Lingkungan). Kemahasiswaan menambah, mengubah, atau menghapus seminar/kegiatan
-DRC dari menu **DRC** dan memilih peserta wajibnya per program studi (Teknologi
+DLS dari menu **DLS** dan memilih peserta wajibnya per program studi (Teknologi
 Rekayasa Logistik, Survei dan Pemetaan, Perawatan Mesin) dan angkatan; tanpa
 pilihan berarti semua. Setiap kegiatan baru (dan perubahan atau pembatalan)
 dikirim hanya ke mahasiswa peserta sebagai pemberitahuan portal sekaligus email
 (email memakai pengaturan `SMTP_*`, tanpa SMTP hanya dicatat di log). Prodi
 dicocokkan dengan kolom `PRODI` mahasiswa tanpa membedakan huruf besar/kecil,
 jadi pastikan nama prodi di file upload sama dengan ketiga nama di atas.
-Mahasiswa hanya melihat kegiatan yang ditujukan untuknya di menu **DRC**.
+Mahasiswa hanya melihat kegiatan yang ditujukan untuknya di menu **DLS**.
 
 Tabel `KegiatanDrc` dibuat oleh migrasi `20261103000000_add_drc_activities` dan
 `20261103010000_add_drc_targets`; terapkan dengan

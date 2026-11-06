@@ -1,7 +1,7 @@
 import type { DisciplinePillar, JenisKegiatanDrc, Prisma } from "@prisma/client";
 import { disciplinePillarLabels } from "./points";
 
-// DRC = Disiplin Refresh Competency: kegiatan wajib mahasiswa setiap awal semester.
+// DLS = Discipline Learning System: kegiatan wajib mahasiswa setiap awal semester.
 export const drcTypeLabels: Record<JenisKegiatanDrc, string> = {
   SEMINAR: "Seminar",
   KEGIATAN_LAIN: "Kegiatan",
@@ -85,18 +85,18 @@ function truncate(text: string, limit: number): string {
 export type DrcNotificationKind = "BARU" | "DIUBAH" | "DIBATALKAN";
 
 const titlePrefixes: Record<DrcNotificationKind, string> = {
-  BARU: "Kegiatan DRC Wajib",
-  DIUBAH: "Perubahan Kegiatan DRC",
-  DIBATALKAN: "Kegiatan DRC Dibatalkan",
+  BARU: "Kegiatan DLS Wajib",
+  DIUBAH: "Perubahan Kegiatan DLS",
+  DIBATALKAN: "Kegiatan DLS Dibatalkan",
 };
 
 const openingLines: Record<DrcNotificationKind, (activity: DrcActivityText) => string> = {
   BARU: (activity) =>
-    `Kemahasiswaan menjadwalkan ${drcTypeLabels[activity.jenis].toLowerCase()} DRC (Disiplin Refresh Competency) semester ${activity.semester}. Kegiatan ini WAJIB Anda ikuti.`,
+    `Kemahasiswaan menjadwalkan ${drcTypeLabels[activity.jenis].toLowerCase()} DLS (Discipline Learning System) semester ${activity.semester}. Kegiatan ini WAJIB Anda ikuti.`,
   DIUBAH: (activity) =>
-    `Terdapat perubahan informasi ${drcTypeLabels[activity.jenis].toLowerCase()} DRC (Disiplin Refresh Competency) semester ${activity.semester}. Mohon perhatikan detail terbaru berikut.`,
+    `Terdapat perubahan informasi ${drcTypeLabels[activity.jenis].toLowerCase()} DLS (Discipline Learning System) semester ${activity.semester}. Mohon perhatikan detail terbaru berikut.`,
   DIBATALKAN: (activity) =>
-    `${drcTypeLabels[activity.jenis]} DRC (Disiplin Refresh Competency) semester ${activity.semester} berikut dibatalkan. Tunggu informasi jadwal pengganti dari Kemahasiswaan.`,
+    `${drcTypeLabels[activity.jenis]} DLS (Discipline Learning System) semester ${activity.semester} berikut dibatalkan. Tunggu informasi jadwal pengganti dari Kemahasiswaan.`,
 };
 
 // Isi Pemberitahuan (dan email) untuk seluruh mahasiswa; dibatasi panjang kolom.

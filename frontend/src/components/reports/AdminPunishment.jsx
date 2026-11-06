@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock3, Gavel } from "lucide-react";
 import { jsonRequest, safeHref, studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
+import Select from "@/components/ui/Select";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -156,7 +157,7 @@ function AssignPunishmentCard({ report, today, onChanged }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm font-semibold text-slate-700">
             Bentuk punishment
-            <select
+            <Select
               value={taskType}
               onChange={(event) => setTaskType(event.target.value)}
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2"
@@ -164,7 +165,7 @@ function AssignPunishmentCard({ report, today, onChanged }) {
               {Object.entries(punishmentTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="block text-sm font-semibold text-slate-700">
             Jangka waktu penyelesaian (hari)

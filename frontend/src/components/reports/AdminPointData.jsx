@@ -5,6 +5,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Download, LoaderCircle, Search,
 import { downloadFile, studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import ViolationDetails from "@/components/reports/ViolationDetails";
+import Select from "@/components/ui/Select";
 
 // Status dan batasnya dihitung backend (src/point-ledger.ts).
 const statusStyles = {
@@ -173,46 +174,46 @@ export default function AdminPointData() {
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Prodi
-          <select value={query.prodi} onChange={(event) => updateFilter("prodi", event.target.value)} className={inputClass}>
+          <Select value={query.prodi} onChange={(event) => updateFilter("prodi", event.target.value)} className={inputClass}>
             <option value="">Semua prodi</option>
             {(data?.filter.prodi ?? []).map((prodi) => (
               <option key={prodi} value={prodi}>{prodi}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Angkatan
-          <select value={query.angkatan} onChange={(event) => updateFilter("angkatan", event.target.value)} className={inputClass}>
+          <Select value={query.angkatan} onChange={(event) => updateFilter("angkatan", event.target.value)} className={inputClass}>
             <option value="">Semua angkatan</option>
             {(data?.filter.angkatan ?? []).map((angkatan) => (
               <option key={angkatan} value={angkatan}>{angkatan}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Status
-          <select value={query.status} onChange={(event) => updateFilter("status", event.target.value)} className={inputClass}>
+          <Select value={query.status} onChange={(event) => updateFilter("status", event.target.value)} className={inputClass}>
             <option value="">Semua status</option>
             {thresholds.map((threshold) => (
               <option key={threshold.kode} value={threshold.kode}>{threshold.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Pelanggaran
-          <select value={query.pelanggaran} onChange={(event) => updateFilter("pelanggaran", event.target.value)} className={inputClass}>
+          <Select value={query.pelanggaran} onChange={(event) => updateFilter("pelanggaran", event.target.value)} className={inputClass}>
             {violationOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Urutkan
-          <select value={query.urut} onChange={(event) => updateFilter("urut", event.target.value)} className={inputClass}>
+          <Select value={query.urut} onChange={(event) => updateFilter("urut", event.target.value)} className={inputClass}>
             {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -363,11 +364,11 @@ export default function AdminPointData() {
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2">
               Per halaman
-              <select value={query.per} onChange={(event) => updateFilter("per", event.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1">
+              <Select placement="top" value={query.per} onChange={(event) => updateFilter("per", event.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1">
                 {["10", "20", "50", "100"].map((size) => (
                   <option key={size} value={size}>{size}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <button
               type="button"

@@ -5,6 +5,7 @@ import ModalLayer from "@/components/modals/ModalLayer";
 import { FileText, Paperclip, X } from "lucide-react";
 import { studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
+import Select from "@/components/ui/Select";
 
 const appealStatus = {
   DIAJUKAN: "Diajukan",
@@ -183,7 +184,7 @@ export default function SanggahanMahasiswa({
             </div>
             <label className="block text-sm font-semibold text-slate-700">
               Catatan yang disanggah
-              <select required value={changeId} onChange={(event) => setChangeId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+              <Select required value={changeId} onChange={(event) => setChangeId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
                 <option value="">Pilih perubahan poin</option>
                 {initialChangeId &&
                   !(changes ?? []).some((change) => String(change.id) === String(initialChangeId)) && (
@@ -196,7 +197,7 @@ export default function SanggahanMahasiswa({
                     {new Date(change.createdAt).toLocaleDateString("id-ID")} · {changeLabels[change.type] ?? change.type} · {change.reason}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="block text-sm font-semibold text-slate-700">
               Alasan dan kronologi (minimal 20 karakter)
@@ -213,7 +214,7 @@ export default function SanggahanMahasiswa({
                   </button>
                 </div>
               ) : (
-                <label className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-600 hover:bg-slate-50">
+                <label className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-xs font-normal text-slate-600 hover:bg-slate-50">
                   <Paperclip className="h-4 w-4 flex-shrink-0" />
                   <span className="truncate">Pilih foto atau dokumen JPEG, PNG, atau PDF (maks. 5 MB)</span>
                   <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={selectFile} className="sr-only" />

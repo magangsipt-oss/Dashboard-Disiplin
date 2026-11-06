@@ -5,6 +5,7 @@ import { CheckCircle2, Clock3, FileCheck2, FileText, History, ShieldCheck } from
 import { jsonRequest, studentApi, safeHref } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { formatDeadline, punishmentTypeLabels } from "@/components/reports/AdminPunishment";
+import Select from "@/components/ui/Select";
 
 const pillarLabels = {
   WAKTU: "Disiplin Waktu",
@@ -337,7 +338,7 @@ export default function DosenReportWorkflow() {
               )}
               <label className="block text-sm font-semibold text-slate-700">
                 Aturan pelanggaran dan pengurangan poin
-                <select
+                <Select
                   required
                   value={selectedRules[report.id] ?? report.aturanId ?? ""}
                   onChange={(event) => setSelectedRules((current) => ({ ...current, [report.id]: event.target.value }))}
@@ -349,7 +350,7 @@ export default function DosenReportWorkflow() {
                       {rule.nama} · {rule.severity} · potong {rule.bobotPoin} poin
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="block text-sm font-semibold text-slate-700">
                 Catatan Dosen PA (opsional)

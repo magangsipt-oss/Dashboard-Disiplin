@@ -5,6 +5,8 @@ import ModalLayer from "@/components/modals/ModalLayer";
 import { Award, FileText, Paperclip, Upload } from "lucide-react";
 import { studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
+import Select from "@/components/ui/Select";
+import DateInput from "@/components/ui/DateInput";
 
 export const claimTypeLabels = {
   LOMBA: "Lomba",
@@ -245,7 +247,7 @@ export default function KlaimKegiatan() {
 
       {isModalOpen && (
         <ModalLayer>
-          <form onSubmit={submitClaim} className="max-h-[88dvh] w-full max-w-2xl space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:space-y-4 sm:p-6">
+          <form onSubmit={submitClaim} className="w-full max-w-2xl space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:space-y-4 sm:p-6">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900">Formulir Klaim Kegiatan</h2>
               <p className="mt-1 text-sm text-slate-500">Isi data sesuai sertifikat. Poin ditetapkan Kemahasiswaan setelah verifikasi.</p>
@@ -253,15 +255,15 @@ export default function KlaimKegiatan() {
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <label className="block min-w-0 text-sm font-semibold text-slate-700">
                 Jenis kegiatan
-                <select value={form.jenis} onChange={updateField("jenis")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:py-2.5">
+                <Select value={form.jenis} onChange={updateField("jenis")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:py-2.5">
                   {Object.entries(claimTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                </Select>
               </label>
               <label className="block min-w-0 text-sm font-semibold text-slate-700">
                 Tingkat
-                <select value={form.tingkat} onChange={updateField("tingkat")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:py-2.5">
+                <Select value={form.tingkat} onChange={updateField("tingkat")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:py-2.5">
                   {Object.entries(activityLevelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                </Select>
               </label>
               <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700">
                 Nama kegiatan
@@ -277,11 +279,11 @@ export default function KlaimKegiatan() {
               </label>
               <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700 sm:col-span-1">
                 Tanggal kegiatan
-                <input required type="date" max={today} value={form.tanggalKegiatan} onChange={updateField("tanggalKegiatan")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
+                <DateInput required type="date" max={today} value={form.tanggalKegiatan} onChange={updateField("tanggalKegiatan")} className="mt-1 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-2 text-sm sm:py-2.5" />
               </label>
               <label className="col-span-2 block min-w-0 text-sm font-semibold text-slate-700 sm:col-span-1">
                 Sertifikat / dokumentasi
-                <span className="mt-1 flex min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm sm:py-2.5 font-normal text-slate-600 hover:bg-slate-50">
+                <span className="mt-1 flex min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs sm:py-2.5 font-normal text-slate-600 hover:bg-slate-50">
                   <Paperclip className="h-4 w-4 flex-shrink-0" />
                   <span className="truncate">{file ? file.name : "Pilih JPEG, PNG, atau PDF (maks. 5 MB)"}</span>
                 </span>

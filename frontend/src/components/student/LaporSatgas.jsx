@@ -7,6 +7,8 @@ import {
   Upload,
 } from "lucide-react";
 import { studentApi } from "@/lib/api";
+import Select from "@/components/ui/Select";
+import DateInput from "@/components/ui/DateInput";
 
 const pillars = [
   { value: "WAKTU", label: "Disiplin Waktu" },
@@ -143,17 +145,17 @@ export default function LaporSatgas({ onCheckReports }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">
               Pilar
-              <select required name="pillar" value={form.pillar} onChange={updateField} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+              <Select required name="pillar" value={form.pillar} onChange={updateField} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
                 <option value="">Pilih pilar</option>
                 {pillars.map((pillar) => <option key={pillar.value} value={pillar.value}>{pillar.label}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="text-sm font-semibold text-slate-700">
               Tingkat menurut pelapor (opsional)
-              <select name="severityUsulan" value={form.severityUsulan} onChange={updateField} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
+              <Select name="severityUsulan" value={form.severityUsulan} onChange={updateField} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm">
                 <option value="">Tidak menentukan</option>
                 {severities.map((severity) => <option key={severity.value} value={severity.value}>{severity.label}</option>)}
-              </select>
+              </Select>
             </label>
             <fieldset className="sm:col-span-2">
               <legend className="text-sm font-semibold text-slate-700">Data terlapor</legend>
@@ -233,7 +235,7 @@ export default function LaporSatgas({ onCheckReports }) {
             </label>
             <label className="text-sm font-semibold text-slate-700">
               Tanggal kejadian
-              <input required type="date" name="tanggalKejadian" value={form.tanggalKejadian} onChange={updateField} max={new Date().toISOString().slice(0, 10)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
+              <DateInput required type="date" name="tanggalKejadian" value={form.tanggalKejadian} onChange={updateField} max={new Date().toISOString().slice(0, 10)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
             </label>
           </div>
 
@@ -244,7 +246,7 @@ export default function LaporSatgas({ onCheckReports }) {
           </label>
 
           <div>
-            <label htmlFor="report-photo" className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
+            <label htmlFor="report-photo" className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
               <Upload className="h-4 w-4 text-red-800" /> Foto bukti (wajib, JPEG/PNG maks. 2 MB)
             </label>
             <input

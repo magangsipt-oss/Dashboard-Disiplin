@@ -64,6 +64,8 @@ import {
   KeyRound,
   CircleCheck,
 } from 'lucide-react';
+import Select from '@/components/ui/Select';
+import DateInput from '@/components/ui/DateInput';
 
 const disciplinePillars = [
   { pillar: 'WAKTU', label: 'Disiplin Waktu', Icon: Clock },
@@ -2516,7 +2518,7 @@ export default function App({ hasSessionCookie = false }) {
                               <h4 className="font-bold text-slate-900">Beri catatan / panggilan konseling</h4>
                               <div>
                                 <label htmlFor="counseling-type" className="mb-1 block text-xs font-bold text-slate-700">Jenis tindak lanjut</label>
-                                <select
+                                <Select
                                   id="counseling-type"
                                   value={counselingForm.type}
                                   onChange={(event) => setCounselingForm((current) => ({ ...current, type: event.target.value }))}
@@ -2524,11 +2526,11 @@ export default function App({ hasSessionCookie = false }) {
                                 >
                                   <option value="GUIDANCE_NOTE">Catatan pembinaan</option>
                                   <option value="COUNSELING_CALL">Panggilan konseling</option>
-                                </select>
+                                </Select>
                               </div>
                               <div>
                                 <label htmlFor="counseling-date" className="mb-1 block text-xs font-bold text-slate-700">Tanggal konseling / tindak lanjut</label>
-                                <input
+                                <DateInput
                                   id="counseling-date"
                                   type="date"
                                   required

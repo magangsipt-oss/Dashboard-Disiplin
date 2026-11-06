@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { History, Pencil, Plus, Scale } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
+import Select from "@/components/ui/Select";
 
 // Bobot di API selalu angka negatif (mis. -25 = poin berkurang 25).
 const policySeverities = ["RINGAN", "SEDANG", "BERAT"];
@@ -87,11 +88,11 @@ function RuleEditor({ rule, severityLabels, onSaved, onCancel }) {
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Tingkat
-          <select value={severity} onChange={(event) => setSeverity(event.target.value)} className={inputClass}>
+          <Select value={severity} onChange={(event) => setSeverity(event.target.value)} className={inputClass}>
             {policySeverities.map((value) => (
               <option key={value} value={value}>{severityLabels[value] ?? value}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Pengurangan poin
@@ -181,7 +182,7 @@ function NewRuleForm({ pillar, levels, severityLabels, onSaved, onCancel }) {
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Tingkat
-          <select
+          <Select
             value={severity}
             onChange={(event) => {
               setSeverity(event.target.value);
@@ -192,7 +193,7 @@ function NewRuleForm({ pillar, levels, severityLabels, onSaved, onCancel }) {
             {policySeverities.map((value) => (
               <option key={value} value={value}>{severityLabels[value] ?? value}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Pengurangan poin

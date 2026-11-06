@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, ChevronDown, ClipboardCheck, FileText, Mail, Pencil, Trash2, Users } from "lucide-react";
 import { jsonRequest, studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
-import { DrcActivityDetails, DrcThemeTable, drcThemes, drcTypeLabels, DrcSection } from "@/lib/drc";
+import { DrcActivityDetails, drcThemes, drcTypeLabels, DrcSection } from "@/lib/drc";
+import Select from "@/components/ui/Select";
+import DateInput from "@/components/ui/DateInput";
 
 const emptyForm = {
   judul: "Seminar Refreshment Kedisiplinan Mahasiswa",
@@ -57,7 +59,7 @@ function TargetDropdown({ label, allLabel, emptyLabel, options, selected, onChan
   }
 
   const summary = selected.length === 0 ? allLabel : selected.join(", ");
-  const rowClass = "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-50";
+  const rowClass = "flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-red-50";
 
   return (
     <div ref={containerRef} className="relative">
@@ -78,8 +80,8 @@ function TargetDropdown({ label, allLabel, emptyLabel, options, selected, onChan
         </span>
       </button>
       {open && (
-        <div role="listbox" aria-multiselectable="true" className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
-          <label className={`${rowClass} font-bold text-slate-900`}>
+        <div role="listbox" aria-multiselectable="true" className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-slate-800 shadow-xl">
+          <label className={`${rowClass} ${selected.length === 0 ? "font-bold text-red-800" : ""}`}>
             <input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} className="h-4 w-4 accent-red-800" />
             {allLabel}
           </label>
@@ -88,7 +90,7 @@ function TargetDropdown({ label, allLabel, emptyLabel, options, selected, onChan
             <p className="px-3 py-2 text-sm text-slate-500">{emptyLabel}</p>
           ) : (
             options.map((option) => (
-              <label key={option} className={`${rowClass} text-slate-700`}>
+              <label key={option} className={`${rowClass} ${selected.includes(option) ? "font-bold text-red-800" : ""}`}>
                 <input type="checkbox" checked={selected.includes(option)} onChange={() => toggle(option)} className="h-4 w-4 accent-red-800" />
                 {option}
               </label>
@@ -217,11 +219,11 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Jenis kegiatan
-          <select value={form.jenis} onChange={(event) => update("jenis", event.target.value)} className={inputClass}>
+          <Select value={form.jenis} onChange={(event) => update("jenis", event.target.value)} className={inputClass}>
             {Object.entries(drcTypeLabels).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Semester
@@ -229,16 +231,16 @@ function DrcForm({ editing, options, onSaved, onCancel }) {
         </label>
         <label className="block text-sm font-semibold text-slate-700">
           Tanggal
-          <input type="date" required value={form.tanggal} onChange={(event) => update("tanggal", event.target.value)} className={inputClass} />
+          <DateInput type="date" required value={form.tanggal} onChange={(event) => update("tanggal", event.target.value)} className={inputClass} />
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm font-semibold text-slate-700">
             Jam mulai (WITA)
-            <input type="time" required value={form.jamMulai} onChange={(event) => update("jamMulai", event.target.value)} className={inputClass} />
+            <DateInput type="time" required value={form.jamMulai} onChange={(event) => update("jamMulai", event.target.value)} className={inputClass} />
           </label>
           <label className="block text-sm font-semibold text-slate-700">
             Jam selesai (WITA)
-            <input type="time" required value={form.jamSelesai} onChange={(event) => update("jamSelesai", event.target.value)} className={inputClass} />
+            <DateInput type="time" required value={form.jamSelesai} onChange={(event) => update("jamSelesai", event.target.value)} className={inputClass} />
           </label>
         </div>
         <label className="block text-sm font-semibold text-slate-700 sm:col-span-2">
@@ -575,9 +577,6 @@ export default function AdminDrc() {
 
       <DrcForm key={formKey} editing={editing} options={data.pilihan} onSaved={handleChanged} onCancel={() => startEditing(null)} />
 
-      <DrcSection title="Garis Besar Materi DRC" description="Lima tema kedisiplinan yang menjadi dasar setiap kegiatan DRC.">
-        <DrcThemeTable />
-      </DrcSection>
 
       <DrcSection title="Kegiatan Akan Datang" description="Kegiatan yang sedang atau akan berlangsung beserta peserta wajibnya.">
         {isLoading ? (

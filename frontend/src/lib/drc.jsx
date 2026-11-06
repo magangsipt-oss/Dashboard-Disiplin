@@ -66,35 +66,6 @@ export function formatDrcDate(value) {
   });
 }
 
-export function DrcThemeTable() {
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead className="bg-red-800 text-xs font-bold uppercase tracking-wide text-white">
-          <tr>
-            <th className="px-4 py-3">No</th>
-            <th className="px-4 py-3">Tema</th>
-            <th className="px-4 py-3">Materi inti</th>
-            <th className="px-4 py-3">Aktivitas</th>
-            <th className="px-4 py-3">Indikator keberhasilan</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {drcThemes.map((item, index) => (
-            <tr key={item.kode} className="even:bg-slate-50/70">
-              <td className="px-4 py-3 font-bold text-slate-900">{String(index + 1).padStart(2, '0')}</td>
-              <td className="px-4 py-3 font-bold uppercase text-slate-900">{item.tema}</td>
-              <td className="px-4 py-3 text-slate-700">{item.materi}</td>
-              <td className="px-4 py-3 text-slate-700">{item.aktivitas}</td>
-              <td className="px-4 py-3 text-slate-700">{item.indikator}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export function DrcActivityDetails({ activity }) {
   return (
     <dl className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">

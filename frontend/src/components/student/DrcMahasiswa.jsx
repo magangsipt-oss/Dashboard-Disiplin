@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarCheck, CheckCircle2, FileText, Paperclip, Upload } from "lucide-react";
 import { studentApi } from "@/lib/api";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
-import { DrcActivityDetails, DrcThemeTable, drcTypeLabels, DrcSection } from "@/lib/drc";
+import { DrcActivityDetails, drcTypeLabels, DrcSection } from "@/lib/drc";
 
 const maxFileSize = 5 * 1024 * 1024;
 const acceptedTypes = ["image/jpeg", "image/png", "application/pdf"];
@@ -146,7 +146,7 @@ function DrcEvidence({ activity, now, onUploaded }) {
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm font-semibold text-slate-700">
             Foto atau sertifikat kehadiran
-            <span className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-600 hover:bg-slate-50">
+            <span className="mt-1.5 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-xs font-normal text-slate-600 hover:bg-slate-50">
               <Paperclip className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">{file ? file.name : "Pilih file JPEG, PNG, atau PDF (maks. 5 MB)"}</span>
             </span>
@@ -255,9 +255,6 @@ export default function DrcMahasiswa() {
         )}
       </DrcSection>
 
-      <DrcSection title="Garis Besar Materi DRC" description="Lima tema kedisiplinan yang menjadi dasar setiap kegiatan DRC.">
-        <DrcThemeTable />
-      </DrcSection>
 
       {past.length > 0 && (
         <DrcSection title="Riwayat Kegiatan" description="Kegiatan DRC yang sudah selesai.">

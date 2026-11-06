@@ -17,6 +17,7 @@
     "prisma:seed:aturan": "tsx prisma/seed-aturan.ts",
     "prisma:seed:dummy-poin": "tsx prisma/seed-dummy-poin.ts",
     "prisma:sync:poin-cache": "tsx prisma/sync-poin-cache.ts",
+    "prisma:backfill:presensi": "tsx prisma/backfill-presensi-sia.ts",
     "prisma:migrate:mahasiswa-profile": "tsx prisma/rename-mahasiswa-profile-columns.ts && npm run prisma:push -- --skip-generate && npm run prisma:generate",
     "prisma:migrate:advisor-requests": "tsx prisma/rename-advisor-request-table.ts && tsx prisma/rename-advisor-request-columns.ts && tsx prisma/rename-mahasiswa-dpa-column.ts && tsx prisma/rename-staff-identity-columns.ts && npm run prisma:push -- --skip-generate && tsx prisma/remove-advisor-request-name-columns.ts && npm run prisma:generate",
     "prisma:migrate:dosen-nuptk": "tsx prisma/migrate-dosen-nuptk.ts && npm run prisma:push -- --skip-generate && npm run prisma:generate",

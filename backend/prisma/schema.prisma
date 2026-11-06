@@ -551,6 +551,9 @@ model PresensiAkademik {
   nim             Int       @map("NIM")
   namaMahasiswa   String    @map("Nama_Mahasiswa")
   jumlahKehadiran Int       @map("Jumlah_Kehadiran")
+  sakit           Int       @default(0) @map("Sakit")
+  ijin            Int       @default(0) @map("Ijin")
+  alpa            Int       @default(0) @map("Alpa")
   timestamp       DateTime  @default(now()) @map("Timestamp")
   mahasiswa       Mahasiswa @relation(fields: [nim], references: [nim], onDelete: Cascade)
 

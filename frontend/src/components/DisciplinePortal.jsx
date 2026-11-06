@@ -63,6 +63,8 @@ import {
   CalendarDays,
   KeyRound,
   CircleCheck,
+  TrendingDown,
+  IdCard,
 } from 'lucide-react';
 import Select from '@/components/ui/Select';
 import DateInput from '@/components/ui/DateInput';
@@ -468,6 +470,9 @@ export default function App({ hasSessionCookie = false }) {
   const [studentPointsError, setStudentPointsError] = useState('');
   const [advisor, setAdvisor] = useState(null);
   const [advisorError, setAdvisorError] = useState('');
+  const [attendance, setAttendance] = useState(null);
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+  const [attendanceError, setAttendanceError] = useState('');
   const [advisorStudents, setAdvisorStudents] = useState([]);
   const [isLoadingAdvisorStudents, setIsLoadingAdvisorStudents] = useState(false);
   const [advisorStudentsError, setAdvisorStudentsError] = useState('');
@@ -681,6 +686,42 @@ export default function App({ hasSessionCookie = false }) {
 
     loadAdvisorStudents(true);
     const stopPolling = startPolling(() => loadAdvisorStudents(false));
+    return () => {
+      isMounted = false;
+      stopPolling();
+    };
+  }, [authenticatedUser?.role, activePage]);
+
+  // Tingkat kehadiran mahasiswa ikut berubah setiap kali akademik mengunggah presensi.
+  useEffect(() => {
+    if (authenticatedUser?.role !== 'mhs' || activePage !== 'dashboard') {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadAttendance = async (showLoading) => {
+      if (showLoading) setIsLoadingAttendance(true);
+      try {
+        const response = await fetch('/api/auth/attendance');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Data kehadiran gagal dimuat.');
+        }
+        if (isMounted) {
+          setAttendance(data.attendance ?? null);
+          setAttendanceError('');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setAttendanceError(error instanceof Error ? error.message : 'Data kehadiran gagal dimuat.');
+        }
+      } finally {
+        if (isMounted && showLoading) setIsLoadingAttendance(false);
+      }
+    };
+
+    loadAttendance(true);
+    const stopPolling = startPolling(() => loadAttendance(false));
     return () => {
       isMounted = false;
       stopPolling();
@@ -953,6 +994,8 @@ export default function App({ hasSessionCookie = false }) {
     setStudentPoints(null);
     setAdvisor(null);
     setAdvisorError('');
+    setAttendance(null);
+    setAttendanceError('');
     authenticatedUserRef.current = null;
     activeTabRef.current = 'dashboard';
     setActiveTabState('dashboard');
@@ -1620,57 +1663,65 @@ export default function App({ hasSessionCookie = false }) {
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Skor Kedisiplinan</span>
                     <Bookmark className="w-5 h-5 text-red-800" />
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">
-                      {isLoadingStudentPoints ? '…' : studentPointsError ? '--' : studentPoints?.score ?? '--'}
-                    </span>
-                    <span className="text-xs text-slate-400 font-semibold">Poin</span>
-                  </div>
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-500">Kategori</span>
-                      <span className={`font-semibold ${
-                        studentPoints?.score >= 90
-                          ? 'text-emerald-700'
-                          : studentPoints?.score > 50
-                            ? 'text-amber-700'
-                            : studentPoints
-                              ? 'text-red-700'
-                              : 'text-slate-700'
-                      }`}>
-                        {isLoadingStudentPoints
-                          ? 'Memuat data…'
-                          : studentPointsError
-                            ? 'Gagal dimuat'
-                            : studentPoints?.predicate ?? 'Belum tersedia'}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-extrabold tracking-tight text-slate-900">
+                        {isLoadingStudentPoints ? '…' : studentPointsError ? '--' : studentPoints?.score ?? '--'}
                       </span>
+                      <span className="text-sm text-slate-400 font-semibold">Poin</span>
                     </div>
-                    {studentPoints && !studentPointsError && (
-                      <dl className="space-y-1 border-t border-slate-100 pt-2 text-xs">
-                        <div className="flex justify-between">
-                          <dt className="text-slate-500">Poin awal</dt>
-                          <dd className="font-semibold text-slate-700">100</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-slate-500">Poin berkurang karena pelanggaran</dt>
-                          <dd className="font-semibold text-red-700">−{studentPoints.pointsDeducted ?? 0}</dd>
-                        </div>
-                        <div className="flex justify-between">
-                          <dt className="text-slate-500">
-                            Poin bertambah
-                            {studentPoints.verifiedActivityCount > 0 && ` (dari ${studentPoints.verifiedActivityCount} lomba/kegiatan)`}
-                          </dt>
-                          <dd className="font-semibold text-emerald-700">+{studentPoints.pointsAdded ?? 0}</dd>
-                        </div>
-                      </dl>
-                    )}
-                    <p className="text-[10px] leading-relaxed text-slate-500">
-                      Kategori: Disiplin 90–200 · Kurang Disiplin 51–89 · Tidak Disiplin 0–50
-                    </p>
-                    {studentPointsError && (
-                      <p className="text-xs text-red-700" role="alert">{studentPointsError}</p>
-                    )}
+                    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${
+                      studentPoints && !studentPointsError
+                        ? studentPoints.score >= 90
+                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                          : studentPoints.score > 50
+                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                            : 'bg-red-50 text-red-700 ring-red-200'
+                        : 'bg-slate-50 text-slate-600 ring-slate-200'
+                    }`}>
+                      {isLoadingStudentPoints
+                        ? 'Memuat data…'
+                        : studentPointsError
+                          ? 'Gagal dimuat'
+                          : studentPoints?.predicate ?? 'Belum tersedia'}
+                    </span>
                   </div>
+                  {studentPoints && !studentPointsError && (
+                    <dl className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-100">
+                        <dt className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
+                          <Bookmark className="h-3 w-3" aria-hidden="true" />
+                          Awal
+                        </dt>
+                        <dd className="mt-0.5 text-lg font-bold text-slate-800">100</dd>
+                      </div>
+                      <div className="rounded-xl bg-red-50/70 px-3 py-2.5 ring-1 ring-inset ring-red-100">
+                        <dt className="flex items-center gap-1 text-[11px] font-medium text-red-700/80">
+                          <TrendingDown className="h-3 w-3" aria-hidden="true" />
+                          Berkurang
+                        </dt>
+                        <dd className="mt-0.5 text-lg font-bold text-red-700">−{studentPoints.pointsDeducted ?? 0}</dd>
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/70 px-3 py-2.5 ring-1 ring-inset ring-emerald-100">
+                        <dt className="flex items-center gap-1 text-[11px] font-medium text-emerald-700/80">
+                          <TrendingUp className="h-3 w-3" aria-hidden="true" />
+                          Bertambah
+                        </dt>
+                        <dd className="mt-0.5 text-lg font-bold text-emerald-700">+{studentPoints.pointsAdded ?? 0}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  {studentPoints && !studentPointsError && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Poin berkurang karena pelanggaran
+                      {studentPoints.verifiedActivityCount > 0
+                        ? ` dan bertambah dari ${studentPoints.verifiedActivityCount} lomba/kegiatan terverifikasi.`
+                        : ', bertambah dari lomba/kegiatan terverifikasi.'}
+                    </p>
+                  )}
+                  {studentPointsError && (
+                    <p className="mt-3 text-xs text-red-700" role="alert">{studentPointsError}</p>
+                  )}
                 </div>
 
                 <div data-scroll-reveal data-reveal-delay="160" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
@@ -1678,14 +1729,73 @@ export default function App({ hasSessionCookie = false }) {
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tingkat Kehadiran</span>
                     <UserCheck className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-slate-900">--</span>
-                  </div>
-                  <div className="mt-3 space-y-1">
-                    <div className="flex justify-between text-xs text-slate-600">
-                      <span>Dihitung dari data presensi yang diunggah bagian akademik</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const rate = attendance?.rate;
+                    const hasRate = typeof rate === 'number';
+                    const tone = !hasRate
+                      ? { badge: 'bg-slate-50 text-slate-600 ring-slate-200', bar: 'bg-slate-300', label: 'Belum ada data' }
+                      : rate >= 80
+                        ? { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', bar: 'bg-emerald-500', label: 'Baik' }
+                        : rate >= 75
+                          ? { badge: 'bg-amber-50 text-amber-700 ring-amber-200', bar: 'bg-amber-500', label: 'Perlu ditingkatkan' }
+                          : { badge: 'bg-red-50 text-red-700 ring-red-200', bar: 'bg-red-500', label: 'Kurang' };
+                    return (
+                      <>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-4xl font-extrabold tracking-tight text-slate-900">
+                              {isLoadingAttendance && !attendance
+                                ? '…'
+                                : hasRate
+                                  ? rate.toLocaleString('id-ID', { maximumFractionDigits: 1 })
+                                  : '--'}
+                            </span>
+                            {hasRate && <span className="text-sm font-semibold text-slate-400">%</span>}
+                          </div>
+                          {!isLoadingAttendance && !attendanceError && (
+                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${tone.badge}`}>
+                              {tone.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
+                            style={{ width: `${hasRate ? Math.min(100, rate) : 0}%` }}
+                          />
+                        </div>
+                        {hasRate ? (
+                          <>
+                            <dl className="mt-4 grid grid-cols-4 gap-2 text-center">
+                              {[
+                                { label: 'Hadir', value: attendance.hadir, cls: 'bg-emerald-50/70 text-emerald-700 ring-emerald-100' },
+                                { label: 'Sakit', value: attendance.sakit, cls: 'bg-sky-50/70 text-sky-700 ring-sky-100' },
+                                { label: 'Ijin', value: attendance.ijin, cls: 'bg-violet-50/70 text-violet-700 ring-violet-100' },
+                                { label: 'Alpa', value: attendance.alpa, cls: 'bg-red-50/70 text-red-700 ring-red-100' },
+                              ].map(({ label, value, cls }) => (
+                                <div key={label} className={`rounded-xl px-2 py-2 ring-1 ring-inset ${cls}`}>
+                                  <dt className="text-[11px] font-medium opacity-80">{label}</dt>
+                                  <dd className="text-lg font-bold tabular-nums">{value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                            <p className="mt-3 text-xs text-slate-500">
+                              Dari {attendance.totalPertemuan} pertemuan pada {attendance.totalMataKuliah} mata kuliah.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="mt-3 text-xs text-slate-500">
+                            {isLoadingAttendance
+                              ? 'Memuat data kehadiran…'
+                              : 'Tingkat kehadiran akan muncul setelah bagian akademik mengunggah data presensi.'}
+                          </p>
+                        )}
+                        {attendanceError && (
+                          <p className="mt-2 text-xs text-red-700" role="alert">{attendanceError}</p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div data-scroll-reveal data-reveal-delay="80" className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 border border-slate-200 shadow-lg hover:shadow-xl transition-all">
@@ -1697,11 +1807,39 @@ export default function App({ hasSessionCookie = false }) {
                     <span className="text-base font-bold text-slate-900 leading-snug block">
                       {advisor?.nama ?? 'Belum ditentukan'}
                     </span>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {advisor
-                        ? 'Hubungi Dosen PA Anda jika memerlukan bimbingan.'
-                        : 'Nama Dosen PA akan muncul setelah ditentukan oleh bagian akademik.'}
-                    </p>
+                    {advisor ? (
+                      <>
+                        <dl className="mt-3 space-y-2 text-xs">
+                          <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-100">
+                            <IdCard className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" aria-hidden="true" />
+                            <div className="min-w-0">
+                              <dt className="text-[11px] font-medium text-slate-500">NUPTK</dt>
+                              <dd className="font-semibold text-slate-800 tabular-nums">{advisor.nuptk || '-'}</dd>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-inset ring-slate-100">
+                            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" aria-hidden="true" />
+                            <div className="min-w-0">
+                              <dt className="text-[11px] font-medium text-slate-500">Email</dt>
+                              <dd className="font-semibold text-slate-800 break-all">
+                                {advisor.email ? (
+                                  <a href={`mailto:${advisor.email}`} className="hover:text-purple-700 hover:underline">
+                                    {advisor.email}
+                                  </a>
+                                ) : '-'}
+                              </dd>
+                            </div>
+                          </div>
+                        </dl>
+                        <p className="text-xs text-slate-500 mt-3">
+                          Hubungi Dosen PA Anda jika memerlukan bimbingan.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Nama Dosen PA akan muncul setelah ditentukan oleh bagian akademik.
+                      </p>
+                    )}
                     {advisorError && (
                       <p className="mt-2 text-xs text-red-700" role="alert">{advisorError}</p>
                     )}
@@ -2010,36 +2148,79 @@ export default function App({ hasSessionCookie = false }) {
                       </p>
                     )}
                     {academicAttendanceResult && (
-                      <div aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900 space-y-2">
-                        <p className="font-semibold">
-                          ✓ Berhasil menyimpan {academicAttendanceResult.imported} baris presensi dari total {academicAttendanceResult.totalRows} baris.
-                        </p>
+                      <div aria-live="polite" className="mt-4 overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+                        <div className="flex items-start gap-3 border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+                          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                          <div>
+                            <p className="text-sm font-bold text-emerald-900">Upload absensi berhasil</p>
+                            <p className="mt-0.5 text-sm text-emerald-800">
+                              {academicAttendanceResult.imported} dari {academicAttendanceResult.totalRows} baris presensi tersimpan.
+                            </p>
+                          </div>
+                        </div>
+
                         {academicAttendanceResult.deductions?.totalDeductions > 0 ? (
-                          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-                            <p className="font-bold text-amber-950 flex items-center gap-1.5">
-                              <span>⚠️</span> Pengurangan Poin Otomatis Diterapkan:
-                            </p>
-                            <p className="mt-1">
-                              Sebanyak <strong>{academicAttendanceResult.deductions.totalDeductions} catatan ketidakhadiran (Alpa)</strong> diproses dengan total pengurangan <strong>-{academicAttendanceResult.deductions.totalPointsDeducted} poin</strong> pada mahasiswa terkait.
-                            </p>
+                          <div className="space-y-4 p-5">
+                            <div className="flex items-start gap-3">
+                              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">Pengurangan poin otomatis diterapkan</p>
+                                <p className="mt-0.5 text-sm text-slate-600">
+                                  Poin mahasiswa dengan catatan Alpa telah dikurangi sesuai aturan poin.
+                                </p>
+                              </div>
+                            </div>
+
+                            <dl className="grid grid-cols-2 gap-3 sm:max-w-md">
+                              <div className="rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-inset ring-amber-200">
+                                <dt className="text-xs font-medium text-amber-800">Catatan Alpa</dt>
+                                <dd className="mt-0.5 text-xl font-bold text-amber-900">
+                                  {academicAttendanceResult.deductions.totalDeductions}
+                                </dd>
+                              </div>
+                              <div className="rounded-xl bg-red-50 px-4 py-3 ring-1 ring-inset ring-red-200">
+                                <dt className="text-xs font-medium text-red-800">Total pengurangan</dt>
+                                <dd className="mt-0.5 text-xl font-bold text-red-700">
+                                  −{academicAttendanceResult.deductions.totalPointsDeducted} poin
+                                </dd>
+                              </div>
+                            </dl>
+
                             {academicAttendanceResult.deductions.students?.length > 0 && (
-                              <ul className="mt-2 list-disc list-inside space-y-0.5 text-slate-700 max-h-36 overflow-y-auto">
-                                {academicAttendanceResult.deductions.students.slice(0, 10).map((item, idx) => (
-                                  <li key={idx}>
-                                    <strong>{item.nama}</strong> ({item.nim}) — {item.mataKuliah}: {item.alpa} Alpa ({item.delta} poin, sisa {item.scoreAfter} poin)
-                                  </li>
-                                ))}
-                                {academicAttendanceResult.deductions.students.length > 10 && (
-                                  <li className="font-semibold text-slate-500">
-                                    ...dan {academicAttendanceResult.deductions.students.length - 10} mahasiswa lainnya.
-                                  </li>
-                                )}
-                              </ul>
+                              <div className="max-h-80 overflow-auto rounded-xl border border-slate-200">
+                                <table className="w-full min-w-[640px] text-left text-sm">
+                                  <thead className="sticky top-0 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <tr>
+                                      <th scope="col" className="px-4 py-2.5">Mahasiswa</th>
+                                      <th scope="col" className="px-4 py-2.5">Mata Kuliah</th>
+                                      <th scope="col" className="px-4 py-2.5 text-center">Alpa</th>
+                                      <th scope="col" className="px-4 py-2.5 text-right">Poin</th>
+                                      <th scope="col" className="px-4 py-2.5 text-right">Sisa Poin</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {academicAttendanceResult.deductions.students.map((item, idx) => (
+                                      <tr key={`${item.nim}-${item.mataKuliah}-${idx}`} className="hover:bg-slate-50/70">
+                                        <td className="px-4 py-2.5">
+                                          <p className="font-semibold text-slate-900">{item.nama}</p>
+                                          <p className="text-xs text-slate-500 tabular-nums">{item.nim}</p>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-slate-700">{item.mataKuliah}</td>
+                                        <td className="px-4 py-2.5 text-center tabular-nums text-slate-700">{item.alpa}</td>
+                                        <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-red-700">
+                                          {String(item.delta).replace('-', '−')}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">{item.scoreAfter}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
                             )}
                           </div>
                         ) : (
-                          <p className="text-xs text-emerald-700">
-                            Seluruh mahasiswa memiliki kehadiran penuh / tidak ada catatan Alpa baru yang memotong poin.
+                          <p className="px-5 py-4 text-sm text-slate-600">
+                            Tidak ada catatan Alpa baru, sehingga tidak ada poin yang dikurangi.
                           </p>
                         )}
                       </div>

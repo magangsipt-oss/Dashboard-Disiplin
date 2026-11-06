@@ -324,19 +324,25 @@ academicRouter.post(
             Array<{ inserted_id: number }>
           >`
             INSERT INTO "PresensiAkademik"
-              ("Mata_Kuliah", "Kelas", "NIM", "Nama_Mahasiswa", "Jumlah_Kehadiran")
+              ("Mata_Kuliah", "Kelas", "NIM", "Nama_Mahasiswa", "Jumlah_Kehadiran", "Sakit", "Ijin", "Alpa")
             VALUES ${Prisma.join(
               chunk.map((row) => Prisma.sql`(
                 ${row.mataKuliah},
                 ${row.kelas},
                 ${row.nim},
                 ${row.namaMahasiswa},
-                ${row.jumlahKehadiran}
+                ${row.jumlahKehadiran},
+                ${row.sakit},
+                ${row.ijin},
+                ${row.alpa}
               )`),
             )}
-            ON CONFLICT ("Mata_Kuliah", "Kelas", "NIM") 
-            DO UPDATE SET 
+            ON CONFLICT ("Mata_Kuliah", "Kelas", "NIM")
+            DO UPDATE SET
               "Jumlah_Kehadiran" = EXCLUDED."Jumlah_Kehadiran",
+              "Sakit" = EXCLUDED."Sakit",
+              "Ijin" = EXCLUDED."Ijin",
+              "Alpa" = EXCLUDED."Alpa",
               "Nama_Mahasiswa" = EXCLUDED."Nama_Mahasiswa",
               "Timestamp" = NOW()
             RETURNING "ID" AS inserted_id

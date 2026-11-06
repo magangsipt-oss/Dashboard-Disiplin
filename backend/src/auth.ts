@@ -486,14 +486,22 @@ authRouter.get("/advisor", requireRole(["mhs"], "Data dosen PA hanya tersedia un
     const student = await database.mahasiswa.findUnique({
       where: { id: session.profile.id },
       select: {
-        dosenPa: { select: { id: true, nama: true } },
+        dosenPa: { select: { id: true, nama: true, nuptk: true, email: true } },
       },
     });
     if (!student) {
       response.status(404).json({ message: "Data mahasiswa tidak ditemukan." });
       return;
     }
-    response.json({ advisor: student.dosenPa });
+    const advisor = student.dosenPa
+      ? {
+          id: student.dosenPa.id,
+          nama: student.dosenPa.nama,
+          nuptk: student.dosenPa.nuptk?.toString() ?? null,
+          email: student.dosenPa.email ?? null,
+        }
+      : null;
+    response.json({ advisor });
   } catch (error) {
     console.error("Gagal memuat dosen PA mahasiswa:", error);
     response.status(500).json({ message: "Pilihan dosen PA gagal dimuat." });
@@ -774,6 +782,81 @@ authRouter.post("/counseling", requireRole(["dosen"], "Hanya dosen PA yang dapat
   } catch (error) {
     console.error("Gagal menyimpan catatan konseling:", error);
     response.status(500).json({ message: "Catatan konseling gagal disimpan." });
+  }
+});
+
+// Tingkat kehadiran: per mata kuliah = Hadir / (Hadir + Sakit + Ijin + Alpa),
+// lalu dirata-ratakan dari seluruh mata kuliah. Berubah otomatis setiap kali
+// akademik mengunggah presensi.
+authRouter.get("/attendance", requireRole(["mhs"], "Data kehadiran hanya tersedia untuk akun mahasiswa."), async (request, response) => {
+  const session = currentSession(response);
+
+  try {
+    const student = await database.mahasiswa.findUnique({
+      where: { id: session.profile.id },
+      select: {
+        presensiAkademik: {
+          orderBy: { mataKuliah: "asc" },
+          select: {
+            mataKuliah: true,
+            kelas: true,
+            jumlahKehadiran: true,
+            sakit: true,
+            ijin: true,
+            alpa: true,
+            timestamp: true,
+          },
+        },
+      },
+    });
+    if (!student) {
+      response.status(404).json({ message: "Data mahasiswa tidak ditemukan." });
+      return;
+    }
+
+    const courses = student.presensiAkademik.map((row) => {
+      const totalPertemuan = row.jumlahKehadiran + row.sakit + row.ijin + row.alpa;
+      return {
+        mataKuliah: row.mataKuliah,
+        kelas: row.kelas,
+        hadir: row.jumlahKehadiran,
+        sakit: row.sakit,
+        ijin: row.ijin,
+        alpa: row.alpa,
+        totalPertemuan,
+        persentase: totalPertemuan > 0 ? (row.jumlahKehadiran / totalPertemuan) * 100 : null,
+      };
+    });
+    const counted = courses.filter((course) => course.persentase !== null);
+    const sum = (key: "hadir" | "sakit" | "ijin" | "alpa" | "totalPertemuan") =>
+      courses.reduce((total, course) => total + course[key], 0);
+    const lastUpdated = student.presensiAkademik.reduce<Date | null>(
+      (latest, row) => (!latest || row.timestamp > latest ? row.timestamp : latest),
+      null,
+    );
+
+    response.json({
+      attendance: {
+        rate:
+          counted.length > 0
+            ? Math.round((counted.reduce((total, course) => total + (course.persentase ?? 0), 0) / counted.length) * 10) / 10
+            : null,
+        totalMataKuliah: courses.length,
+        totalPertemuan: sum("totalPertemuan"),
+        hadir: sum("hadir"),
+        sakit: sum("sakit"),
+        ijin: sum("ijin"),
+        alpa: sum("alpa"),
+        lastUpdated,
+        courses: courses.map((course) => ({
+          ...course,
+          persentase: course.persentase === null ? null : Math.round(course.persentase * 10) / 10,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Gagal memuat kehadiran mahasiswa:", error);
+    response.status(500).json({ message: "Data kehadiran gagal dimuat." });
   }
 });
 
